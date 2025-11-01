@@ -15,6 +15,7 @@ import HowToPlay from './HowToPlay';
 import NewsUpdates from './NewsUpdates';
 import PrivacyPolicy from './PrivacyPolicy';
 import Settings from './Settings';
+import ContactUs from './ContactUs';
 import SidebarMenu from './SidebarMenu';
 import MobileHeader from './MobileHeader';
 
@@ -143,6 +144,11 @@ export default function SimpleWelcome() {
       backgroundColor={backgroundColor}
       onBackgroundColorChange={setBackgroundColor}
     />;
+  }
+
+  // Handle Contact Us page
+  if (gameMode === 'contact-us') {
+    return <ContactUs onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
   }
 
   // Handle Take Turns submenu

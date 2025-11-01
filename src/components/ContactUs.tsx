@@ -3,12 +3,12 @@
 import React from 'react';
 import { soundManager } from '../utils/sounds';
 
-interface AboutUsProps {
+interface ContactUsProps {
   onBackToMenu: () => void;
   isMobile: boolean;
 }
 
-export default function AboutUs({ onBackToMenu, isMobile }: AboutUsProps) {
+export default function ContactUs({ onBackToMenu, isMobile }: ContactUsProps) {
   return (
     <div style={{ 
       background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)',
@@ -45,7 +45,7 @@ export default function AboutUs({ onBackToMenu, isMobile }: AboutUsProps) {
           lineHeight: '1.2',
           fontWeight: 'bold'
         }}>
-          About Bee-Five
+          Contact Us
         </h1>
         <button
           onClick={() => {
@@ -117,20 +117,62 @@ export default function AboutUs({ onBackToMenu, isMobile }: AboutUsProps) {
           lineHeight: '1.8',
           marginBottom: '2rem'
         }}>
-          <p style={{ marginBottom: '1.5rem' }}>
-            Bee-Five is your favorite version of Connect-Five — a fun, fast, and colorful strategy game created by MindGrind. It's designed to bring people together through friendly competition, whether you're playing locally, against the AI, or online with friends.
-          </p>
-          
-          <p style={{ marginBottom: '1.5rem' }}>
-            Our mission is to make simple, addictive games that challenge the mind and bring joy to your screen. Bee-Five takes the classic "five-in-a-row" game and adds a clean, modern design inspired by the structure of a beehive.
-          </p>
-          
-          <p style={{ marginBottom: '1.5rem' }}>
-            Every feature of Bee-Five, from the AI Game to the upcoming Online Multiplayer, is designed to run smoothly on both mobile devices and desktops.
-          </p>
-          
           <p style={{ marginBottom: '2rem' }}>
-            Bee-Five is proudly developed in South Africa by MindGrind, a creative studio focused on original, smart, and community-driven games.
+            Have questions, feedback, or just want to say hello? We'd love to hear from you!
+          </p>
+
+          <h3 style={{
+            fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+            color: '#FFC30B',
+            marginTop: '2rem',
+            marginBottom: '1rem',
+            fontWeight: 'bold'
+          }}>
+            📧 Email
+          </h3>
+          <p style={{ marginBottom: '1.5rem' }}>
+            Send us an email at{' '}
+            <a 
+              href="mailto:beehive@mindgrind.co.za"
+              style={{ 
+                color: '#FFC30B', 
+                textDecoration: 'underline',
+                fontWeight: 'bold'
+              }}
+              onClick={() => soundManager.playClickSound()}
+            >
+              beehive@mindgrind.co.za
+            </a>
+          </p>
+
+          <h3 style={{
+            fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+            color: '#FFC30B',
+            marginTop: '2rem',
+            marginBottom: '1rem',
+            fontWeight: 'bold'
+          }}>
+            🎵 TikTok
+          </h3>
+          <p style={{ marginBottom: '2rem' }}>
+            Follow us on TikTok{' '}
+            <a 
+              href="https://www.tiktok.com/@beefive1.1"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ 
+                color: '#FFC30B', 
+                textDecoration: 'underline',
+                fontWeight: 'bold'
+              }}
+              onClick={() => soundManager.playClickSound()}
+            >
+              @beefive1.1
+            </a>
+          </p>
+
+          <p style={{ marginBottom: '2rem', fontStyle: 'italic', color: 'rgba(255,255,255,0.8)' }}>
+            We typically respond within 24-48 hours. Thank you for being part of the Bee-Five community!
           </p>
           
           <div style={{

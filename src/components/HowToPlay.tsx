@@ -17,14 +17,78 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
       maxWidth: '100vw',
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: isMobile ? '1rem 0.75rem' : 'clamp(1rem, 2vw, 2rem)',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       position: 'relative',
       overflow: 'visible',
       boxSizing: 'border-box'
     }}>
+      {/* Fixed Header */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        background: 'rgba(0, 0, 0, 0.95)',
+        backdropFilter: 'blur(10px)',
+        padding: isMobile ? '0.75rem 1rem' : '1rem 1.5rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        zIndex: 1000
+      }}>
+        <h1 style={{ 
+          fontSize: isMobile ? 'clamp(1.2rem, 4vw, 1.5rem)' : 'clamp(1.5rem, 3vw, 2rem)', 
+          color: '#FFC30B',
+          textShadow: '2px 2px 0px black',
+          margin: 0,
+          lineHeight: '1.2',
+          fontWeight: 'bold'
+        }}>
+          How to Play Bee-Five
+        </h1>
+        <button
+          onClick={() => {
+            onBackToMenu();
+            soundManager.playClickSound();
+          }}
+          style={{
+            padding: isMobile ? '0.75rem 1rem' : '0.75rem 1.5rem',
+            fontSize: isMobile ? '0.9rem' : '1rem',
+            fontWeight: 'bold',
+            backgroundColor: '#666',
+            color: 'white',
+            border: '2px solid black',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent'
+          }}
+          onMouseEnter={(e) => {
+            if (!isMobile) {
+              e.currentTarget.style.backgroundColor = '#777';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isMobile) {
+              e.currentTarget.style.backgroundColor = '#666';
+            }
+          }}
+        >
+          Back to Menu
+        </button>
+      </div>
+
+      {/* Main content card with top padding for fixed header */}
+      <div style={{
+        marginTop: isMobile ? '80px' : '90px',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: isMobile ? '1rem 0.75rem' : 'clamp(1rem, 2vw, 2rem)',
+        width: '100%'
+      }}>
       {/* Main content card */}
       <div style={{
         background: 'rgba(0, 0, 0, 0.95)',
@@ -45,20 +109,7 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
         justifyContent: 'flex-start',
         overflowY: 'auto',
         flex: isMobile ? 'none' : '0 1 auto'
-      }}>
-        {/* Title */}
-        <h1 style={{ 
-          fontSize: isMobile ? 'clamp(1.5rem, 8vw, 2rem)' : 'clamp(2rem, 4vw, 2.5rem)', 
-          color: '#FFC30B',
-          textShadow: '2px 2px 0px black',
-          margin: '0 0 clamp(1.5rem, 3vw, 2rem) 0',
-          lineHeight: '1.2',
-          fontWeight: 'bold',
-          textAlign: 'center'
-        }}>
-          How to Play Bee-Five
-        </h1>
-
+      }}> 
         {/* Content */}
         <div style={{
           color: '#ffffff',
@@ -134,41 +185,7 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
             © 2025 Bee-Five. Product of MindGrind.
           </div>
         </div>
-
-        {/* Back button */}
-        <button
-          onClick={() => {
-            onBackToMenu();
-            soundManager.playClickSound();
-          }}
-          style={{
-            padding: isMobile ? '0.75rem 1rem' : '0.75rem 1.5rem',
-            fontSize: isMobile ? '0.9rem' : '1rem',
-            fontWeight: 'bold',
-            backgroundColor: '#666',
-            color: 'white',
-            border: '2px solid black',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            marginTop: 'auto',
-            alignSelf: 'center',
-            touchAction: 'manipulation',
-            WebkitTapHighlightColor: 'transparent'
-          }}
-          onMouseEnter={(e) => {
-            if (!isMobile) {
-              e.currentTarget.style.backgroundColor = '#777';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isMobile) {
-              e.currentTarget.style.backgroundColor = '#666';
-            }
-          }}
-        >
-          Back to Menu
-        </button>
+      </div>
       </div>
     </div>
   );
