@@ -19,6 +19,7 @@ export class MultiplayerService {
   private playerNumber: 1 | 2 = 1;
   private playerId: string | null = null;
   private roomSubscription: any = null;
+  private playerSubscription: any = null;
   private moveSubscription: any = null;
   private gameStateSubscription: any = null;
 
@@ -157,7 +158,7 @@ export class MultiplayerService {
       return {
         roomId: roomCode,
         players: allPlayers!.map(p => ({
-          id: player.id,
+          id: p.id,
           name: p.player_name,
           playerNumber: p.player_number,
           isHost: p.is_host
@@ -193,7 +194,33 @@ export class MultiplayerService {
       )
       .subscribe();
 
-    // Subscribe to player changes
+    // Subscribe to player joins and leaves (CRITICAL: This was missing!)
+    this.playerSubscription = supabase!
+      .channel(`players:${roomId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'game_players', filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const newPlayer = payload.new as GamePlayer;
+          // Only notify if it's not the current player
+          if (newPlayer.id !== this.playerId && this.onPlayerJoined) {
+            console.log('New player joined:', newPlayer);
+            this.onPlayerJoined(newPlayer);
+          }
+        }
+      )
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'game_players', filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const deletedPlayer = payload.old as GamePlayer;
+          if (deletedPlayer.id !== this.playerId && this.onPlayerLeft) {
+            console.log('Player left:', deletedPlayer);
+            this.onPlayerLeft(deletedPlayer.id);
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to move changes
     this.moveSubscription = supabase!
       .channel(`moves:${roomId}`)
       .on('postgres_changes',
@@ -305,12 +332,19 @@ export class MultiplayerService {
     // Unsubscribe from all channels
     if (this.roomSubscription) {
       await supabase!.removeChannel(this.roomSubscription);
+      this.roomSubscription = null;
+    }
+    if (this.playerSubscription) {
+      await supabase!.removeChannel(this.playerSubscription);
+      this.playerSubscription = null;
     }
     if (this.moveSubscription) {
       await supabase!.removeChannel(this.moveSubscription);
+      this.moveSubscription = null;
     }
     if (this.gameStateSubscription) {
       await supabase!.removeChannel(this.gameStateSubscription);
+      this.gameStateSubscription = null;
     }
 
     // Remove player from database

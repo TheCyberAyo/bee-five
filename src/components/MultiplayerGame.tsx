@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { simpleMultiplayerClient, type SimpleMove, type SimpleGameState } from '../utils/simpleMultiplayer';
+import { multiplayerService, type GameMove } from '../services/multiplayerService';
 import { soundManager } from '../utils/sounds';
 import { GRID_SIZE, MULTIPLAYER_CELL_SIZE, BORDER_WIDTH, MULTIPLAYER_CANVAS_SIZE } from '../constants/gameConstants';
 import { checkWinCondition, getWinningPieces } from '../utils/gameLogic';
@@ -53,88 +53,78 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
   const ANIMATION_DURATION = 400;
   const animationFrameRef = useRef<number | undefined>(undefined);
 
+  // Apply a move to the game board (must be defined before useEffect)
+  const applyMove = useCallback((move: { row: number; col: number; player: 1 | 2; timestamp: number; roomId: string }) => {
+    setBoard(prevBoard => {
+      const newBoard = prevBoard.map(row => [...row]);
+      newBoard[move.row][move.col] = move.player;
+
+      // Check for win condition using the updated board
+      const winningPieces = getWinningPieces(newBoard, move.row, move.col, move.player);
+      if (winningPieces.length >= 5) {
+        setTimeout(() => {
+          setWinner(move.player);
+          setWinningPieces(winningPieces);
+          setGameActive(false);
+          
+          setTimeout(() => {
+            const isPlayerWin = move.player === playerNumber;
+            setWinMessage(isPlayerWin ? 'You Win!' : 'Opponent Wins!');
+            setShowWinPopup(true);
+            
+            if (isPlayerWin) {
+              soundManager.playVictorySound();
+            } else {
+              soundManager.playDefeatSound();
+            }
+          }, 500);
+        }, 0);
+      } else {
+        // Switch turns
+        setCurrentPlayer(move.player === 1 ? 2 : 1);
+      }
+
+      return newBoard;
+    });
+
+    // Start animation for the move
+    const pieceKey = `${move.row}-${move.col}`;
+    setAnimatingPieces(prev => new Map(prev).set(pieceKey, {
+      player: move.player,
+      startTime: Date.now(),
+      row: move.row,
+      col: move.col
+    }));
+
+    // Play sound for opponent moves
+    if (move.player !== playerNumber) {
+      soundManager.playBuzzSound();
+    }
+  }, [playerNumber]);
+
   // Initialize multiplayer event handlers
   useEffect(() => {
     // Find opponent name
     const opponent = roomInfo.players.find(p => p.playerNumber !== playerNumber);
     setOpponentName(opponent?.name || 'Opponent');
 
-    // Set up simple multiplayer client
-    simpleMultiplayerClient.createRoom(roomInfo.roomId, playerNumber);
-    
-    // Set up move callback
-    simpleMultiplayerClient.onMove((move: SimpleMove) => {
-      applyMove(move);
-    });
-
-    // Set up game state callback
-    simpleMultiplayerClient.onGameState((gameState: SimpleGameState) => {
-      setBoard(gameState.board);
-      setCurrentPlayer(gameState.currentPlayer);
-      setWinner(gameState.winner);
-      setGameActive(gameState.gameActive);
-    });
+    // Set up move callback from Supabase
+    multiplayerService.onMove = (move: GameMove) => {
+      // Convert GameMove to the format expected by applyMove
+      applyMove({
+        row: move.row,
+        col: move.col,
+        player: move.player_number,
+        timestamp: new Date(move.timestamp).getTime(),
+        roomId: roomInfo.roomId
+      });
+    };
 
     return () => {
-      // Clean up multiplayer client
-      simpleMultiplayerClient.leaveRoom();
+      // Clean up is handled by multiplayerService when leaving
+      multiplayerService.onMove = undefined;
     };
-  }, [roomInfo, playerNumber]);
-
-  // Apply a move to the game board
-  const applyMove = useCallback((move: SimpleMove) => {
-    setBoard(prevBoard => {
-      const newBoard = prevBoard.map(row => [...row]);
-      newBoard[move.row][move.col] = move.player;
-      return newBoard;
-    });
-
-    // Start animation for the move
-    const pieceKey = `${move.row}-${move.col}`;
-    setAnimatingPieces(prev => {
-      const newMap = new Map(prev);
-      newMap.set(pieceKey, {
-        player: move.player,
-        startTime: Date.now(),
-        row: move.row,
-        col: move.col
-      });
-      return newMap;
-    });
-
-    // Play sound for opponent moves
-    if (move.player !== playerNumber) {
-      soundManager.playBuzzSound();
-    }
-
-    // Check for win condition
-    const newBoard = board.map(row => [...row]);
-    newBoard[move.row][move.col] = move.player;
-    
-    const winningPieces = getWinningPieces(newBoard, move.row, move.col, move.player);
-    if (winningPieces.length >= 5) {
-      setTimeout(() => {
-        setWinner(move.player);
-        setWinningPieces(winningPieces);
-        setGameActive(false);
-        
-        setTimeout(() => {
-          const isPlayerWin = move.player === playerNumber;
-          setWinMessage(isPlayerWin ? 'You Win!' : `${opponentName} Wins!`);
-          setShowWinPopup(true);
-          
-          if (isPlayerWin) {
-            soundManager.playVictorySound();
-          } else {
-            soundManager.playDefeatSound();
-          }
-        }, 500);
-      }, 0);
-    } else {
-      // Switch turns
-      setCurrentPlayer(move.player === 1 ? 2 : 1);
-    }
-  }, [board, playerNumber, opponentName]);
+  }, [roomInfo, playerNumber, applyMove]);
 
   // Check for win condition
 
@@ -321,24 +311,16 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
         setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
       }
 
-      // Send move to other players via simple multiplayer
-      simpleMultiplayerClient.sendMove(row, col);
+      // Send move to other players via Supabase
+      await multiplayerService.sendMove(row, col);
       
-      // Send game state to other players
-      const gameState: SimpleGameState = {
-        board: newBoard,
-        currentPlayer: currentPlayer === 1 ? 2 : 1,
-        winner: newWinner,
-        gameActive: newGameActive,
-        lastMove: {
-          row,
-          col,
-          player: currentPlayer,
-          timestamp: Date.now(),
-          roomId: roomInfo.roomId
-        }
-      };
-      simpleMultiplayerClient.sendGameState(gameState);
+      // Update game state in Supabase
+      await multiplayerService.updateGameState(
+        newBoard,
+        currentPlayer === 1 ? 2 : 1,
+        newWinner,
+        newGameActive
+      );
       
       // Play sound
       soundManager.playBuzzSound();
@@ -397,8 +379,8 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
   };
 
   // Leave game
-  const handleLeaveGame = () => {
-    simpleMultiplayerClient.leaveRoom();
+  const handleLeaveGame = async () => {
+    await multiplayerService.leaveRoom();
     soundManager.playClickSound();
     onBackToLobby();
   };
