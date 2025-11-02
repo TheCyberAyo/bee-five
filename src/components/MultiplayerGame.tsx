@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { multiplayerService, type GameMove } from '../services/multiplayerService';
+import { multiplayerService } from '../services/multiplayerService';
+import { type GameMove } from '../lib/supabase';
 import { soundManager } from '../utils/sounds';
 import { GRID_SIZE, MULTIPLAYER_CELL_SIZE, BORDER_WIDTH, MULTIPLAYER_CANVAS_SIZE } from '../constants/gameConstants';
 import { checkWinCondition, getWinningPieces } from '../utils/gameLogic';
