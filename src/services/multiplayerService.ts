@@ -17,7 +17,8 @@ export interface PlayerInfo {
 export class MultiplayerService {
   private roomId: string | null = null;
   private playerNumber: 1 | 2 = 1;
-  private playerId: string | null = null;
+  private playerId: string | null = null; // Client-generated ID
+  private databasePlayerId: string | null = null; // Database UUID for the player record
   private roomSubscription: any = null;
   private playerSubscription: any = null;
   private moveSubscription: any = null;
@@ -83,6 +84,8 @@ export class MultiplayerService {
 
       this.roomId = room.id;
       this.playerNumber = 1;
+      this.databasePlayerId = player.id; // Store the database UUID
+      console.log('Host player created with database ID:', this.databasePlayerId);
 
       // Set up real-time subscriptions
       this.setupSubscriptions(room.id);
@@ -157,6 +160,8 @@ export class MultiplayerService {
 
       this.roomId = room.id;
       this.playerNumber = 2;
+      this.databasePlayerId = player.id; // Store the database UUID
+      console.log('Guest player created with database ID:', this.databasePlayerId);
 
       // Set up real-time subscriptions
       this.setupSubscriptions(room.id);
@@ -194,6 +199,8 @@ export class MultiplayerService {
       return;
     }
 
+    console.log('Setting up real-time subscriptions for room:', roomId);
+
     // Subscribe to room updates
     this.roomSubscription = supabase!
       .channel(`room:${roomId}`)
@@ -213,8 +220,8 @@ export class MultiplayerService {
         { event: 'INSERT', schema: 'public', table: 'game_players', filter: `room_id=eq.${roomId}` },
         (payload) => {
           const newPlayer = payload.new as GamePlayer;
-          // Only notify if it's not the current player
-          if (newPlayer.id !== this.playerId && this.onPlayerJoined) {
+          // Only notify if it's not the current player (check database ID)
+          if (newPlayer.id !== this.databasePlayerId && this.onPlayerJoined) {
             console.log('New player joined:', newPlayer);
             this.onPlayerJoined(newPlayer);
           }
@@ -224,7 +231,7 @@ export class MultiplayerService {
         { event: 'DELETE', schema: 'public', table: 'game_players', filter: `room_id=eq.${roomId}` },
         (payload) => {
           const deletedPlayer = payload.old as GamePlayer;
-          if (deletedPlayer.id !== this.playerId && this.onPlayerLeft) {
+          if (deletedPlayer.id !== this.databasePlayerId && this.onPlayerLeft) {
             console.log('Player left:', deletedPlayer);
             this.onPlayerLeft(deletedPlayer.id);
           }
@@ -238,14 +245,45 @@ export class MultiplayerService {
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'game_moves', filter: `room_id=eq.${roomId}` },
         (payload) => {
+          console.log('Move received via real-time:', payload);
           const move = payload.new as GameMove;
+          console.log('Move details:', {
+            movePlayerNumber: move.player_number,
+            currentPlayerNumber: this.playerNumber,
+            roomId: move.room_id,
+            row: move.row,
+            col: move.col
+          });
+          
           // Only handle opponent moves
-          if (move.player_number !== this.playerNumber && this.onMove) {
-            this.onMove(move);
+          if (move.player_number !== this.playerNumber) {
+            console.log('Processing opponent move');
+            if (this.onMove) {
+              this.onMove(move);
+            } else {
+              console.warn('onMove handler not set!');
+            }
+          } else {
+            console.log('Ignoring own move (expected)');
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Move subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to move changes for room:', roomId);
+          console.log('Waiting for moves with filter: room_id=eq.' + roomId);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Error subscribing to move changes');
+          console.error('⚠️ Make sure Real-time is enabled for game_moves table in Supabase!');
+        } else if (status === 'TIMED_OUT') {
+          console.error('❌ Move subscription timed out');
+        } else if (status === 'CLOSED') {
+          console.warn('⚠️ Move subscription closed');
+        } else {
+          console.log('Move subscription status:', status);
+        }
+      });
 
     // Subscribe to game state changes
     this.gameStateSubscription = supabase!
@@ -264,14 +302,25 @@ export class MultiplayerService {
 
   // Send a move
   async sendMove(row: number, col: number): Promise<void> {
-    if (!this.roomId) return;
+    if (!this.roomId) {
+      console.error('Cannot send move: roomId is null');
+      return;
+    }
 
     if (!isSupabaseConfigured()) {
+      console.error('Cannot send move: Supabase not configured');
       return;
     }
 
     try {
-      const { error } = await supabase!
+      console.log('Sending move:', {
+        roomId: this.roomId,
+        playerNumber: this.playerNumber,
+        row,
+        col
+      });
+
+      const { data, error } = await supabase!
         .from('game_moves')
         .insert({
           room_id: this.roomId,
@@ -279,9 +328,16 @@ export class MultiplayerService {
           row,
           col,
           timestamp: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error sending move to database:', error);
+        throw error;
+      }
+
+      console.log('Move successfully inserted:', data);
     } catch (error) {
       console.error('Error sending move:', error);
       if (this.onError) {
@@ -359,17 +415,29 @@ export class MultiplayerService {
       this.gameStateSubscription = null;
     }
 
-    // Remove player from database
-    if (this.roomId && this.playerId) {
-      await supabase!
+    // Remove player from database (use database UUID, not client ID)
+    if (this.roomId && this.databasePlayerId) {
+      console.log('Removing player from database:', this.databasePlayerId);
+      const { error } = await supabase!
         .from('game_players')
         .delete()
-        .eq('room_id', this.roomId)
-        .eq('id', this.playerId);
+        .eq('id', this.databasePlayerId);
+      
+      if (error) {
+        console.error('Error removing player:', error);
+      } else {
+        console.log('Player successfully removed');
+      }
+    } else {
+      console.warn('Cannot remove player: missing roomId or databasePlayerId', {
+        roomId: this.roomId,
+        databasePlayerId: this.databasePlayerId
+      });
     }
 
     this.roomId = null;
     this.playerId = null;
+    this.databasePlayerId = null;
   }
 
   // Generate room code

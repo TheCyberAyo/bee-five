@@ -110,7 +110,9 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     setOpponentName(opponent?.name || 'Opponent');
 
     // Set up move callback from Supabase
+    console.log('Setting up onMove handler for player', playerNumber);
     multiplayerService.onMove = (move: GameMove) => {
+      console.log('onMove callback triggered:', move);
       // Convert GameMove to the format expected by applyMove
       applyMove({
         row: move.row,
@@ -123,6 +125,7 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
 
     return () => {
       // Clean up is handled by multiplayerService when leaving
+      console.log('Cleaning up onMove handler');
       multiplayerService.onMove = undefined;
     };
   }, [roomInfo, playerNumber, applyMove]);
