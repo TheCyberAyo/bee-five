@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { multiplayerService, type RoomInfo, type PlayerInfo } from '../services/multiplayerService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { soundManager } from '../utils/sounds';
@@ -19,14 +19,35 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
   const [lobbyMode, setLobbyMode] = useState<'menu' | 'create' | 'join' | 'waiting'>('menu');
   const [error, setError] = useState<string | null>(null);
 
-  // Clean up on unmount
+  // Track if we're transitioning to game (don't clean up in this case)
+  const transitioningToGameRef = useRef(false);
+
+  // Clean up ONLY when going back to menu, NOT when transitioning to game
+  useEffect(() => {
+    // Reset transition flag when currentRoom becomes null (went back to menu)
+    if (!currentRoom) {
+      transitioningToGameRef.current = false;
+    }
+  }, [currentRoom]);
+
+  // Clean up on component unmount only (not on currentRoom changes)
   useEffect(() => {
     return () => {
-      if (currentRoom) {
-        multiplayerService.leaveRoom();
+      // Get the current value at cleanup time
+      const isTransitioning = transitioningToGameRef.current;
+      // Only clean up if we're actually leaving to go back to menu, not transitioning to game
+      if (!isTransitioning) {
+        console.log('MultiplayerLobby unmounting - cleaning up (going back to menu)');
+        // Only leave room if we actually have a room (check if service still has roomId)
+        if (multiplayerService.getCurrentRoomId()) {
+          multiplayerService.leaveRoom();
+        }
+      } else {
+        console.log('MultiplayerLobby unmounting - NOT cleaning up (transitioning to game)');
+        console.log('Subscriptions will remain active for MultiplayerGame');
       }
     };
-  }, [currentRoom]);
+  }, []); // Empty deps - only run on mount/unmount, not on state changes
 
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
@@ -61,6 +82,8 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
           isGameStarted: true
         };
         setCurrentRoom(updatedRoom);
+        // Mark that we're transitioning to game (don't clean up subscriptions)
+        transitioningToGameRef.current = true;
         onGameStart(updatedRoom, 1);
       };
       
@@ -100,6 +123,9 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
       const roomInfo = await multiplayerService.joinRoom(roomCode.trim(), playerName.trim());
       setCurrentRoom(roomInfo);
       setLobbyMode('waiting');
+      
+      // Mark that we're transitioning to game (don't clean up subscriptions)
+      transitioningToGameRef.current = true;
       
       // Start the game immediately
       onGameStart(roomInfo, 2);

@@ -86,6 +86,7 @@ export class MultiplayerService {
       this.playerNumber = 1;
       this.databasePlayerId = player.id; // Store the database UUID
       console.log('Host player created with database ID:', this.databasePlayerId);
+      console.log('Service roomId set to:', this.roomId, 'for room code:', roomCode);
 
       // Set up real-time subscriptions
       this.setupSubscriptions(room.id);
@@ -251,20 +252,32 @@ export class MultiplayerService {
             movePlayerNumber: move.player_number,
             currentPlayerNumber: this.playerNumber,
             roomId: move.room_id,
+            expectedRoomId: this.roomId,
             row: move.row,
-            col: move.col
+            col: move.col,
+            hasOnMoveHandler: !!this.onMove
           });
+          
+          // Verify roomId matches (safety check)
+          if (move.room_id !== this.roomId) {
+            console.warn('⚠️ Received move for different room:', {
+              moveRoomId: move.room_id,
+              currentRoomId: this.roomId
+            });
+            return;
+          }
           
           // Only handle opponent moves
           if (move.player_number !== this.playerNumber) {
-            console.log('Processing opponent move');
+            console.log('✅ Processing opponent move - player', move.player_number, 'to player', this.playerNumber);
             if (this.onMove) {
+              console.log('Calling onMove handler...');
               this.onMove(move);
             } else {
-              console.warn('onMove handler not set!');
+              console.error('❌ onMove handler not set! Cannot process move.');
             }
           } else {
-            console.log('Ignoring own move (expected)');
+            console.log('Ignoring own move (player', move.player_number, ') - expected behavior');
           }
         }
       )
@@ -303,7 +316,16 @@ export class MultiplayerService {
   // Send a move
   async sendMove(row: number, col: number): Promise<void> {
     if (!this.roomId) {
-      console.error('Cannot send move: roomId is null');
+      console.error('Cannot send move: roomId is null', {
+        roomId: this.roomId,
+        playerNumber: this.playerNumber,
+        playerId: this.playerId,
+        databasePlayerId: this.databasePlayerId
+      });
+      console.error('Service state:', {
+        hasRoomSubscription: !!this.roomSubscription,
+        hasMoveSubscription: !!this.moveSubscription
+      });
       return;
     }
 
@@ -317,27 +339,42 @@ export class MultiplayerService {
         roomId: this.roomId,
         playerNumber: this.playerNumber,
         row,
-        col
+        col,
+        hasSubscriptions: {
+          move: !!this.moveSubscription,
+          player: !!this.playerSubscription
+        }
       });
+
+      const moveData = {
+        room_id: this.roomId,
+        player_number: this.playerNumber,
+        row,
+        col,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('Inserting move into database:', moveData);
 
       const { data, error } = await supabase!
         .from('game_moves')
-        .insert({
-          room_id: this.roomId,
-          player_number: this.playerNumber,
-          row,
-          col,
-          timestamp: new Date().toISOString()
-        })
+        .insert(moveData)
         .select()
         .single();
 
       if (error) {
-        console.error('Error sending move to database:', error);
+        console.error('❌ Error sending move to database:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
-      console.log('Move successfully inserted:', data);
+      console.log('✅ Move successfully inserted into database:', data);
+      console.log('Move should now be received via real-time by other players');
     } catch (error) {
       console.error('Error sending move:', error);
       if (this.onError) {
@@ -391,29 +428,43 @@ export class MultiplayerService {
 
   // Leave the room
   async leaveRoom(): Promise<void> {
+    console.log('leaveRoom called - cleaning up subscriptions and room data');
+    
     if (!isSupabaseConfigured()) {
       this.roomId = null;
       this.playerId = null;
+      this.databasePlayerId = null;
       return;
     }
 
     // Unsubscribe from all channels
     if (this.roomSubscription) {
+      console.log('Removing room subscription');
       await supabase!.removeChannel(this.roomSubscription);
       this.roomSubscription = null;
     }
     if (this.playerSubscription) {
+      console.log('Removing player subscription');
       await supabase!.removeChannel(this.playerSubscription);
       this.playerSubscription = null;
     }
     if (this.moveSubscription) {
+      console.log('Removing move subscription');
       await supabase!.removeChannel(this.moveSubscription);
       this.moveSubscription = null;
     }
     if (this.gameStateSubscription) {
+      console.log('Removing game state subscription');
       await supabase!.removeChannel(this.gameStateSubscription);
       this.gameStateSubscription = null;
     }
+    
+    // Clear event handlers
+    this.onMove = undefined;
+    this.onPlayerJoined = undefined;
+    this.onPlayerLeft = undefined;
+    this.onGameStateUpdate = undefined;
+    this.onError = undefined;
 
     // Remove player from database (use database UUID, not client ID)
     if (this.roomId && this.databasePlayerId) {
@@ -452,6 +503,63 @@ export class MultiplayerService {
 
   getPlayerNumber(): 1 | 2 {
     return this.playerNumber;
+  }
+
+  // Recovery method: restore roomId from room code (for Fast Refresh issues)
+  async recoverRoomFromCode(roomCode: string): Promise<void> {
+    if (!isSupabaseConfigured()) {
+      console.error('Cannot recover room: Supabase not configured');
+      return;
+    }
+
+    if (this.roomId) {
+      console.log('Room already has roomId:', this.roomId);
+      return;
+    }
+
+    try {
+      console.log('Attempting to recover roomId from code:', roomCode);
+      const { data: room, error } = await supabase!
+        .from('game_rooms')
+        .select('id, status')
+        .eq('room_code', roomCode.toUpperCase())
+        .single();
+
+      if (error || !room) {
+        console.error('Failed to find room by code:', error);
+        return;
+      }
+
+      this.roomId = room.id;
+      console.log('✅ Recovered roomId:', this.roomId, 'from room code:', roomCode);
+      
+      // Also restore subscriptions if they're missing
+      if (!this.moveSubscription) {
+        console.log('Restoring subscriptions after recovery');
+        this.setupSubscriptions(room.id);
+      }
+
+      // Note: Don't try to restore player number automatically during recovery
+      // The player number should already be set correctly from createRoom/joinRoom
+      // Only restore database player ID if we have a clue
+      if (!this.databasePlayerId) {
+        const { data: players } = await supabase!
+          .from('game_players')
+          .select('*')
+          .eq('room_id', room.id)
+          .order('created_at', { ascending: true });
+
+        if (players && players.length > 0) {
+          // Just log what we found, but don't assume player number
+          console.log('Found', players.length, 'players in room, but player number should be set from initial join');
+          console.log('Current playerNumber:', this.playerNumber);
+        }
+      } else {
+        console.log('Database player ID already set:', this.databasePlayerId);
+      }
+    } catch (error) {
+      console.error('Error recovering room:', error);
+    }
   }
 }
 

@@ -109,7 +109,12 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     const opponent = roomInfo.players.find(p => p.playerNumber !== playerNumber);
     setOpponentName(opponent?.name || 'Opponent');
 
-    // Set up move callback from Supabase
+    // Verify service has roomId set (for debugging)
+    const serviceRoomId = multiplayerService.getCurrentRoomId();
+    console.log('MultiplayerGame mounted - Service roomId:', serviceRoomId, 'Player:', playerNumber);
+    
+    // IMPORTANT: Set up move callback FIRST before any recovery
+    // This ensures the handler is ready when moves arrive
     console.log('Setting up onMove handler for player', playerNumber);
     multiplayerService.onMove = (move: GameMove) => {
       console.log('onMove callback triggered:', move);
@@ -123,10 +128,26 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
       });
     };
 
+    // If roomId is missing, recover it immediately
+    const ensureRoomId = async () => {
+      const currentRoomId = multiplayerService.getCurrentRoomId();
+      if (!currentRoomId) {
+        console.warn('⚠️ Service roomId is null when game starts! Attempting to recover...');
+        await multiplayerService.recoverRoomFromCode(roomInfo.roomId);
+        const recovered = multiplayerService.getCurrentRoomId();
+        if (recovered) {
+          console.log('✅ RoomId recovered successfully:', recovered);
+        } else {
+          console.error('❌ Failed to recover roomId');
+        }
+      }
+    };
+    ensureRoomId();
+
     return () => {
-      // Clean up is handled by multiplayerService when leaving
-      console.log('Cleaning up onMove handler');
-      multiplayerService.onMove = undefined;
+      // Don't clear onMove handler - let it persist during the game
+      // Only clean up when explicitly leaving
+      console.log('MultiplayerGame unmounting (but keeping onMove handler)');
     };
   }, [roomInfo, playerNumber, applyMove]);
 
@@ -274,6 +295,20 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
 
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Ensure roomId is set before sending move
+    const serviceRoomId = multiplayerService.getCurrentRoomId();
+    if (!serviceRoomId) {
+      console.warn('RoomId missing, attempting recovery before sending move...');
+      await multiplayerService.recoverRoomFromCode(roomInfo.roomId);
+      const recovered = multiplayerService.getCurrentRoomId();
+      if (!recovered) {
+        console.error('Cannot send move: roomId recovery failed');
+        alert('Connection lost. Please refresh and rejoin the room.');
+        return;
+      }
+      console.log('RoomId recovered, proceeding with move');
+    }
 
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
