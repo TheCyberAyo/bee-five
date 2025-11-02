@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { multiplayerService, type RoomInfo, type PlayerInfo } from '../services/multiplayerService';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { soundManager } from '../utils/sounds';
 
 interface MultiplayerLobbyProps {
@@ -37,12 +38,15 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
     setError(null);
 
     try {
+      console.log('Creating room for player:', playerName.trim());
       const roomInfo = await multiplayerService.createRoom(playerName.trim());
+      console.log('Room created successfully:', roomInfo);
       setCurrentRoom(roomInfo);
       setLobbyMode('waiting');
       
       // Set up listener for when player joins
       multiplayerService.onPlayerJoined = (player) => {
+        console.log('Player joined:', player);
         const updatedRoom: RoomInfo = {
           ...roomInfo,
           players: [
@@ -60,8 +64,18 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
         onGameStart(updatedRoom, 1);
       };
       
+      // Set up error handler
+      multiplayerService.onError = (errorMsg) => {
+        console.error('Multiplayer service error:', errorMsg);
+        setError(errorMsg);
+      };
+      
     } catch (error) {
-      setError('Failed to create room. Please try again.');
+      console.error('Error creating room:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to create room. Please check your connection and try again.';
+      setError(errorMessage);
     } finally {
       setIsCreatingRoom(false);
       soundManager.playClickSound();
@@ -115,29 +129,52 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
     onBackToMenu();
   };
 
-  const renderLobbyMenu = () => (
-    <div style={{ textAlign: 'center' }}>
-      <h2 style={{ color: 'black', marginBottom: '30px' }}>
-        🐝 Direct Multiplayer 🐝
-      </h2>
+  const renderLobbyMenu = () => {
+    const isConfigured = isSupabaseConfigured();
+    
+    return (
+      <div style={{ textAlign: 'center' }}>
+        <h2 style={{ color: 'black', marginBottom: '30px' }}>
+          🐝 Direct Multiplayer 🐝
+        </h2>
 
-      <div style={{ marginBottom: '20px' }}>
-        <input
-          type="text"
-          placeholder="Enter your name"
-          value={playerName}
-          onChange={(e) => setPlayerName(e.target.value)}
-          style={{
-            padding: '10px',
-            fontSize: '1em',
-            borderRadius: '5px',
-            border: '2px solid black',
-            width: '200px',
-            textAlign: 'center'
-          }}
-          maxLength={20}
-        />
-      </div>
+        {!isConfigured && (
+          <div style={{ 
+            marginBottom: '20px', 
+            backgroundColor: '#fff3cd', 
+            padding: '15px', 
+            borderRadius: '8px',
+            border: '2px solid #ffc107'
+          }}>
+            <p style={{ 
+              color: '#856404', 
+              fontSize: '0.9em', 
+              margin: 0, 
+              textAlign: 'center',
+              fontWeight: 'bold'
+            }}>
+              ⚠️ Supabase is not configured. Please check your .env.local file.
+            </p>
+          </div>
+        )}
+
+        <div style={{ marginBottom: '20px' }}>
+          <input
+            type="text"
+            placeholder="Enter your name"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            style={{
+              padding: '10px',
+              fontSize: '1em',
+              borderRadius: '5px',
+              border: '2px solid black',
+              width: '200px',
+              textAlign: 'center'
+            }}
+            maxLength={20}
+          />
+        </div>
 
       <div style={{ 
         marginBottom: '20px', 
@@ -160,7 +197,7 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
       <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginBottom: '20px' }}>
         <button
           onClick={() => setLobbyMode('create')}
-          disabled={!playerName.trim()}
+          disabled={!playerName.trim() || !isConfigured}
           style={{
             padding: '12px 20px',
             fontSize: '1em',
@@ -168,8 +205,8 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
             color: 'white',
             border: '2px solid black',
             borderRadius: '8px',
-            cursor: !playerName.trim() ? 'not-allowed' : 'pointer',
-            opacity: !playerName.trim() ? 0.5 : 1
+            cursor: (!playerName.trim() || !isConfigured) ? 'not-allowed' : 'pointer',
+            opacity: (!playerName.trim() || !isConfigured) ? 0.5 : 1
           }}
         >
           🏠 Create Room
@@ -177,7 +214,7 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
 
         <button
           onClick={() => setLobbyMode('join')}
-          disabled={!playerName.trim()}
+          disabled={!playerName.trim() || !isConfigured}
           style={{
             padding: '12px 20px',
             fontSize: '1em',
@@ -185,8 +222,8 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
             color: 'white',
             border: '2px solid black',
             borderRadius: '8px',
-            cursor: !playerName.trim() ? 'not-allowed' : 'pointer',
-            opacity: !playerName.trim() ? 0.5 : 1
+            cursor: (!playerName.trim() || !isConfigured) ? 'not-allowed' : 'pointer',
+            opacity: (!playerName.trim() || !isConfigured) ? 0.5 : 1
           }}
         >
           🚪 Join Room
@@ -198,8 +235,9 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
           {error}
         </div>
       )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderCreateRoom = () => (
     <div style={{ textAlign: 'center' }}>
@@ -242,9 +280,26 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
         {isCreatingRoom ? '🔄 Creating...' : '🏠 Create Room'}
       </button>
 
+      {error && (
+        <div style={{ 
+          color: '#f44336', 
+          fontSize: '0.9em', 
+          marginBottom: '15px',
+          padding: '10px',
+          backgroundColor: '#ffebee',
+          borderRadius: '5px',
+          border: '1px solid #f44336'
+        }}>
+          ⚠️ {error}
+        </div>
+      )}
+
       <div style={{ marginTop: '20px' }}>
         <button
-          onClick={() => setLobbyMode('menu')}
+          onClick={() => {
+            setError(null);
+            setLobbyMode('menu');
+          }}
           style={{
             padding: '8px 16px',
             fontSize: '0.9em',

@@ -57,7 +57,10 @@ export class MultiplayerService {
         .select()
         .single();
 
-      if (roomError) throw roomError;
+      if (roomError) {
+        console.error('Error creating room in database:', roomError);
+        throw new Error(`Failed to create room: ${roomError.message || 'Database error'}`);
+      }
 
       // Add host as player
       const { data: player, error: playerError } = await supabase!
@@ -71,7 +74,12 @@ export class MultiplayerService {
         .select()
         .single();
 
-      if (playerError) throw playerError;
+      if (playerError) {
+        console.error('Error creating player in database:', playerError);
+        // Clean up room if player creation fails
+        await supabase!.from('game_rooms').delete().eq('id', room.id);
+        throw new Error(`Failed to add player: ${playerError.message || 'Database error'}`);
+      }
 
       this.roomId = room.id;
       this.playerNumber = 1;
@@ -92,8 +100,12 @@ export class MultiplayerService {
       };
     } catch (error) {
       console.error('Error creating room:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to create room. Please check your connection.';
+      
       if (this.onError) {
-        this.onError('Failed to create room');
+        this.onError(errorMessage);
       }
       throw error;
     }
