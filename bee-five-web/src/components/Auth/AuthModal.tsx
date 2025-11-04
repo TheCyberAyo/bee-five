@@ -19,12 +19,25 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
-  const { signUp, signIn, signInWithProvider, refreshProfile } = useAuth();
+  const [justSignedIn, setJustSignedIn] = useState(false);
+  const { signUp, signIn, signInWithProvider, refreshProfile, user } = useAuth();
+
+  // Close modal when user successfully signs in
+  useEffect(() => {
+    if (user && (justSignedIn || !loading)) {
+      // User is signed in, close the modal
+      setJustSignedIn(false);
+      setLoading(false);
+      onClose();
+      onSuccess?.();
+    }
+  }, [user, loading, justSignedIn, onClose, onSuccess]);
 
   // Check username availability when user types (debounced)
   useEffect(() => {
     if (!isSignUp || !username.trim() || username.trim().length < 3) {
       setUsernameError(null);
+      setCheckingUsername(false);
       return;
     }
 
@@ -32,16 +45,28 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       setCheckingUsername(true);
       setUsernameError(null);
       
-      const result = await isUsernameAvailable(username.trim());
-      
-      if (!result.available) {
-        setUsernameError(result.error || 'Username is already taken');
+      try {
+        const result = await isUsernameAvailable(username.trim());
+        
+        if (!result.available) {
+          setUsernameError(result.error || 'Username is already taken');
+        } else {
+          setUsernameError(null);
+        }
+      } catch (error) {
+        console.error('Error checking username:', error);
+        // Don't set error on check failure - let user try to submit
+        setUsernameError(null);
+      } finally {
+        setCheckingUsername(false);
       }
-      
-      setCheckingUsername(false);
     }, 500); // Debounce for 500ms
 
-    return () => clearTimeout(checkTimer);
+    return () => {
+      clearTimeout(checkTimer);
+      // Reset checking state if component unmounts or username changes
+      setCheckingUsername(false);
+    };
   }, [username, isSignUp]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,6 +84,24 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         }
 
         // Check username availability before signup
+        // Wait if debounced check is still running
+        if (checkingUsername) {
+          // Wait for debounced check to complete (max 1 second)
+          let waited = 0;
+          while (checkingUsername && waited < 1000) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waited += 100;
+          }
+        }
+        
+        // If username already has an error from debounced check, don't proceed
+        if (usernameError) {
+          setError(usernameError);
+          setLoading(false);
+          return;
+        }
+        
+        // Final username check before signup
         const usernameCheck = await isUsernameAvailable(username.trim());
         if (!usernameCheck.available) {
           setError(usernameCheck.error || 'Username is already taken. Please choose another.');
@@ -70,6 +113,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         const { error } = await signUp(email, password, username.trim());
         if (error) {
           setError(error.message || 'Failed to sign up');
+          setLoading(false);
         } else {
           // Update profile with username (after trigger creates it)
           const supabaseClient = supabase;
@@ -99,23 +143,28 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             }, 1000);
           }
           setError(null);
+          setLoading(false);
           // Check email confirmation message
           alert('Please check your email to confirm your account!');
+          // Close modal after sign up (even if email confirmation is required)
+          onClose();
           onSuccess?.();
         }
       } else {
         const { error } = await signIn(email, password);
         if (error) {
           setError(error.message || 'Failed to sign in');
+          setLoading(false);
+          setJustSignedIn(false);
         } else {
+          // Success - mark that we just signed in, useEffect will close modal
           setError(null);
-          onSuccess?.();
-          onClose();
+          setJustSignedIn(true);
+          // The useEffect will detect user and close the modal
         }
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
-    } finally {
       setLoading(false);
     }
   };
@@ -387,6 +436,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);
+              setJustSignedIn(false);
             }}
             style={{
               background: 'none',

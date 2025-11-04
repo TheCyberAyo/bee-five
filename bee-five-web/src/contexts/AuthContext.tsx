@@ -44,7 +44,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase?.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase?.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change:', event, session?.user?.email || 'no user');
+      
+      // If SIGNED_OUT event, ensure we clear everything
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -137,12 +148,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     
-    // Clear local state immediately for instant feedback
-    setSession(null);
-    setUser(null);
-    setProfile(null);
+    console.log('SignOut: Starting sign out process...');
     
-    // Clear storage immediately
+    // Clear storage first to prevent auth state listener from restoring session
     if (typeof window !== 'undefined') {
       try {
         // Clear all Supabase auth-related keys
@@ -167,6 +175,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     
+    // Clear local state immediately
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    
     // Try to sign out from Supabase with a timeout
     try {
       console.log('SignOut: Attempting to sign out from Supabase...');
@@ -179,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Sign out timeout')), 3000)
+        setTimeout(() => reject(new Error('Sign out timeout')), 2000)
       );
       
       await Promise.race([signOutPromise, timeoutPromise]);
@@ -188,6 +201,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn('SignOut: Error or timeout during Supabase signOut:', error);
       // State already cleared, so we continue anyway
     }
+    
+    // Double-check: ensure state is cleared
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    console.log('SignOut: Sign out process completed');
   };
 
   const signInWithProvider = async (provider: 'google' | 'github') => {

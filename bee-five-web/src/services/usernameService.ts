@@ -5,7 +5,9 @@ import { supabase } from '../lib/supabase';
  */
 export async function isUsernameAvailable(username: string): Promise<{ available: boolean; error?: string }> {
   if (!supabase) {
-    return { available: false, error: 'Supabase is not configured' };
+    // If Supabase is not configured, allow the username (will fail later during signup)
+    console.warn('Supabase not configured, skipping username check');
+    return { available: true };
   }
 
   if (!username || username.trim().length < 3) {
@@ -22,21 +24,33 @@ export async function isUsernameAvailable(username: string): Promise<{ available
   }
 
   try {
+    // Normalize username for comparison (lowercase, trimmed)
+    const normalizedUsername = username.trim().toLowerCase();
+    
+    // Fetch usernames and check case-insensitively
+    // Note: This fetches all usernames, which is fine for small apps
+    // For large apps, consider using a database function for case-insensitive search
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('username')
-      .eq('username', username.trim())
-      .limit(1);
+      .select('username');
 
     if (error) {
       console.error('Error checking username:', error);
-      return { available: false, error: 'Error checking username availability' };
+      // On error, allow the username (optimistic approach)
+      // The database constraint will catch duplicates anyway
+      return { available: true };
     }
 
-    return { available: data.length === 0 };
+    // Check if any existing username matches (case-insensitive)
+    const exists = data?.some(profile => 
+      profile.username?.toLowerCase() === normalizedUsername
+    ) || false;
+
+    return { available: !exists };
   } catch (error) {
     console.error('Error checking username:', error);
-    return { available: false, error: 'Error checking username availability' };
+    // On error, allow the username (optimistic approach)
+    return { available: true };
   }
 }
 
