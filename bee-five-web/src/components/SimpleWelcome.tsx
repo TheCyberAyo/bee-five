@@ -1537,6 +1537,8 @@ export default function SimpleWelcome() {
           onClose={() => setShowAuthModal(false)}
           onSuccess={() => {
             setShowAuthModal(false);
+            // Ensure we're on the main menu after sign in
+            setGameMode('menu');
           }}
         />
       )}

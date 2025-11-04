@@ -250,6 +250,8 @@ export default function Profile({ onBackToMenu, isMobile }: ProfileProps) {
           onClose={() => setShowAuthModal(false)}
           onSuccess={() => {
             setShowAuthModal(false);
+            // Navigate back to menu after successful sign in
+            onBackToMenu();
           }}
         />
       )}
