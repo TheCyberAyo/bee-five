@@ -7,14 +7,26 @@ import { isSupabaseConfigured } from '../lib/supabase';
  * Shows helpful information if Supabase is not configured
  */
 export function SupabaseStatus() {
+  // Get environment variables (Next.js bundles NEXT_PUBLIC_* vars at build time)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Check if variables are present and valid
+  const hasUrl = supabaseUrl && 
+                 supabaseUrl.trim() !== '' && 
+                 supabaseUrl.trim() !== 'YOUR_SUPABASE_URL' &&
+                 supabaseUrl.trim().startsWith('https://');
+  
+  const hasKey = supabaseKey && 
+                 supabaseKey.trim() !== '' && 
+                 supabaseKey.trim() !== 'YOUR_SUPABASE_ANON_KEY' &&
+                 supabaseKey.trim().startsWith('eyJ');
+  
+  // Check if Supabase is actually configured (server-side check)
   const isConfigured = isSupabaseConfigured();
-  // Check if variables are available (may be undefined on client if not loaded at build time)
-  const hasUrl = typeof process.env.NEXT_PUBLIC_SUPABASE_URL !== 'undefined' && 
-                 process.env.NEXT_PUBLIC_SUPABASE_URL !== '';
-  const hasKey = typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'undefined' && 
-                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== '';
-
-  if (isConfigured) {
+  
+  // Only show error if both checks fail (client-side vars missing AND server-side not configured)
+  if (isConfigured || (hasUrl && hasKey)) {
     return null; // Don't show anything if configured
   }
 
@@ -38,8 +50,16 @@ export function SupabaseStatus() {
       <div style={{ color: '#856404', marginBottom: '10px' }}>
         Environment variables status:
         <ul style={{ margin: '5px 0', paddingLeft: '20px' }}>
-          <li>NEXT_PUBLIC_SUPABASE_URL: {hasUrl ? '✅ Set' : '❌ Missing'}</li>
-          <li>NEXT_PUBLIC_SUPABASE_ANON_KEY: {hasKey ? '✅ Set' : '❌ Missing'}</li>
+          <li>NEXT_PUBLIC_SUPABASE_URL: {hasUrl ? '✅ Set' : '❌ Missing'}
+            {supabaseUrl && !hasUrl && <span style={{ fontSize: '0.75em', display: 'block', marginTop: '2px' }}>
+              (Invalid: {supabaseUrl.substring(0, 30)}...)
+            </span>}
+          </li>
+          <li>NEXT_PUBLIC_SUPABASE_ANON_KEY: {hasKey ? '✅ Set' : '❌ Missing'}
+            {supabaseKey && !hasKey && <span style={{ fontSize: '0.75em', display: 'block', marginTop: '2px' }}>
+              (Invalid format)
+            </span>}
+          </li>
         </ul>
       </div>
       <div style={{ fontSize: '0.8em', color: '#856404' }}>
