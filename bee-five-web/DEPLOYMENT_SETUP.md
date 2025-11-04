@@ -1,8 +1,52 @@
 # Deployment Setup Guide
 
+This guide explains how to configure Supabase environment variables for both local development and production deployments.
+
+---
+
+## 🏠 Local Development Setup
+
+**If you're seeing this error while running locally**, you need to create a `.env.local` file.
+
+### Quick Setup for Local Development
+
+1. **Get your Supabase credentials:**
+   - Go to [Supabase Dashboard](https://supabase.com/dashboard)
+   - Select your project
+   - Navigate to **Settings → API**
+   - Copy:
+     - **Project URL** (e.g., `https://xxxxx.supabase.co`)
+     - **anon/public key** (starts with `eyJhbG...`)
+
+2. **Create `.env.local` file** in your project root (`bee-five-web/` folder):
+   ```bash
+   # Create the file (or use your code editor)
+   touch .env.local
+   ```
+
+3. **Add these variables** to `.env.local`:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
+
+4. **Restart your development server:**
+   ```bash
+   # Stop the server (Ctrl+C), then:
+   npm run dev
+   ```
+
+5. **Verify:** The warning should disappear and Supabase should be configured! ✅
+
+**Note:** See `SUPABASE_SETUP.md` for detailed setup instructions including database table creation.
+
+---
+
+## 🚀 Production Deployment Setup
+
 This guide explains how to configure Supabase environment variables for production deployments.
 
-## The Problem
+### The Problem
 
 Your `.env.local` file contains your Supabase credentials, but this file is:
 - Not committed to git (for security)

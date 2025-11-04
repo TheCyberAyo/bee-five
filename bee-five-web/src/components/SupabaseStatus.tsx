@@ -8,8 +8,11 @@ import { isSupabaseConfigured } from '../lib/supabase';
  */
 export function SupabaseStatus() {
   const isConfigured = isSupabaseConfigured();
-  const hasUrl = typeof process.env.NEXT_PUBLIC_SUPABASE_URL !== 'undefined';
-  const hasKey = typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'undefined';
+  // Check if variables are available (may be undefined on client if not loaded at build time)
+  const hasUrl = typeof process.env.NEXT_PUBLIC_SUPABASE_URL !== 'undefined' && 
+                 process.env.NEXT_PUBLIC_SUPABASE_URL !== '';
+  const hasKey = typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'undefined' && 
+                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== '';
 
   if (isConfigured) {
     return null; // Don't show anything if configured
@@ -40,9 +43,12 @@ export function SupabaseStatus() {
         </ul>
       </div>
       <div style={{ fontSize: '0.8em', color: '#856404' }}>
-        <strong>Solution:</strong> Set environment variables in your deployment platform.
-        <br />
-        See <strong>DEPLOYMENT_SETUP.md</strong> for instructions.
+        <strong>Solution:</strong> 
+        <ul style={{ margin: '5px 0', paddingLeft: '20px', marginTop: '5px' }}>
+          <li>Create <code>.env.local</code> file in <code>bee-five-web/</code> folder</li>
+          <li>Add your Supabase credentials (see <strong>DEPLOYMENT_SETUP.md</strong>)</li>
+          <li><strong>Restart your dev server</strong> (Ctrl+C then <code>npm run dev</code>)</li>
+        </ul>
       </div>
     </div>
   );
