@@ -10,6 +10,8 @@ import { useTheme } from '../hooks/useTheme';
 import BeeLifeStageEffects from './BeeLifeStageEffects';
 import { getBeeFactForGame } from '../data/beeFacts';
 import { getStoryForGame, shouldShowStory, type StageStory } from '../data/stageStories';
+import { useAuth } from '../contexts/AuthContext';
+import { loadAdventureProgress, saveAdventureProgress, autoSaveProgress } from '../services/progressService';
 
 interface AdventureGameProps {
   onBackToMenu: () => void;
@@ -69,10 +71,12 @@ const ADVENTURE_STAGES = [
 ];
 
 const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
+  const { user } = useAuth();
   const [currentGame, setCurrentGame] = useState(1);
   const [gamesWon, setGamesWon] = useState(0);
   const [gamesCompleted, setGamesCompleted] = useState<number[]>([]);
   const [highestUnlockedGame, setHighestUnlockedGame] = useState(1); // Track the highest unlocked game (starts at 1)
+  const [progressLoaded, setProgressLoaded] = useState(false);
   const [showBeeFact, setShowBeeFact] = useState(false);
   const [currentBeeFact, setCurrentBeeFact] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(true);
@@ -185,12 +189,36 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     soundManager.setMuted(!soundEnabled);
   }, [volume, soundEnabled]);
 
+  // Load progress on mount if user is logged in
+  useEffect(() => {
+    const loadProgress = async () => {
+      if (user && !progressLoaded) {
+        try {
+          const progress = await loadAdventureProgress(user.id);
+          if (progress) {
+            setCurrentGame(progress.current_game);
+            setHighestUnlockedGame(progress.highest_unlocked_game);
+            setGamesCompleted(progress.games_completed);
+            setGamesWon(progress.games_won);
+          }
+          setProgressLoaded(true);
+        } catch (error) {
+          console.error('Error loading progress:', error);
+          setProgressLoaded(true);
+        }
+      } else if (!user) {
+        setProgressLoaded(true);
+      }
+    };
+    loadProgress();
+  }, [user, progressLoaded]);
+
   React.useEffect(() => {
-    setGamesWon(0);
+    if (!progressLoaded) return;
     setPlayerWins(0);
     setAiWins(0);
     setGameProcessed(false);
-  }, []);
+  }, [progressLoaded]);
 
    // Handle start countdown (3 seconds before game starts)
    React.useEffect(() => {
@@ -278,15 +306,34 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
              // Check if match is complete after this win
              if (newPlayerWins >= requiredWins || (currentMatch > totalGames)) {
                setIsMatchComplete(true);
-               setGamesWon(prevGames => prevGames + 1);
+               setGamesWon(prevGames => {
+                 const newGamesWon = prevGames + 1;
+                 // Auto-save progress when winning match
+                 if (user) {
+                   autoSaveProgress(user.id, {
+                     current_game: currentGame + 1,
+                     highest_unlocked_game: Math.max(highestUnlockedGame, currentGame + 1),
+                     games_completed: gamesCompleted.includes(currentGame) ? gamesCompleted : [...gamesCompleted, currentGame],
+                     games_won: newGamesWon,
+                   });
+                 }
+                 return newGamesWon;
+               });
                // Unlock the next game when match is won
                setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
                
                setGamesCompleted(prev => {
-                 if (!prev.includes(currentGame)) {
-                   return [...prev, currentGame];
+                 const newCompleted = !prev.includes(currentGame) ? [...prev, currentGame] : prev;
+                 // Auto-save progress when game is completed
+                 if (user && !prev.includes(currentGame)) {
+                   autoSaveProgress(user.id, {
+                     current_game: currentGame,
+                     highest_unlocked_game: highestUnlockedGame,
+                     games_completed: newCompleted,
+                     games_won: gamesWon,
+                   });
                  }
-                 return prev;
+                 return newCompleted;
                });
                
                // Show results popup for best-of-3 matches with 1 second delay
@@ -336,15 +383,34 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         setWinMessage(`${winText} 🐝`);
         
          if (gameState.winner === 1) {
-           setGamesWon(prev => prev + 1);
+           setGamesWon(prev => {
+             const newGamesWon = prev + 1;
+             // Auto-save progress when winning
+             if (user) {
+               autoSaveProgress(user.id, {
+                 current_game: currentGame + 1,
+                 highest_unlocked_game: Math.max(highestUnlockedGame, currentGame + 1),
+                 games_completed: gamesCompleted.includes(currentGame) ? gamesCompleted : [...gamesCompleted, currentGame],
+                 games_won: newGamesWon,
+               });
+             }
+             return newGamesWon;
+           });
            // Unlock the next game when current game is won
            setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
          }
         setGamesCompleted(prev => {
-          if (!prev.includes(currentGame)) {
-            return [...prev, currentGame];
+          const newCompleted = !prev.includes(currentGame) ? [...prev, currentGame] : prev;
+          // Auto-save progress when game is completed
+          if (user && !prev.includes(currentGame)) {
+            autoSaveProgress(user.id, {
+              current_game: currentGame,
+              highest_unlocked_game: highestUnlockedGame,
+              games_completed: newCompleted,
+              games_won: gamesWon,
+            });
           }
-          return prev;
+          return newCompleted;
         });
         
         // Show win popup after 1 second delay
@@ -361,10 +427,17 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       if (requiresMatchSystem(currentGame)) {
       } else {
         setGamesCompleted(prev => {
-          if (!prev.includes(currentGame)) {
-            return [...prev, currentGame];
+          const newCompleted = !prev.includes(currentGame) ? [...prev, currentGame] : prev;
+          // Auto-save progress when game is completed
+          if (user && !prev.includes(currentGame)) {
+            autoSaveProgress(user.id, {
+              current_game: currentGame,
+              highest_unlocked_game: highestUnlockedGame,
+              games_completed: newCompleted,
+              games_won: gamesWon,
+            });
           }
-          return prev;
+          return newCompleted;
         });
       }
       
@@ -390,15 +463,34 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
              // Check if match is complete after this win
              if (newPlayerWins >= requiredWins || (currentMatch > totalGames)) {
                setIsMatchComplete(true);
-               setGamesWon(prevGames => prevGames + 1);
+               setGamesWon(prevGames => {
+                 const newGamesWon = prevGames + 1;
+                 // Auto-save progress when winning match
+                 if (user) {
+                   autoSaveProgress(user.id, {
+                     current_game: currentGame + 1,
+                     highest_unlocked_game: Math.max(highestUnlockedGame, currentGame + 1),
+                     games_completed: gamesCompleted.includes(currentGame) ? gamesCompleted : [...gamesCompleted, currentGame],
+                     games_won: newGamesWon,
+                   });
+                 }
+                 return newGamesWon;
+               });
                // Unlock the next game when match is won
                setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
                
                setGamesCompleted(prev => {
-                 if (!prev.includes(currentGame)) {
-                   return [...prev, currentGame];
+                 const newCompleted = !prev.includes(currentGame) ? [...prev, currentGame] : prev;
+                 // Auto-save progress when game is completed
+                 if (user && !prev.includes(currentGame)) {
+                   autoSaveProgress(user.id, {
+                     current_game: currentGame,
+                     highest_unlocked_game: highestUnlockedGame,
+                     games_completed: newCompleted,
+                     games_won: gamesWon,
+                   });
                  }
-                 return prev;
+                 return newCompleted;
                });
                
                // Show results popup for best-of-3 matches with 1 second delay
@@ -447,16 +539,35 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         const winText = gameState.currentPlayer === 1 ? 'Time\'s Up - You Lost' : 'Time\'s Up - You Won!';
         setWinMessage(`${winText} 🐝`);
         
-         if (gameState.currentPlayer === 2) {
-           setGamesWon(prev => prev + 1);
-           // Unlock the next game when current game is won
-           setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
+        if (gameState.currentPlayer === 2) {
+          setGamesWon(prev => {
+            const newGamesWon = prev + 1;
+            // Auto-save progress when winning
+            if (user) {
+               autoSaveProgress(user.id, {
+                 current_game: currentGame + 1,
+                 highest_unlocked_game: Math.max(highestUnlockedGame, currentGame + 1),
+                 games_completed: gamesCompleted.includes(currentGame) ? gamesCompleted : [...gamesCompleted, currentGame],
+                 games_won: newGamesWon,
+               });
+            }
+            return newGamesWon;
+          });
+          // Unlock the next game when current game is won
+          setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
          }
         setGamesCompleted(prev => {
-          if (!prev.includes(currentGame)) {
-            return [...prev, currentGame];
+          const newCompleted = !prev.includes(currentGame) ? [...prev, currentGame] : prev;
+          // Auto-save progress when game is completed
+          if (user && !prev.includes(currentGame)) {
+            autoSaveProgress(user.id, {
+              current_game: currentGame,
+              highest_unlocked_game: highestUnlockedGame,
+              games_completed: newCompleted,
+              games_won: gamesWon,
+            });
           }
-          return prev;
+          return newCompleted;
         });
         
         // Show timeout popup after 1 second delay

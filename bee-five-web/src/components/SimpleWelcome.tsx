@@ -16,8 +16,11 @@ import NewsUpdates from './NewsUpdates';
 import PrivacyPolicy from './PrivacyPolicy';
 import Settings from './Settings';
 import ContactUs from './ContactUs';
+import Profile from './Profile';
 import SidebarMenu from './SidebarMenu';
 import MobileHeader from './MobileHeader';
+import { useAuth } from '../contexts/AuthContext';
+import AuthModal from './Auth/AuthModal';
 
 export default function SimpleWelcome() {
   const [gameMode, setGameMode] = useState<'menu' | 'local-multiplayer' | 'online-lobby' | 'online-game' | 'ai-game' | 'adventure-game' | 'show-take-turns-submenu' | 'show-ai-submenu' | 'competition' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
@@ -31,6 +34,10 @@ export default function SimpleWelcome() {
   const [aiTimer, setAiTimer] = useState<number>(15);
   const [isMobile, setIsMobile] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState<'yellow' | 'black'>('yellow');
+  
+  // Auth state
+  const { user, profile, loading: authLoading } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   
   // Competition system state (fresh tournament implementation)
   const [showCompetitionModal, setShowCompetitionModal] = useState(false);
@@ -149,6 +156,11 @@ export default function SimpleWelcome() {
   // Handle Contact Us page
   if (gameMode === 'contact-us') {
     return <ContactUs onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+  }
+
+  // Handle Profile page
+  if (gameMode === 'profile') {
+    return <Profile onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
   }
 
   // Handle Take Turns submenu
@@ -1464,6 +1476,44 @@ export default function SimpleWelcome() {
             <span style={{ fontSize: '1.3em' }}>🌐</span>
             <span>Online Multiplayer</span>
           </button>
+
+          {/* Auth Section - Only show sign in button if not logged in */}
+          {!user && (
+            <div style={{
+              marginTop: isMobile ? '1rem' : '1.5rem',
+              paddingTop: isMobile ? '1rem' : '1.5rem',
+              borderTop: '2px solid rgba(255, 195, 11, 0.3)',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+              alignItems: 'center'
+            }}>
+              <button
+                onClick={() => {
+                  setShowAuthModal(true);
+                  soundManager.playClickSound();
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 100%)',
+                  color: '#000',
+                  border: '2px solid #000',
+                  borderRadius: isMobile ? '12px' : '16px',
+                  padding: isMobile ? '0.75rem 1rem' : '0.75rem 1.5rem',
+                  fontSize: isMobile ? '0.95rem' : '1rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                  width: '100%',
+                  maxWidth: isMobile ? '100%' : '250px',
+                  touchAction: 'manipulation',
+                }}
+              >
+                🔐 Sign In / Sign Up
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -1480,6 +1530,16 @@ export default function SimpleWelcome() {
           </p>
         </footer>
       </div>
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => {
+            setShowAuthModal(false);
+          }}
+        />
+      )}
 
       {/* Competition Modal - Fresh tournament implementation */}
       {showCompetitionModal && createPortal(
