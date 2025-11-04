@@ -131,7 +131,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) {
       return;
     }
-    await supabase.auth.signOut();
+    
+    try {
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Error signing out:', error);
+        // Even if there's an error, clear local state as fallback
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        throw error;
+      }
+      
+      // The onAuthStateChange listener should handle clearing state,
+      // but we'll also clear it here to be safe
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Ensure state is cleared even if signOut fails
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      throw error;
+    }
   };
 
   const signInWithProvider = async (provider: 'google' | 'github') => {
