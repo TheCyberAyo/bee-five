@@ -40,6 +40,9 @@ Make sure your `.env.local` file has Supabase credentials:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Optional: Set this for production or when testing email confirmation on mobile
+# NEXT_PUBLIC_SITE_URL=https://your-deployed-site.com
 ```
 
 ## Step 4: Test Authentication
@@ -132,6 +135,31 @@ Both versions use the same database and authentication system.
 - Make sure you're signed in with the same account
 - Check browser console for errors
 - Verify the `adventure_progress` table has data for your user ID
+
+### Issue: Email confirmation link redirects to localhost:3000 (ERR_CONNECTION_FAILED)
+This happens when you click the email confirmation link on a mobile device or different network. The fix:
+
+1. **For Production/Deployed Sites:**
+   - Add `NEXT_PUBLIC_SITE_URL` to your `.env.local` file (or production environment variables):
+     ```env
+     NEXT_PUBLIC_SITE_URL=https://your-deployed-site.com
+     ```
+   - Replace `https://your-deployed-site.com` with your actual deployed URL (e.g., `https://bee-five.vercel.app`)
+   - Restart your development server
+
+2. **Configure Supabase Redirect URLs:**
+   - Go to your Supabase Dashboard → Authentication → URL Configuration
+   - Add your production URL to "Redirect URLs":
+     - `https://your-deployed-site.com/auth/callback`
+   - Also add localhost for local development:
+     - `http://localhost:3000/auth/callback`
+
+3. **For Local Development (Testing on Mobile):**
+   - If you want to test email confirmation on your phone while developing locally:
+     - Use a tool like [ngrok](https://ngrok.com/) to create a public tunnel to your localhost
+     - Set `NEXT_PUBLIC_SITE_URL` to your ngrok URL (e.g., `https://abc123.ngrok.io`)
+     - Add the ngrok URL to Supabase redirect URLs
+     - Note: ngrok URLs change each time you restart (unless you have a paid plan)
 
 ## Next Steps
 

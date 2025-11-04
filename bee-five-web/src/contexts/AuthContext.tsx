@@ -70,6 +70,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) {
       return { error: { message: 'Supabase is not configured' } };
     }
+    
+    // Get the redirect URL - use environment variable if set, otherwise use window.location.origin
+    // This ensures email confirmation links work on mobile devices
+    const getRedirectUrl = () => {
+      if (typeof window === 'undefined') return undefined;
+      
+      // Check for configured site URL (for production)
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+      if (siteUrl && siteUrl.startsWith('http')) {
+        return `${siteUrl}/auth/callback`;
+      }
+      
+      // Fall back to window.location.origin (for local development)
+      return `${window.location.origin}/auth/callback`;
+    };
+    
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -77,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           username: username || email.split('@')[0],
         },
+        emailRedirectTo: getRedirectUrl(),
       },
     });
     
@@ -121,10 +138,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) {
       return;
     }
+    
+    // Get the redirect URL - use environment variable if set, otherwise use window.location.origin
+    const getRedirectUrl = () => {
+      if (typeof window === 'undefined') return undefined;
+      
+      // Check for configured site URL (for production)
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+      if (siteUrl && siteUrl.startsWith('http')) {
+        return siteUrl;
+      }
+      
+      // Fall back to window.location.origin (for local development)
+      return window.location.origin;
+    };
+    
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}`,
+        redirectTo: getRedirectUrl(),
       },
     });
   };

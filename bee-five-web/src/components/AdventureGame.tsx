@@ -213,6 +213,33 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     loadProgress();
   }, [user, progressLoaded]);
 
+  // Save progress when navigating away or component unmounts
+  useEffect(() => {
+    const saveProgressOnUnmount = () => {
+      if (user && progressLoaded) {
+        // Use saveAdventureProgress directly (not autoSave) to ensure immediate save
+        saveAdventureProgress(user.id, {
+          current_game: currentGame,
+          highest_unlocked_game: highestUnlockedGame,
+          games_completed: gamesCompleted,
+          games_won: gamesWon,
+        });
+      }
+    };
+
+    // Save before page unload
+    window.addEventListener('beforeunload', saveProgressOnUnmount);
+
+    // Cleanup on unmount
+    return () => {
+      window.removeEventListener('beforeunload', saveProgressOnUnmount);
+      // Save one more time on cleanup
+      if (user && progressLoaded) {
+        saveProgressOnUnmount();
+      }
+    };
+  }, [user, progressLoaded, currentGame, highestUnlockedGame, gamesCompleted, gamesWon]);
+
   React.useEffect(() => {
     if (!progressLoaded) return;
     setPlayerWins(0);
@@ -1215,6 +1242,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
        
       if (playerWins >= requiredWins || aiWins >= requiredWins || currentMatch > totalGames) {
         setIsMatchComplete(true);
+        saveProgressOnMapReturn(); // Save progress when returning to map
         setShowMap(true);
         setGameInitialized(false); // Reset game initialization when returning to map
       } else {
@@ -1247,10 +1275,12 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         setIsWaitingForNextGame(false);
         setGameProcessed(false);
       } else {
+        saveProgressOnMapReturn(); // Save progress when returning to map
         setShowMap(true);
         setGameInitialized(false); // Reset game initialization when returning to map
       }
      } else {
+       saveProgressOnMapReturn(); // Save progress when returning to map
        setShowMap(true);
        setGameInitialized(false); // Reset game initialization when returning to map
      }
@@ -1287,6 +1317,16 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const handleGameSelect = (gameNumber: number) => {
     setCurrentGame(gameNumber);
     setShowMap(false);
+    
+    // Save progress when selecting a game
+    if (user) {
+      autoSaveProgress(user.id, {
+        current_game: gameNumber,
+        highest_unlocked_game: highestUnlockedGame,
+        games_completed: gamesCompleted,
+        games_won: gamesWon,
+      });
+    }
     
     // Check if we should show a story carousel first
     if (shouldShowStory(gameNumber)) {
@@ -1332,6 +1372,18 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const handleStageTransitionClose = () => {
     setShowStageTransition(false);
     if (soundEnabled) soundManager.playClickSound();
+  };
+
+  // Helper function to save progress when returning to map
+  const saveProgressOnMapReturn = () => {
+    if (user && progressLoaded) {
+      autoSaveProgress(user.id, {
+        current_game: currentGame,
+        highest_unlocked_game: highestUnlockedGame,
+        games_completed: gamesCompleted,
+        games_won: gamesWon,
+      });
+    }
   };
 
   const isMobile = window.innerWidth <= 768;
@@ -1712,6 +1764,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         }}>
           <button 
             onClick={() => {
+              saveProgressOnMapReturn(); // Save progress before going back to menu
               onBackToMenu();
               if (soundEnabled) soundManager.playClickSound();
             }}
@@ -1753,6 +1806,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         }}>
           <button
             onClick={() => {
+              saveProgressOnMapReturn(); // Save progress when returning to map
               setShowMap(true);
               setGameInitialized(false); // Reset game initialization when returning to map
               if (soundEnabled) soundManager.playClickSound();
@@ -2353,6 +2407,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                   <button 
                     onClick={() => {
                       setShowWinPopup(false);
+                      saveProgressOnMapReturn(); // Save progress before going back to menu
                       onBackToMenu();
                     }}
                     style={{
@@ -2542,6 +2597,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
               <button 
                 onClick={() => {
                   setShowResultsPopup(false);
+                  saveProgressOnMapReturn(); // Save progress before going back to menu
                   onBackToMenu();
                 }}
                 style={{
