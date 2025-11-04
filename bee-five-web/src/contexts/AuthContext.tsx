@@ -83,10 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // If signup successful and username provided, update profile immediately
     if (!error && username && supabase) {
       // Wait a moment for the trigger to create the profile
+      const supabaseClient = supabase;
       setTimeout(async () => {
-        const { data: { user } } = await supabase.auth.getUser();
+        if (!supabaseClient) return;
+        const { data: { user } } = await supabaseClient.auth.getUser();
         if (user) {
-          await supabase
+          await supabaseClient
             .from('user_profiles')
             .update({ username: username.trim() })
             .eq('id', user.id);

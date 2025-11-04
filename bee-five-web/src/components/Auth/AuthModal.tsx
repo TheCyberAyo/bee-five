@@ -72,14 +72,17 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           setError(error.message || 'Failed to sign up');
         } else {
           // Update profile with username (after trigger creates it)
-          if (supabase) {
+          const supabaseClient = supabase;
+          if (supabaseClient) {
             setTimeout(async () => {
-              const { data: { user } } = await supabase.auth.getUser();
+              if (!supabaseClient) return;
+              const { data: { user } } = await supabaseClient.auth.getUser();
               if (user) {
                 // Try to update profile, retry if it doesn't exist yet
                 let retries = 0;
                 const updateProfile = async () => {
-                  const { error: updateError } = await supabase
+                  if (!supabaseClient) return;
+                  const { error: updateError } = await supabaseClient
                     .from('user_profiles')
                     .update({ username: username.trim() })
                     .eq('id', user.id);
