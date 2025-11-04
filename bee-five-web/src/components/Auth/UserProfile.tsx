@@ -24,21 +24,28 @@ export default function UserProfile({ onClose }: UserProfileProps) {
     }
   }, [profile, user]);
 
-  const handleSignOut = async () => {
+  const handleSignOut = () => {
+    if (loading) return; // Prevent multiple clicks
+    
     setLoading(true);
-    try {
-      await signOut();
-      // Close the profile modal if onClose is provided
-      onClose?.();
-      // Force a page reload to ensure all state is cleared
-      // This is a safety measure in case some components don't react to auth state changes
-      window.location.reload();
-    } catch (error) {
-      console.error('Error signing out:', error);
-      // Show error to user
-      alert('Failed to sign out. Please try again or refresh the page.');
-      setLoading(false);
-    }
+    
+    console.log('UserProfile: Starting sign out...');
+    
+    // Call signOut (this clears state immediately)
+    // Don't await - just fire and forget
+    signOut().catch(err => {
+      console.warn('SignOut completed with warning:', err);
+    });
+    
+    // Close the profile modal immediately
+    onClose?.();
+    
+    // Navigate immediately without waiting
+    // Use a small timeout to ensure state clears, but don't wait for Supabase
+    setTimeout(() => {
+      console.log('UserProfile: Navigating to home...');
+      window.location.href = '/';
+    }, 100);
   };
 
   const handleSaveUsername = async () => {

@@ -129,34 +129,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     if (!supabase) {
+      console.error('SignOut: Supabase is not configured');
+      // Clear state anyway
+      setSession(null);
+      setUser(null);
+      setProfile(null);
       return;
     }
     
-    try {
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Error signing out:', error);
-        // Even if there's an error, clear local state as fallback
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        throw error;
+    // Clear local state immediately for instant feedback
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    
+    // Clear storage immediately
+    if (typeof window !== 'undefined') {
+      try {
+        // Clear all Supabase auth-related keys
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            localStorage.removeItem(key);
+          }
+        });
+        
+        // Also clear sessionStorage
+        const sessionKeys = Object.keys(sessionStorage);
+        sessionKeys.forEach(key => {
+          if (key.includes('supabase') || key.includes('sb-')) {
+            sessionStorage.removeItem(key);
+          }
+        });
+        
+        console.log('SignOut: Cleared localStorage and sessionStorage');
+      } catch (storageError) {
+        console.warn('SignOut: Could not clear storage:', storageError);
       }
+    }
+    
+    // Try to sign out from Supabase with a timeout
+    try {
+      console.log('SignOut: Attempting to sign out from Supabase...');
       
-      // The onAuthStateChange listener should handle clearing state,
-      // but we'll also clear it here to be safe
-      setSession(null);
-      setUser(null);
-      setProfile(null);
+      // Add a timeout to prevent hanging
+      const signOutPromise = supabase.auth.signOut().then(({ error }) => {
+        if (error) {
+          throw error;
+        }
+      });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sign out timeout')), 3000)
+      );
+      
+      await Promise.race([signOutPromise, timeoutPromise]);
+      console.log('SignOut: Successfully signed out from Supabase');
     } catch (error) {
-      console.error('Sign out error:', error);
-      // Ensure state is cleared even if signOut fails
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      throw error;
+      console.warn('SignOut: Error or timeout during Supabase signOut:', error);
+      // State already cleared, so we continue anyway
     }
   };
 
