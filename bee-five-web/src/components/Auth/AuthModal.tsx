@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { isUsernameAvailable } from '../../services/usernameService';
@@ -399,17 +400,35 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             />
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label
-              style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                color: '#333',
-                fontWeight: 'bold',
-              }}
-            >
-              Password
-            </label>
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label
+                style={{
+                  display: 'block',
+                  color: '#333',
+                  fontWeight: 'bold',
+                }}
+              >
+                Password
+              </label>
+              {!isSignUp && (
+                <Link
+                  href="/auth/forgot-password"
+                  onClick={onClose}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#FFC30B',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: '0.85rem',
+                    fontWeight: 'normal',
+                  }}
+                >
+                  Forgot Password?
+                </Link>
+              )}
+            </div>
             <input
               type="password"
               value={password}

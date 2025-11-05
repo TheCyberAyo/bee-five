@@ -34,6 +34,7 @@ export default function SimpleWelcome() {
   const [aiTimer, setAiTimer] = useState<number>(15);
   const [isMobile, setIsMobile] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState<'yellow' | 'black'>('yellow');
+  const [isMounted, setIsMounted] = useState(false);
   
   // Auth state
   const { user, profile, loading: authLoading } = useAuth();
@@ -50,8 +51,9 @@ export default function SimpleWelcome() {
   const [competitionWinner, setCompetitionWinner] = useState('');
   const [showCompetitionWinnerModal, setShowCompetitionWinnerModal] = useState(false);
 
-  // Initialize mobile detection
+  // Initialize mobile detection and mount state
   useEffect(() => {
+    setIsMounted(true);
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
@@ -391,7 +393,7 @@ export default function SimpleWelcome() {
         </footer>
 
         {/* Competition Modal - rendered within Take Turns submenu */}
-        {showCompetitionModal && createPortal(
+        {showCompetitionModal && isMounted && createPortal(
           <div style={{
             position: 'fixed',
             top: 0,
@@ -937,7 +939,7 @@ export default function SimpleWelcome() {
         </footer>
 
         {/* Difficulty Modal - rendered within AI submenu */}
-        {showDifficultyModal && createPortal(
+        {showDifficultyModal && isMounted && createPortal(
           <div style={{
             position: 'fixed',
             top: 0,
@@ -1101,7 +1103,7 @@ export default function SimpleWelcome() {
         )}
 
         {/* Timer Selection Modal - appears after selecting difficulty */}
-        {showTimerModal && createPortal(
+        {showTimerModal && isMounted && createPortal(
           <div style={{
             position: 'fixed',
             top: 0,
