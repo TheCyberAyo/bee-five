@@ -21,6 +21,8 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
 
   // Track if we're transitioning to game (don't clean up in this case)
   const transitioningToGameRef = useRef(false);
+  // Track if we're currently creating/joining a room
+  const isCreatingOrJoiningRef = useRef(false);
 
   // Clean up ONLY when going back to menu, NOT when transitioning to game
   useEffect(() => {
@@ -35,16 +37,13 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
     return () => {
       // Get the current value at cleanup time
       const isTransitioning = transitioningToGameRef.current;
-      // Only clean up if we're actually leaving to go back to menu, not transitioning to game
-      if (!isTransitioning) {
-        console.log('MultiplayerLobby unmounting - cleaning up (going back to menu)');
-        // Only leave room if we actually have a room (check if service still has roomId)
+      const isInProgress = isCreatingOrJoiningRef.current;
+      
+      // Only clean up if we're actually leaving to go back to menu, not transitioning to game or creating/joining
+      if (!isTransitioning && !isInProgress) {
         if (multiplayerService.getCurrentRoomId()) {
           multiplayerService.leaveRoom();
         }
-      } else {
-        console.log('MultiplayerLobby unmounting - NOT cleaning up (transitioning to game)');
-        console.log('Subscriptions will remain active for MultiplayerGame');
       }
     };
   }, []); // Empty deps - only run on mount/unmount, not on state changes
@@ -57,17 +56,15 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
 
     setIsCreatingRoom(true);
     setError(null);
+    isCreatingOrJoiningRef.current = true;
 
     try {
-      console.log('Creating room for player:', playerName.trim());
       const roomInfo = await multiplayerService.createRoom(playerName.trim());
-      console.log('Room created successfully:', roomInfo);
       setCurrentRoom(roomInfo);
       setLobbyMode('waiting');
       
       // Set up listener for when player joins
       multiplayerService.onPlayerJoined = (player) => {
-        console.log('Player joined:', player);
         const updatedRoom: RoomInfo = {
           ...roomInfo,
           players: [
@@ -89,18 +86,17 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
       
       // Set up error handler
       multiplayerService.onError = (errorMsg) => {
-        console.error('Multiplayer service error:', errorMsg);
         setError(errorMsg);
       };
       
     } catch (error) {
-      console.error('Error creating room:', error);
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to create room. Please check your connection and try again.';
       setError(errorMessage);
     } finally {
       setIsCreatingRoom(false);
+      isCreatingOrJoiningRef.current = false;
       soundManager.playClickSound();
     }
   };
@@ -118,6 +114,7 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
 
     setIsJoiningRoom(true);
     setError(null);
+    isCreatingOrJoiningRef.current = true;
 
     try {
       const roomInfo = await multiplayerService.joinRoom(roomCode.trim(), playerName.trim());
@@ -134,6 +131,7 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
       setError(error instanceof Error ? error.message : 'Failed to join room. Please check the room code.');
     } finally {
       setIsJoiningRoom(false);
+      isCreatingOrJoiningRef.current = false;
       soundManager.playClickSound();
     }
   };

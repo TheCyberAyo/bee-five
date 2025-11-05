@@ -43,6 +43,11 @@ export class MultiplayerService {
       throw new Error('Supabase is not configured. Please set up your Supabase credentials in .env.local');
     }
 
+    // Validate player name
+    if (!playerName || !playerName.trim()) {
+      throw new Error('Player name is required');
+    }
+
     try {
       this.playerId = this.generatePlayerId();
       const roomCode = this.generateRoomCode();
@@ -59,16 +64,44 @@ export class MultiplayerService {
         .single();
 
       if (roomError) {
-        console.error('Error creating room in database:', roomError);
-        throw new Error(`Failed to create room: ${roomError.message || 'Database error'}`);
+        // Provide more specific error messages based on error code
+        let errorMessage = 'Failed to create room';
+        
+        if (roomError.code === '23505') {
+          errorMessage = 'Room code already exists. Please try again.';
+        } else if (roomError.code === 'PGRST301' || roomError.code === 'PGRST116') {
+          errorMessage = 'Database connection error. Please check your Supabase configuration.';
+        } else if (roomError.code === '42P01') {
+          errorMessage = 'Database table not found. Please run the database setup script.';
+        } else if (roomError.code === 'PGRST302') {
+          errorMessage = 'Permission denied. Please check your Row Level Security policies.';
+        } else if (roomError.message) {
+          errorMessage = `Failed to create room: ${roomError.message}`;
+        } else if (roomError.details) {
+          errorMessage = `Failed to create room: ${roomError.details}`;
+        } else if (roomError.hint) {
+          errorMessage = `Failed to create room: ${roomError.hint}`;
+        } else if ((roomError as any).statusCode === 401) {
+          errorMessage = 'Authentication failed. Please check your Supabase API key.';
+        } else if ((roomError as any).statusCode === 403) {
+          errorMessage = 'Permission denied. Please check your Row Level Security policies.';
+        } else if (roomError.code) {
+          errorMessage = `Failed to create room (Error code: ${roomError.code}). Please check your database setup.`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
+      if (!room) {
+        throw new Error('Failed to create room: No room data returned from database');
+      }
+      
       // Add host as player
       const { data: player, error: playerError } = await supabase!
         .from('game_players')
         .insert({
           room_id: room.id,
-          player_name: playerName,
+          player_name: playerName.trim(),
           player_number: 1,
           is_host: true
         })
@@ -76,17 +109,31 @@ export class MultiplayerService {
         .single();
 
       if (playerError) {
-        console.error('Error creating player in database:', playerError);
         // Clean up room if player creation fails
         await supabase!.from('game_rooms').delete().eq('id', room.id);
-        throw new Error(`Failed to add player: ${playerError.message || 'Database error'}`);
+        
+        // Provide more specific error messages
+        let errorMessage = 'Failed to add player';
+        if (playerError.code === '23505') {
+          errorMessage = 'Player already exists in this room.';
+        } else if (playerError.code === '23503') {
+          errorMessage = 'Room reference error. Please try creating a new room.';
+        } else if (playerError.code === 'PGRST301') {
+          errorMessage = 'Database connection error. Please check your Supabase configuration.';
+        } else if (playerError.code === '42P01') {
+          errorMessage = 'Database table not found. Please run the database setup script.';
+        } else if (playerError.message) {
+          errorMessage = `Failed to add player: ${playerError.message}`;
+        } else {
+          errorMessage = `Failed to add player: ${playerError.code || 'Unknown database error'}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       this.roomId = room.id;
       this.playerNumber = 1;
-      this.databasePlayerId = player.id; // Store the database UUID
-      console.log('Host player created with database ID:', this.databasePlayerId);
-      console.log('Service roomId set to:', this.roomId, 'for room code:', roomCode);
+      this.databasePlayerId = player.id;
 
       // Set up real-time subscriptions
       this.setupSubscriptions(room.id);
@@ -95,7 +142,7 @@ export class MultiplayerService {
         roomId: roomCode,
         players: [{
           id: this.playerId!,
-          name: playerName,
+          name: playerName.trim(),
           playerNumber: 1,
           isHost: true
         }],
@@ -103,7 +150,6 @@ export class MultiplayerService {
         hostId: this.playerId!
       };
     } catch (error) {
-      console.error('Error creating room:', error);
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to create room. Please check your connection.';
@@ -121,6 +167,17 @@ export class MultiplayerService {
       throw new Error('Supabase is not configured. Please set up your Supabase credentials in .env.local');
     }
 
+    // Validate room code format
+    const trimmedCode = roomCode.trim().toUpperCase();
+    if (!trimmedCode || trimmedCode.length !== 6) {
+      throw new Error('Room code must be 6 characters long');
+    }
+
+    // Validate player name
+    if (!playerName.trim()) {
+      throw new Error('Player name is required');
+    }
+
     try {
       this.playerId = this.generatePlayerId();
 
@@ -128,11 +185,28 @@ export class MultiplayerService {
       const { data: room, error: roomError } = await supabase!
         .from('game_rooms')
         .select('*')
-        .eq('room_code', roomCode.toUpperCase())
+        .eq('room_code', trimmedCode)
         .single();
 
-      if (roomError || !room) {
-        throw new Error('Room not found');
+      if (roomError) {
+        if (roomError.code === 'PGRST116') {
+          throw new Error('Room not found. Please check the room code and try again.');
+        }
+        throw new Error(`Failed to find room: ${roomError.message || 'Database error'}`);
+      }
+
+      if (!room) {
+        throw new Error('Room not found. Please check the room code and try again.');
+      }
+
+      // Check if room status allows joining
+      if (room.status !== 'waiting') {
+        if (room.status === 'active') {
+          throw new Error('This game has already started. Please ask the host to share a new room code.');
+        } else if (room.status === 'finished') {
+          throw new Error('This game has already finished. Please ask the host to create a new room.');
+        }
+        throw new Error(`Cannot join room: Room status is "${room.status}"`);
       }
 
       // Check if room already has 2 players
@@ -142,7 +216,7 @@ export class MultiplayerService {
         .eq('room_id', room.id);
 
       if (players && players.length >= 2) {
-        throw new Error('Room is full');
+        throw new Error('Room is full. Please ask the host to create a new room.');
       }
 
       // Add guest as player
@@ -150,19 +224,26 @@ export class MultiplayerService {
         .from('game_players')
         .insert({
           room_id: room.id,
-          player_name: playerName,
+          player_name: playerName.trim(),
           player_number: 2,
           is_host: false
         })
         .select()
         .single();
 
-      if (playerError) throw playerError;
+      if (playerError) {
+        // Check for common database errors
+        if (playerError.code === '23505') {
+          throw new Error('Could not join room. You may already be in this room.');
+        } else if (playerError.code === '23503') {
+          throw new Error('Room no longer exists. It may have been deleted.');
+        }
+        throw new Error(`Failed to join room: ${playerError.message || 'Database error'}`);
+      }
 
       this.roomId = room.id;
       this.playerNumber = 2;
-      this.databasePlayerId = player.id; // Store the database UUID
-      console.log('Guest player created with database ID:', this.databasePlayerId);
+      this.databasePlayerId = player.id;
 
       // Set up real-time subscriptions
       this.setupSubscriptions(room.id);
@@ -174,7 +255,7 @@ export class MultiplayerService {
         .eq('room_id', room.id);
 
       return {
-        roomId: roomCode,
+        roomId: trimmedCode,
         players: allPlayers!.map(p => ({
           id: p.id,
           name: p.player_name,
@@ -185,7 +266,6 @@ export class MultiplayerService {
         hostId: room.host_id
       };
     } catch (error) {
-      console.error('Error joining room:', error);
       if (this.onError) {
         this.onError(error instanceof Error ? error.message : 'Failed to join room');
       }
@@ -196,19 +276,15 @@ export class MultiplayerService {
   // Setup real-time subscriptions
   private setupSubscriptions(roomId: string) {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, real-time features will not work');
       return;
     }
-
-    console.log('Setting up real-time subscriptions for room:', roomId);
 
     // Subscribe to room updates
     this.roomSubscription = supabase!
       .channel(`room:${roomId}`)
       .on('postgres_changes', 
         { event: 'UPDATE', schema: 'public', table: 'game_rooms', filter: `id=eq.${roomId}` },
-        (payload) => {
-          console.log('Room updated:', payload);
+        () => {
           // Handle room status changes
         }
       )
@@ -223,7 +299,6 @@ export class MultiplayerService {
           const newPlayer = payload.new as GamePlayer;
           // Only notify if it's not the current player (check database ID)
           if (newPlayer.id !== this.databasePlayerId && this.onPlayerJoined) {
-            console.log('New player joined:', newPlayer);
             this.onPlayerJoined(newPlayer);
           }
         }
@@ -233,7 +308,6 @@ export class MultiplayerService {
         (payload) => {
           const deletedPlayer = payload.old as GamePlayer;
           if (deletedPlayer.id !== this.databasePlayerId && this.onPlayerLeft) {
-            console.log('Player left:', deletedPlayer);
             this.onPlayerLeft(deletedPlayer.id);
           }
         }
@@ -246,57 +320,20 @@ export class MultiplayerService {
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'game_moves', filter: `room_id=eq.${roomId}` },
         (payload) => {
-          console.log('Move received via real-time:', payload);
           const move = payload.new as GameMove;
-          console.log('Move details:', {
-            movePlayerNumber: move.player_number,
-            currentPlayerNumber: this.playerNumber,
-            roomId: move.room_id,
-            expectedRoomId: this.roomId,
-            row: move.row,
-            col: move.col,
-            hasOnMoveHandler: !!this.onMove
-          });
           
           // Verify roomId matches (safety check)
           if (move.room_id !== this.roomId) {
-            console.warn('⚠️ Received move for different room:', {
-              moveRoomId: move.room_id,
-              currentRoomId: this.roomId
-            });
             return;
           }
           
           // Only handle opponent moves
-          if (move.player_number !== this.playerNumber) {
-            console.log('✅ Processing opponent move - player', move.player_number, 'to player', this.playerNumber);
-            if (this.onMove) {
-              console.log('Calling onMove handler...');
-              this.onMove(move);
-            } else {
-              console.error('❌ onMove handler not set! Cannot process move.');
-            }
-          } else {
-            console.log('Ignoring own move (player', move.player_number, ') - expected behavior');
+          if (move.player_number !== this.playerNumber && this.onMove) {
+            this.onMove(move);
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Move subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to move changes for room:', roomId);
-          console.log('Waiting for moves with filter: room_id=eq.' + roomId);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Error subscribing to move changes');
-          console.error('⚠️ Make sure Real-time is enabled for game_moves table in Supabase!');
-        } else if (status === 'TIMED_OUT') {
-          console.error('❌ Move subscription timed out');
-        } else if (status === 'CLOSED') {
-          console.warn('⚠️ Move subscription closed');
-        } else {
-          console.log('Move subscription status:', status);
-        }
-      });
+      .subscribe();
 
     // Subscribe to game state changes
     this.gameStateSubscription = supabase!
@@ -315,68 +352,27 @@ export class MultiplayerService {
 
   // Send a move
   async sendMove(row: number, col: number): Promise<void> {
-    if (!this.roomId) {
-      console.error('Cannot send move: roomId is null', {
-        roomId: this.roomId,
-        playerNumber: this.playerNumber,
-        playerId: this.playerId,
-        databasePlayerId: this.databasePlayerId
-      });
-      console.error('Service state:', {
-        hasRoomSubscription: !!this.roomSubscription,
-        hasMoveSubscription: !!this.moveSubscription
-      });
-      return;
-    }
-
-    if (!isSupabaseConfigured()) {
-      console.error('Cannot send move: Supabase not configured');
+    if (!this.roomId || !isSupabaseConfigured()) {
       return;
     }
 
     try {
-      console.log('Sending move:', {
-        roomId: this.roomId,
-        playerNumber: this.playerNumber,
-        row,
-        col,
-        hasSubscriptions: {
-          move: !!this.moveSubscription,
-          player: !!this.playerSubscription
-        }
-      });
-
-      const moveData = {
-        room_id: this.roomId,
-        player_number: this.playerNumber,
-        row,
-        col,
-        timestamp: new Date().toISOString()
-      };
-
-      console.log('Inserting move into database:', moveData);
-
-      const { data, error } = await supabase!
+      const { error } = await supabase!
         .from('game_moves')
-        .insert(moveData)
+        .insert({
+          room_id: this.roomId,
+          player_number: this.playerNumber,
+          row,
+          col,
+          timestamp: new Date().toISOString()
+        })
         .select()
         .single();
 
       if (error) {
-        console.error('❌ Error sending move to database:', error);
-        console.error('Error details:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
         throw error;
       }
-
-      console.log('✅ Move successfully inserted into database:', data);
-      console.log('Move should now be received via real-time by other players');
     } catch (error) {
-      console.error('Error sending move:', error);
       if (this.onError) {
         this.onError('Failed to send move');
       }
@@ -419,7 +415,6 @@ export class MultiplayerService {
         if (error) throw error;
       }
     } catch (error) {
-      console.error('Error updating game state:', error);
       if (this.onError) {
         this.onError('Failed to update game state');
       }
@@ -428,8 +423,6 @@ export class MultiplayerService {
 
   // Leave the room
   async leaveRoom(): Promise<void> {
-    console.log('leaveRoom called - cleaning up subscriptions and room data');
-    
     if (!isSupabaseConfigured()) {
       this.roomId = null;
       this.playerId = null;
@@ -439,22 +432,18 @@ export class MultiplayerService {
 
     // Unsubscribe from all channels
     if (this.roomSubscription) {
-      console.log('Removing room subscription');
       await supabase!.removeChannel(this.roomSubscription);
       this.roomSubscription = null;
     }
     if (this.playerSubscription) {
-      console.log('Removing player subscription');
       await supabase!.removeChannel(this.playerSubscription);
       this.playerSubscription = null;
     }
     if (this.moveSubscription) {
-      console.log('Removing move subscription');
       await supabase!.removeChannel(this.moveSubscription);
       this.moveSubscription = null;
     }
     if (this.gameStateSubscription) {
-      console.log('Removing game state subscription');
       await supabase!.removeChannel(this.gameStateSubscription);
       this.gameStateSubscription = null;
     }
@@ -468,22 +457,10 @@ export class MultiplayerService {
 
     // Remove player from database (use database UUID, not client ID)
     if (this.roomId && this.databasePlayerId) {
-      console.log('Removing player from database:', this.databasePlayerId);
-      const { error } = await supabase!
+      await supabase!
         .from('game_players')
         .delete()
         .eq('id', this.databasePlayerId);
-      
-      if (error) {
-        console.error('Error removing player:', error);
-      } else {
-        console.log('Player successfully removed');
-      }
-    } else {
-      console.warn('Cannot remove player: missing roomId or databasePlayerId', {
-        roomId: this.roomId,
-        databasePlayerId: this.databasePlayerId
-      });
     }
 
     this.roomId = null;
@@ -507,18 +484,11 @@ export class MultiplayerService {
 
   // Recovery method: restore roomId from room code (for Fast Refresh issues)
   async recoverRoomFromCode(roomCode: string): Promise<void> {
-    if (!isSupabaseConfigured()) {
-      console.error('Cannot recover room: Supabase not configured');
-      return;
-    }
-
-    if (this.roomId) {
-      console.log('Room already has roomId:', this.roomId);
+    if (!isSupabaseConfigured() || this.roomId) {
       return;
     }
 
     try {
-      console.log('Attempting to recover roomId from code:', roomCode);
       const { data: room, error } = await supabase!
         .from('game_rooms')
         .select('id, status')
@@ -526,39 +496,17 @@ export class MultiplayerService {
         .single();
 
       if (error || !room) {
-        console.error('Failed to find room by code:', error);
         return;
       }
 
       this.roomId = room.id;
-      console.log('✅ Recovered roomId:', this.roomId, 'from room code:', roomCode);
       
       // Also restore subscriptions if they're missing
       if (!this.moveSubscription) {
-        console.log('Restoring subscriptions after recovery');
         this.setupSubscriptions(room.id);
       }
-
-      // Note: Don't try to restore player number automatically during recovery
-      // The player number should already be set correctly from createRoom/joinRoom
-      // Only restore database player ID if we have a clue
-      if (!this.databasePlayerId) {
-        const { data: players } = await supabase!
-          .from('game_players')
-          .select('*')
-          .eq('room_id', room.id)
-          .order('created_at', { ascending: true });
-
-        if (players && players.length > 0) {
-          // Just log what we found, but don't assume player number
-          console.log('Found', players.length, 'players in room, but player number should be set from initial join');
-          console.log('Current playerNumber:', this.playerNumber);
-        }
-      } else {
-        console.log('Database player ID already set:', this.databasePlayerId);
-      }
     } catch (error) {
-      console.error('Error recovering room:', error);
+      // Silent fail for recovery
     }
   }
 }
