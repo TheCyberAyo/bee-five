@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return `${window.location.origin}/auth/callback`;
     };
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -108,23 +108,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     
-    // If signup successful and username provided, update profile immediately
-    if (!error && username && supabase) {
-      // Wait a moment for the trigger to create the profile
-      const supabaseClient = supabase;
-      setTimeout(async () => {
-        if (!supabaseClient) return;
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (user) {
-          await supabaseClient
-            .from('user_profiles')
-            .update({ username: username.trim() })
-            .eq('id', user.id);
-        }
-      }, 500);
-    }
-    
-    return { error };
+    // Return both data and error so the caller can check if user was created
+    return { data, error };
   };
 
   const signIn = async (email: string, password: string) => {

@@ -27,22 +27,26 @@ export async function isUsernameAvailable(username: string): Promise<{ available
     // Normalize username for comparison (lowercase, trimmed)
     const normalizedUsername = username.trim().toLowerCase();
     
-    // Fetch usernames and check case-insensitively
-    // Note: This fetches all usernames, which is fine for small apps
-    // For large apps, consider using a database function for case-insensitive search
-    const { data, error } = await supabase
+    // Fetch all usernames and check case-insensitively
+    // Add timeout to prevent hanging
+    const queryPromise = supabase
       .from('user_profiles')
       .select('username');
+    
+    const timeoutPromise = new Promise<any>((resolve) => 
+      setTimeout(() => resolve({ data: [], error: null }), 5000)
+    );
+    
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
     if (error) {
       console.error('Error checking username:', error);
       // On error, allow the username (optimistic approach)
-      // The database constraint will catch duplicates anyway
       return { available: true };
     }
 
     // Check if any existing username matches (case-insensitive)
-    const exists = data?.some(profile => 
+    const exists = data?.some((profile: any) => 
       profile.username?.toLowerCase() === normalizedUsername
     ) || false;
 

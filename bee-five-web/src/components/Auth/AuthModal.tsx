@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { isUsernameAvailable } from '../../services/usernameService';
@@ -20,18 +20,31 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [justSignedIn, setJustSignedIn] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const { signUp, signIn, signInWithProvider, refreshProfile, user } = useAuth();
+  
+  // Store callbacks in refs to avoid dependency array issues
+  const onCloseRef = useRef(onClose);
+  const onSuccessRef = useRef(onSuccess);
+  
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onSuccessRef.current = onSuccess;
+  }, [onClose, onSuccess]);
 
   // Close modal when user successfully signs in
   useEffect(() => {
-    if (user && (justSignedIn || !loading)) {
-      // User is signed in, close the modal
-      setJustSignedIn(false);
+    if (user) {
+      // User is signed in, close immediately
+      setIsClosing(true);
       setLoading(false);
-      onClose();
-      onSuccess?.();
+      const timer = setTimeout(() => {
+        onCloseRef.current();
+        onSuccessRef.current?.();
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [user, loading, justSignedIn, onClose, onSuccess]);
+  }, [user]);
 
   // Check username availability when user types (debounced)
   useEffect(() => {
@@ -69,6 +82,12 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     };
   }, [username, isSignUp]);
 
+  // Early return if closing or user exists - don't render anything
+  // IMPORTANT: This must be AFTER all hooks are called
+  if (isClosing || user) {
+    return null;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -83,17 +102,20 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           return;
         }
 
-        // Check username availability before signup
-        // Wait if debounced check is still running
-        if (checkingUsername) {
-          // Wait for debounced check to complete (max 1 second)
-          let waited = 0;
-          while (checkingUsername && waited < 1000) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            waited += 100;
-          }
+        // Validate username format
+        const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+        if (!usernameRegex.test(username.trim())) {
+          setError('Username can only contain letters, numbers, underscores, and hyphens');
+          setLoading(false);
+          return;
         }
-        
+
+        if (username.trim().length < 3) {
+          setError('Username must be at least 3 characters');
+          setLoading(false);
+          return;
+        }
+
         // If username already has an error from debounced check, don't proceed
         if (usernameError) {
           setError(usernameError);
@@ -101,71 +123,109 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           return;
         }
         
-        // Final username check before signup
-        const usernameCheck = await isUsernameAvailable(username.trim());
-        if (!usernameCheck.available) {
-          setError(usernameCheck.error || 'Username is already taken. Please choose another.');
+        // Skip username check on submit - let database handle validation
+        // This prevents hanging and improves UX
+        console.log('Attempting sign up...');
+        
+        // Sign up with username (database will catch duplicates)
+        const { error, data } = await signUp(email, password, username.trim());
+        
+        if (error) {
+          console.error('Sign up error:', error);
+          // Check if error is about duplicate username
+          if (error.message?.toLowerCase().includes('username') || 
+              error.message?.toLowerCase().includes('duplicate') ||
+              error.message?.toLowerCase().includes('unique')) {
+            setError('Username is already taken. Please choose another.');
+          } else {
+            setError(error.message || 'Failed to sign up. Please try again.');
+          }
           setLoading(false);
           return;
         }
 
-        // Sign up with username
-        const { error } = await signUp(email, password, username.trim());
-        if (error) {
-          setError(error.message || 'Failed to sign up');
-          setLoading(false);
-        } else {
-          // Update profile with username (after trigger creates it)
-          const supabaseClient = supabase;
-          if (supabaseClient) {
-            setTimeout(async () => {
-              if (!supabaseClient) return;
-              const { data: { user } } = await supabaseClient.auth.getUser();
-              if (user) {
-                // Try to update profile, retry if it doesn't exist yet
+        console.log('Sign up successful!');
+
+        // Sign up successful - handle success
+        setError(null);
+        
+        // Update profile with username (after trigger creates it)
+        if (data?.user && supabase) {
+          // Try to update profile immediately
+          setTimeout(async () => {
+            try {
+              const { error: updateError } = await supabase
+                .from('user_profiles')
+                .update({ username: username.trim() })
+                .eq('id', data.user.id);
+              
+              if (updateError) {
+                console.warn('Could not update username immediately:', updateError);
+                // Retry a few times
                 let retries = 0;
-                const updateProfile = async () => {
-                  if (!supabaseClient) return;
-                  const { error: updateError } = await supabaseClient
-                    .from('user_profiles')
-                    .update({ username: username.trim() })
-                    .eq('id', user.id);
-                  
-                  if (updateError && retries < 3) {
-                    retries++;
-                    setTimeout(updateProfile, 500);
-                  } else {
-                    await refreshProfile();
-                  }
+                const retryUpdate = async () => {
+                  if (retries >= 3) return;
+                  retries++;
+                  setTimeout(async () => {
+                    const { error: retryError } = await supabase
+                      .from('user_profiles')
+                      .update({ username: username.trim() })
+                      .eq('id', data.user.id);
+                    if (retryError && retries < 3) {
+                      retryUpdate();
+                    }
+                  }, 500);
                 };
-                await updateProfile();
+                retryUpdate();
               }
-            }, 1000);
-          }
-          setError(null);
-          setLoading(false);
-          // Check email confirmation message
-          alert('Please check your email to confirm your account!');
-          // Close modal after sign up (even if email confirmation is required)
-          onClose();
-          onSuccess?.();
+            } catch (err) {
+              console.warn('Error updating profile:', err);
+            }
+          }, 1000);
         }
+        
+        setLoading(false);
+        
+        // Show success message
+        alert('Please check your email to confirm your account!');
+        
+        // Close modal after sign up (even if email confirmation is required)
+        setIsClosing(true);
+        setTimeout(() => {
+          onCloseRef.current();
+          onSuccessRef.current?.();
+        }, 100);
+        
       } else {
         const { error } = await signIn(email, password);
         if (error) {
           setError(error.message || 'Failed to sign in');
           setLoading(false);
           setJustSignedIn(false);
+          setIsClosing(false);
         } else {
-          // Success - mark that we just signed in, useEffect will close modal
+          // Success - close modal immediately
           setError(null);
           setJustSignedIn(true);
-          // The useEffect will detect user and close the modal
+          setIsClosing(true);
+          setLoading(false);
+          
+          // Call onClose immediately to update parent state
+          onCloseRef.current();
+          onSuccessRef.current?.();
+          
+          // Also ensure it closes after a brief moment
+          setTimeout(() => {
+            onCloseRef.current();
+            onSuccessRef.current?.();
+          }, 100);
         }
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
+      console.error('Sign up/sign in error:', err);
+      setError(err.message || 'An unexpected error occurred. Please try again.');
       setLoading(false);
+      setIsClosing(false);
     }
   };
 
