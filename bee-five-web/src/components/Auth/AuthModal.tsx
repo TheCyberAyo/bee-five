@@ -151,10 +151,12 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         
         // Update profile with username (after trigger creates it)
         if (data?.user && supabase) {
+          const supabaseClient = supabase; // Store in local variable for closure
           // Try to update profile immediately
           setTimeout(async () => {
+            if (!supabaseClient) return;
             try {
-              const { error: updateError } = await supabase
+              const { error: updateError } = await supabaseClient
                 .from('user_profiles')
                 .update({ username: username.trim() })
                 .eq('id', data.user.id);
@@ -164,10 +166,11 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                 // Retry a few times
                 let retries = 0;
                 const retryUpdate = async () => {
-                  if (retries >= 3) return;
+                  if (retries >= 3 || !supabaseClient) return;
                   retries++;
                   setTimeout(async () => {
-                    const { error: retryError } = await supabase
+                    if (!supabaseClient) return;
+                    const { error: retryError } = await supabaseClient
                       .from('user_profiles')
                       .update({ username: username.trim() })
                       .eq('id', data.user.id);

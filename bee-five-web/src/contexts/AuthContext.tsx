@@ -10,7 +10,7 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, username?: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, username?: string) => Promise<{ data: any; error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   signInWithProvider: (provider: 'google' | 'github') => Promise<void>;
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, username?: string) => {
     if (!supabase) {
-      return { error: { message: 'Supabase is not configured' } };
+      return { data: null, error: { message: 'Supabase is not configured' } };
     }
     
     // Get the redirect URL - use environment variable if set, otherwise use window.location.origin
