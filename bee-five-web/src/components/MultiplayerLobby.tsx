@@ -128,7 +128,9 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
       onGameStart(roomInfo, 2);
       
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to join room. Please check the room code.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to join room. Please check the room code.';
+      console.error('Join room error:', error); // Temporary debug log
+      setError(errorMessage);
     } finally {
       setIsJoiningRoom(false);
       isCreatingOrJoiningRef.current = false;

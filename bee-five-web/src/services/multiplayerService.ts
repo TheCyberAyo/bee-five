@@ -189,10 +189,11 @@ export class MultiplayerService {
         .single();
 
       if (roomError) {
+        // Provide more helpful error messages
         if (roomError.code === 'PGRST116') {
           throw new Error('Room not found. Please check the room code and try again.');
         }
-        throw new Error(`Failed to find room: ${roomError.message || 'Database error'}`);
+        throw new Error(`Failed to find room: ${roomError.message || roomError.code || 'Database error'}`);
       }
 
       if (!room) {
@@ -210,10 +211,14 @@ export class MultiplayerService {
       }
 
       // Check if room already has 2 players
-      const { data: players } = await supabase!
+      const { data: players, error: playersError } = await supabase!
         .from('game_players')
         .select('*')
         .eq('room_id', room.id);
+
+      if (playersError) {
+        throw new Error(`Failed to check room status: ${playersError.message || 'Database error'}`);
+      }
 
       if (players && players.length >= 2) {
         throw new Error('Room is full. Please ask the host to create a new room.');
