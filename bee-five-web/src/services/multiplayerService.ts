@@ -516,6 +516,52 @@ export class MultiplayerService {
     return this.playerNumber;
   }
 
+  // Fetch existing moves for a room (used when joining)
+  async fetchExistingMoves(roomId: string): Promise<GameMove[]> {
+    if (!isSupabaseConfigured()) {
+      return [];
+    }
+
+    try {
+      const { data: moves, error } = await supabase!
+        .from('game_moves')
+        .select('*')
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        return [];
+      }
+
+      return moves || [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  // Fetch current game state
+  async fetchGameState(roomId: string): Promise<GameState | null> {
+    if (!isSupabaseConfigured()) {
+      return null;
+    }
+
+    try {
+      const { data: gameState, error } = await supabase!
+        .from('game_state')
+        .select('*')
+        .eq('room_id', roomId)
+        .single();
+
+      if (error || !gameState) {
+        return null;
+      }
+
+      return gameState;
+    } catch (error) {
+      return null;
+    }
+  }
+
   // Recovery method: restore roomId from room code (for Fast Refresh issues)
   async recoverRoomFromCode(roomCode: string): Promise<void> {
     if (!isSupabaseConfigured() || this.roomId) {

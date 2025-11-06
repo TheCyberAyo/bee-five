@@ -129,6 +129,62 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     };
     ensureRoomId();
 
+    // Fetch and apply existing moves when game starts (for players who join after moves have been made)
+    const syncExistingMoves = async () => {
+      // First ensure roomId is set
+      let currentRoomId = multiplayerService.getCurrentRoomId();
+      if (!currentRoomId) {
+        await multiplayerService.recoverRoomFromCode(roomInfo.roomId);
+        currentRoomId = multiplayerService.getCurrentRoomId();
+      }
+      
+      if (!currentRoomId) return;
+
+      // Fetch existing moves
+      const existingMoves = await multiplayerService.fetchExistingMoves(currentRoomId);
+      
+      // Fetch game state first to get the full board state
+      const gameState = await multiplayerService.fetchGameState(currentRoomId);
+      if (gameState) {
+        try {
+          const boardState = JSON.parse(gameState.board_state) as (0 | 1 | 2)[][];
+          // Update board state if it has moves
+          if (boardState.some(row => row.some(cell => cell !== 0))) {
+            setBoard(boardState);
+            setCurrentPlayer(gameState.current_player);
+            if (gameState.winner > 0) {
+              setWinner(gameState.winner);
+              setGameActive(false);
+            }
+          }
+        } catch (error) {
+          // If game state parsing fails, apply moves individually
+          for (const move of existingMoves) {
+            applyMove({
+              row: move.row,
+              col: move.col,
+              player: move.player_number,
+              timestamp: new Date(move.timestamp).getTime(),
+              roomId: roomInfo.roomId
+            });
+          }
+        }
+      } else if (existingMoves.length > 0) {
+        // If no game state, apply moves individually
+        for (const move of existingMoves) {
+          applyMove({
+            row: move.row,
+            col: move.col,
+            player: move.player_number,
+            timestamp: new Date(move.timestamp).getTime(),
+            roomId: roomInfo.roomId
+          });
+        }
+      }
+    };
+
+    syncExistingMoves();
+
     return () => {
       // Don't clear onMove handler - let it persist during the game
     };
