@@ -23,6 +23,10 @@ export class MultiplayerService {
   private playerSubscription: any = null;
   private moveSubscription: any = null;
   private gameStateSubscription: any = null;
+  private reconnectAttempts: Map<string, number> = new Map();
+  private reconnectTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private maxReconnectAttempts = 5;
+  private baseReconnectDelay = 1000; // 1 second
 
   // Event handlers
   public onRoomUpdate?: (roomInfo: RoomInfo) => void;
@@ -31,6 +35,7 @@ export class MultiplayerService {
   public onPlayerJoined?: (player: GamePlayer) => void;
   public onPlayerLeft?: (playerId: string) => void;
   public onError?: (error: string) => void;
+  public onConnectionStatusChange?: (isConnected: boolean) => void;
 
   // Generate a unique player ID
   private generatePlayerId(): string {
@@ -280,11 +285,14 @@ export class MultiplayerService {
     }
   }
 
-  // Setup real-time subscriptions
-  private setupSubscriptions(roomId: string) {
+  // Setup real-time subscriptions with retry logic
+  private setupSubscriptions(roomId: string, isRetry: boolean = false) {
     if (!isSupabaseConfigured()) {
       return;
     }
+
+    // Clear any existing subscriptions first
+    this.cleanupSubscriptions();
 
     // Subscribe to room updates
     this.roomSubscription = supabase!
@@ -296,14 +304,7 @@ export class MultiplayerService {
         }
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          // Successfully subscribed
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          // Subscription failed - try to reconnect
-          if (this.onError) {
-            this.onError('Connection issue. Please refresh and try again.');
-          }
-        }
+        this.handleSubscriptionStatus('room', status, roomId);
       });
 
     // Subscribe to player joins and leaves
@@ -329,11 +330,7 @@ export class MultiplayerService {
         }
       )
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          if (this.onError) {
-            this.onError('Connection issue. Please refresh and try again.');
-          }
-        }
+        this.handleSubscriptionStatus('players', status, roomId);
       });
 
     // Subscribe to move changes
@@ -356,11 +353,7 @@ export class MultiplayerService {
         }
       )
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          if (this.onError) {
-            this.onError('Connection issue. Please refresh and try again.');
-          }
-        }
+        this.handleSubscriptionStatus('moves', status, roomId);
       });
 
     // Subscribe to game state changes
@@ -376,40 +369,150 @@ export class MultiplayerService {
         }
       )
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          if (this.onError) {
-            this.onError('Connection issue. Please refresh and try again.');
-          }
-        }
+        this.handleSubscriptionStatus('game_state', status, roomId);
       });
+
+    // Track subscription status
+    if (!isRetry) {
+      this.reconnectAttempts.clear();
+    }
   }
 
-  // Send a move
+  // Handle subscription status with retry logic
+  private handleSubscriptionStatus(channelName: string, status: string, roomId: string) {
+    if (status === 'SUBSCRIBED') {
+      // Successfully subscribed - reset retry counter
+      this.reconnectAttempts.delete(channelName);
+      const timeout = this.reconnectTimeouts.get(channelName);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.reconnectTimeouts.delete(channelName);
+      }
+      
+      // Check if all critical channels are connected
+      this.checkConnectionStatus();
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+      // Connection failed - attempt to reconnect
+      this.attemptReconnect(channelName, roomId);
+    }
+  }
+
+  // Attempt to reconnect with exponential backoff
+  private attemptReconnect(channelName: string, roomId: string) {
+    const attempts = this.reconnectAttempts.get(channelName) || 0;
+    
+    if (attempts >= this.maxReconnectAttempts) {
+      if (this.onError) {
+        this.onError(`Connection failed after ${this.maxReconnectAttempts} attempts. Please refresh the page.`);
+      }
+      if (this.onConnectionStatusChange) {
+        this.onConnectionStatusChange(false);
+      }
+      return;
+    }
+
+    this.reconnectAttempts.set(channelName, attempts + 1);
+    
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+    const delay = this.baseReconnectDelay * Math.pow(2, attempts);
+    
+    const timeout = setTimeout(() => {
+      if (this.roomId === roomId) { // Only reconnect if still in the same room
+        this.setupSubscriptions(roomId, true);
+      }
+    }, delay);
+    
+    this.reconnectTimeouts.set(channelName, timeout);
+  }
+
+  // Check overall connection status
+  private checkConnectionStatus() {
+    const criticalChannels = ['moves', 'players'];
+    const allConnected = criticalChannels.every(channel => 
+      !this.reconnectAttempts.has(channel) || 
+      this.reconnectAttempts.get(channel) === 0
+    );
+    
+    if (this.onConnectionStatusChange) {
+      this.onConnectionStatusChange(allConnected);
+    }
+  }
+
+  // Cleanup subscriptions
+  private cleanupSubscriptions() {
+    if (this.roomSubscription) {
+      supabase?.removeChannel(this.roomSubscription);
+      this.roomSubscription = null;
+    }
+    if (this.playerSubscription) {
+      supabase?.removeChannel(this.playerSubscription);
+      this.playerSubscription = null;
+    }
+    if (this.moveSubscription) {
+      supabase?.removeChannel(this.moveSubscription);
+      this.moveSubscription = null;
+    }
+    if (this.gameStateSubscription) {
+      supabase?.removeChannel(this.gameStateSubscription);
+      this.gameStateSubscription = null;
+    }
+    
+    // Clear all reconnect timeouts
+    this.reconnectTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.reconnectTimeouts.clear();
+  }
+
+  // Send a move with retry logic
   async sendMove(row: number, col: number): Promise<void> {
     if (!this.roomId || !isSupabaseConfigured()) {
       return;
     }
 
-    try {
-      const { error } = await supabase!
-        .from('game_moves')
-        .insert({
-          room_id: this.roomId,
-          player_number: this.playerNumber,
-          row,
-          col,
-          timestamp: new Date().toISOString()
-        })
-        .select()
-        .single();
+    const maxRetries = 3;
+    let lastError: any = null;
 
-      if (error) {
-        throw error;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const { error } = await supabase!
+          .from('game_moves')
+          .insert({
+            room_id: this.roomId,
+            player_number: this.playerNumber,
+            row,
+            col,
+            timestamp: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) {
+          throw error;
+        }
+        
+        // Success - return early
+        return;
+      } catch (error) {
+        lastError = error;
+        
+        // Don't retry on certain errors
+        if (error && typeof error === 'object' && 'code' in error) {
+          const errorCode = (error as any).code;
+          if (errorCode === '23505' || errorCode === '23503') {
+            // Unique constraint violation or foreign key violation - don't retry
+            break;
+          }
+        }
+        
+        // Wait before retrying (exponential backoff)
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
+        }
       }
-    } catch (error) {
-      if (this.onError) {
-        this.onError('Failed to send move');
-      }
+    }
+
+    // All retries failed
+    if (this.onError) {
+      this.onError('Failed to send move after multiple attempts. Please check your connection.');
     }
   }
 
@@ -464,23 +567,9 @@ export class MultiplayerService {
       return;
     }
 
-    // Unsubscribe from all channels
-    if (this.roomSubscription) {
-      await supabase!.removeChannel(this.roomSubscription);
-      this.roomSubscription = null;
-    }
-    if (this.playerSubscription) {
-      await supabase!.removeChannel(this.playerSubscription);
-      this.playerSubscription = null;
-    }
-    if (this.moveSubscription) {
-      await supabase!.removeChannel(this.moveSubscription);
-      this.moveSubscription = null;
-    }
-    if (this.gameStateSubscription) {
-      await supabase!.removeChannel(this.gameStateSubscription);
-      this.gameStateSubscription = null;
-    }
+    // Cleanup subscriptions and timeouts
+    this.cleanupSubscriptions();
+    this.reconnectAttempts.clear();
     
     // Clear event handlers
     this.onMove = undefined;
@@ -488,6 +577,7 @@ export class MultiplayerService {
     this.onPlayerLeft = undefined;
     this.onGameStateUpdate = undefined;
     this.onError = undefined;
+    this.onConnectionStatusChange = undefined;
 
     // Remove player from database (use database UUID, not client ID)
     if (this.roomId && this.databasePlayerId) {
@@ -588,6 +678,33 @@ export class MultiplayerService {
     } catch (error) {
       // Silent fail for recovery
     }
+  }
+
+  // Manually retry connections (useful for UI retry buttons)
+  async retryConnections(): Promise<void> {
+    if (!this.roomId || !isSupabaseConfigured()) {
+      return;
+    }
+
+    // Reset retry counters
+    this.reconnectAttempts.clear();
+    
+    // Re-establish subscriptions
+    this.setupSubscriptions(this.roomId);
+    
+    if (this.onConnectionStatusChange) {
+      this.onConnectionStatusChange(false); // Set to connecting state
+    }
+  }
+
+  // Check if currently connected
+  isConnected(): boolean {
+    // Check if critical subscriptions exist and haven't failed
+    const criticalChannels = ['moves', 'players'];
+    return criticalChannels.every(channel => 
+      !this.reconnectAttempts.has(channel) || 
+      this.reconnectAttempts.get(channel) === 0
+    );
   }
 }
 

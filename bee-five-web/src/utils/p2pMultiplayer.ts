@@ -175,39 +175,98 @@ class P2PMultiplayerClient {
   }
 
   private async setupPeerConnection(): Promise<void> {
-    // Use free STUN servers for NAT traversal
+    // Enhanced ICE server configuration with STUN and TURN servers
+    // TURN servers are essential for symmetric NATs and restrictive firewalls
     const configuration: RTCConfiguration = {
       iceServers: [
+        // Google STUN servers (for NAT discovery)
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
-      ]
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        // Free public TURN servers (for relay when direct connection fails)
+        // Note: These are public servers and may have rate limits
+        // For production, consider using a paid TURN service like Twilio, Metered, or Cloudflare
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        // Additional TURN servers for redundancy
+        {
+          urls: 'turn:relay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:relay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:relay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ],
+      // ICE transport policy: prefer relay for better connectivity
+      iceTransportPolicy: 'all', // Try all: host, srflx, relay
+      // ICE candidate pool size for faster connection
+      iceCandidatePoolSize: 10
     };
 
     this.peerConnection = new RTCPeerConnection(configuration);
 
+    let iceGatheringComplete = false;
+    let connectionTimeout: ReturnType<typeof setTimeout> | null = null;
+    const CONNECTION_TIMEOUT = 30000; // 30 seconds
+
     // Set up event handlers
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        // console.log('🧊 ICE candidate generated');
         // Store ICE candidate for the other peer
         this.storeIceCandidate(event.candidate);
       } else {
-        // console.log('🧊 ICE gathering complete');
+        // ICE gathering complete
+        iceGatheringComplete = true;
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+        }
       }
     };
 
     this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection?.connectionState;
-      // console.log('🔗 Connection state changed:', state);
       
       if (state === 'connected') {
-        // console.log('✅ WebRTC connection established!');
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+          connectionTimeout = null;
+        }
         if (this.onConnected) {
           this.onConnected();
         }
-      } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-        // console.log('❌ WebRTC connection failed:', state);
+      } else if (state === 'disconnected') {
+        // Try to reconnect if disconnected
+        this.handleConnectionFailure('disconnected');
+      } else if (state === 'failed') {
+        this.handleConnectionFailure('failed');
+      } else if (state === 'closed') {
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+          connectionTimeout = null;
+        }
         if (this.onDisconnected) {
           this.onDisconnected();
         }
@@ -215,8 +274,24 @@ class P2PMultiplayerClient {
     };
 
     this.peerConnection.oniceconnectionstatechange = () => {
-      // console.log('🧊 ICE connection state:', this.peerConnection?.iceConnectionState);
+      const iceState = this.peerConnection?.iceConnectionState;
+      
+      if (iceState === 'failed') {
+        this.handleConnectionFailure('ice_failed');
+      } else if (iceState === 'disconnected') {
+        // Connection temporarily lost, but might recover
+        if (this.onError) {
+          this.onError('Connection temporarily lost. Attempting to reconnect...');
+        }
+      }
     };
+
+    // Set connection timeout
+    connectionTimeout = setTimeout(() => {
+      if (this.peerConnection?.connectionState !== 'connected') {
+        this.handleConnectionFailure('timeout');
+      }
+    }, CONNECTION_TIMEOUT);
 
     if (this.isHost) {
       // Host creates data channel
@@ -397,6 +472,33 @@ class P2PMultiplayerClient {
   // Removed pollForAnswer method as it's not needed in simplified mode
 
   // Removed unused WebRTC methods for simplified mode
+
+  private handleConnectionFailure(reason: string): void {
+    if (this.onError) {
+      let errorMessage = 'Connection failed';
+      switch (reason) {
+        case 'timeout':
+          errorMessage = 'Connection timeout. Please check your network and try again.';
+          break;
+        case 'failed':
+          errorMessage = 'Connection failed. This may be due to network restrictions.';
+          break;
+        case 'disconnected':
+          errorMessage = 'Connection lost. Attempting to reconnect...';
+          break;
+        case 'ice_failed':
+          errorMessage = 'Unable to establish connection. Please check your firewall settings.';
+          break;
+        default:
+          errorMessage = `Connection error: ${reason}`;
+      }
+      this.onError(errorMessage);
+    }
+    
+    if (this.onDisconnected) {
+      this.onDisconnected();
+    }
+  }
 
   private storeIceCandidate(candidate: RTCIceCandidate): void {
     if (!this.currentRoom) return;
