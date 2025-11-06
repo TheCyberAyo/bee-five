@@ -30,7 +30,14 @@ export const supabase = isConfigured
       realtime: {
         params: {
           eventsPerSecond: 10
-        }
+        },
+        transport: 'websocket' as any,
+        timeout: 10000
+      },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
       }
     })
   : null;

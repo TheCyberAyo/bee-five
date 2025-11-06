@@ -293,9 +293,18 @@ export class MultiplayerService {
           // Handle room status changes
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          // Successfully subscribed
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          // Subscription failed - try to reconnect
+          if (this.onError) {
+            this.onError('Connection issue. Please refresh and try again.');
+          }
+        }
+      });
 
-    // Subscribe to player joins and leaves (CRITICAL: This was missing!)
+    // Subscribe to player joins and leaves
     this.playerSubscription = supabase!
       .channel(`players:${roomId}`)
       .on('postgres_changes',
@@ -317,7 +326,13 @@ export class MultiplayerService {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          if (this.onError) {
+            this.onError('Connection issue. Please refresh and try again.');
+          }
+        }
+      });
 
     // Subscribe to move changes
     this.moveSubscription = supabase!
@@ -338,7 +353,13 @@ export class MultiplayerService {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          if (this.onError) {
+            this.onError('Connection issue. Please refresh and try again.');
+          }
+        }
+      });
 
     // Subscribe to game state changes
     this.gameStateSubscription = supabase!
@@ -352,7 +373,13 @@ export class MultiplayerService {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          if (this.onError) {
+            this.onError('Connection issue. Please refresh and try again.');
+          }
+        }
+      });
   }
 
   // Send a move
