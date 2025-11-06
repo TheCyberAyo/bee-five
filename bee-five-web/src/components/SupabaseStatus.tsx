@@ -65,9 +65,10 @@ export function SupabaseStatus() {
       <div style={{ fontSize: '0.8em', color: '#856404' }}>
         <strong>Solution:</strong> 
         <ul style={{ margin: '5px 0', paddingLeft: '20px', marginTop: '5px' }}>
-          <li>Create <code>.env.local</code> file in <code>bee-five-web/</code> folder</li>
-          <li>Add your Supabase credentials (see <strong>DEPLOYMENT_SETUP.md</strong>)</li>
-          <li><strong>Restart your dev server</strong> (Ctrl+C then <code>npm run dev</code>)</li>
+          <li><strong>For local development:</strong> Create <code>.env.local</code> file and add Supabase credentials</li>
+          <li><strong>For deployed apps:</strong> Set environment variables in your deployment platform (Vercel, Netlify, etc.)</li>
+          <li>See <strong>DEPLOYMENT_SETUP.md</strong> for detailed instructions</li>
+          <li><strong>Important:</strong> Redeploy your app after adding environment variables!</li>
         </ul>
       </div>
     </div>

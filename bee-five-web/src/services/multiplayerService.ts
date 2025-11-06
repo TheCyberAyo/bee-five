@@ -40,7 +40,7 @@ export class MultiplayerService {
   // Create a new game room
   async createRoom(playerName: string): Promise<RoomInfo> {
     if (!isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured. Please set up your Supabase credentials in .env.local');
+      throw new Error('Supabase is not configured. Please check your deployment environment variables.');
     }
 
     // Validate player name
@@ -75,16 +75,18 @@ export class MultiplayerService {
           errorMessage = 'Database table not found. Please run the database setup script.';
         } else if (roomError.code === 'PGRST302') {
           errorMessage = 'Permission denied. Please check your Row Level Security policies.';
+        } else if ((roomError as any).statusCode === 401) {
+          errorMessage = 'Authentication failed. Please check your Supabase API key in deployment settings.';
+        } else if ((roomError as any).statusCode === 403) {
+          errorMessage = 'Permission denied. Please check your Row Level Security policies.';
+        } else if ((roomError as any).statusCode === 0 || (roomError as any).statusCode === undefined) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
         } else if (roomError.message) {
           errorMessage = `Failed to create room: ${roomError.message}`;
         } else if (roomError.details) {
           errorMessage = `Failed to create room: ${roomError.details}`;
         } else if (roomError.hint) {
           errorMessage = `Failed to create room: ${roomError.hint}`;
-        } else if ((roomError as any).statusCode === 401) {
-          errorMessage = 'Authentication failed. Please check your Supabase API key.';
-        } else if ((roomError as any).statusCode === 403) {
-          errorMessage = 'Permission denied. Please check your Row Level Security policies.';
         } else if (roomError.code) {
           errorMessage = `Failed to create room (Error code: ${roomError.code}). Please check your database setup.`;
         }
