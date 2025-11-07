@@ -264,7 +264,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
   // Get geographical location for each game (organic flowing S-curve)
   const getGamePosition = (gameNumber: number) => {
     const gameIndex = gameNumber - 1;
-    const isMobile = window.innerWidth <= 768;
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
     
     // Organic flowing S-curve parameters
     const totalHeight = isMobile ? 280000 : 320000; // Much larger height to accommodate all 2000 games
@@ -374,7 +374,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
     const isCurrent = gameNumber === currentGame;
     const isLocked = gameNumber > highestUnlockedGame;
     const environment = getGameEnvironment(gameNumber);
-    const isMobile = window.innerWidth <= 768;
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
     
     return (
       <div
@@ -504,7 +504,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
 
   // Main map render with organic flowing S-curve design
   const renderBeeAdventureMap = () => {
-    const isMobile = window.innerWidth <= 768;
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
     const totalHeight = isMobile ? 280000 : 320000; // Much larger height to accommodate all 2000 games
     
     return (

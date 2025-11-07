@@ -1386,7 +1386,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     }
   };
 
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
   
   // Get stage emoji based on current game
   const getStageEmoji = (gameNumber: number): string => {

@@ -516,6 +516,28 @@ export class MultiplayerService {
     }
   }
 
+  // Clean up old moves when starting a new game
+  async clearOldMoves(): Promise<void> {
+    if (!this.roomId || !isSupabaseConfigured()) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase!
+        .from('game_moves')
+        .delete()
+        .eq('room_id', this.roomId);
+
+      if (error) {
+        console.error('Failed to clear old moves:', error);
+        // Don't throw - this is not critical, just cleanup
+      }
+    } catch (error) {
+      console.error('Error clearing old moves:', error);
+      // Silent fail - cleanup is not critical
+    }
+  }
+
   // Update game state
   async updateGameState(board: (0 | 1 | 2)[][], currentPlayer: 1 | 2, winner: 0 | 1 | 2, isGameActive: boolean): Promise<void> {
     if (!this.roomId || !isSupabaseConfigured()) return;
@@ -554,6 +576,26 @@ export class MultiplayerService {
     } catch (error) {
       if (this.onError) {
         this.onError('Failed to update game state');
+      }
+    }
+  }
+
+  // Reset game state (clears moves and resets game state)
+  async resetGameState(): Promise<void> {
+    if (!this.roomId || !isSupabaseConfigured()) {
+      return;
+    }
+
+    try {
+      // Clear old moves first
+      await this.clearOldMoves();
+
+      // Reset game state to empty board
+      const emptyBoard = Array(10).fill(null).map(() => Array(10).fill(0));
+      await this.updateGameState(emptyBoard, 1, 0, true);
+    } catch (error) {
+      if (this.onError) {
+        this.onError('Failed to reset game state');
       }
     }
   }

@@ -393,7 +393,7 @@ export default function SimpleWelcome() {
         </footer>
 
         {/* Competition Modal - rendered within Take Turns submenu */}
-        {showCompetitionModal && isMounted && createPortal(
+        {showCompetitionModal && isMounted && typeof document !== 'undefined' && createPortal(
           <div style={{
             position: 'fixed',
             top: 0,
@@ -939,7 +939,7 @@ export default function SimpleWelcome() {
         </footer>
 
         {/* Difficulty Modal - rendered within AI submenu */}
-        {showDifficultyModal && isMounted && createPortal(
+        {showDifficultyModal && isMounted && typeof document !== 'undefined' && createPortal(
           <div style={{
             position: 'fixed',
             top: 0,
@@ -1103,7 +1103,7 @@ export default function SimpleWelcome() {
         )}
 
         {/* Timer Selection Modal - appears after selecting difficulty */}
-        {showTimerModal && isMounted && createPortal(
+        {showTimerModal && isMounted && typeof document !== 'undefined' && createPortal(
           <div style={{
             position: 'fixed',
             top: 0,
@@ -1546,7 +1546,7 @@ export default function SimpleWelcome() {
       )}
 
       {/* Competition Modal - Fresh tournament implementation */}
-      {showCompetitionModal && createPortal(
+      {showCompetitionModal && isMounted && typeof document !== 'undefined' && createPortal(
         <div style={{
           position: 'fixed',
           top: 0,
@@ -1756,7 +1756,7 @@ export default function SimpleWelcome() {
       )}
 
       {/* Difficulty Modal */}
-      {showDifficultyModal && createPortal(
+      {showDifficultyModal && isMounted && typeof document !== 'undefined' && createPortal(
         <div style={{
           position: 'fixed',
           top: 0,

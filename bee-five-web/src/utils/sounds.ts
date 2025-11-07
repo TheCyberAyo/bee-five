@@ -13,6 +13,7 @@ class SoundGenerator {
   private initAudioContext() {
     if (!this.audioContext) {
       try {
+        if (typeof window === 'undefined') return;
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         this.masterGain = this.audioContext.createGain();
         this.masterGain.connect(this.audioContext.destination);

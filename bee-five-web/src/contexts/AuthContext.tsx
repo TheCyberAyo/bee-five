@@ -31,20 +31,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // If Supabase is not configured, just set loading to false
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
     // Get initial session
-    supabase?.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         await loadProfile(session.user.id);
       }
       setLoading(false);
+    }).catch((error) => {
+      console.error('Error getting session:', error);
+      setLoading(false);
     });
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase?.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change:', event, session?.user?.email || 'no user');
       
       // If SIGNED_OUT event, ensure we clear everything
@@ -64,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
       }
       setLoading(false);
-    }) || { data: { subscription: null } };
+    });
 
     return () => {
       subscription?.unsubscribe();

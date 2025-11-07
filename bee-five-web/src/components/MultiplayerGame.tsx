@@ -48,6 +48,10 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
   const [connectionStatus, _setConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected');
   const [opponentName, setOpponentName] = useState<string>('');
 
+  // Use refs to track game state for callback checks (avoid stale closure)
+  const gameActiveRef = useRef(true);
+  const winnerRef = useRef<0 | 1 | 2>(0);
+
   // Use shared constants
   const CELL_SIZE = MULTIPLAYER_CELL_SIZE;
   const CANVAS_SIZE = MULTIPLAYER_CANVAS_SIZE;
@@ -58,15 +62,25 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
   const applyMove = useCallback((move: { row: number; col: number; player: 1 | 2; timestamp: number; roomId: string }) => {
     setBoard(prevBoard => {
       const newBoard = prevBoard.map(row => [...row]);
+      
+      // Don't apply move if cell is already occupied (safety check)
+      if (newBoard[move.row][move.col] !== 0) {
+        return prevBoard;
+      }
+      
       newBoard[move.row][move.col] = move.player;
 
       // Check for win condition using the updated board
       const winningPieces = getWinningPieces(newBoard, move.row, move.col, move.player);
       if (winningPieces.length >= 5) {
+        // Immediately disable the game to prevent further moves
+        gameActiveRef.current = false;
+        winnerRef.current = move.player;
+        setGameActive(false);
+        
         setTimeout(() => {
           setWinner(move.player);
           setWinningPieces(winningPieces);
-          setGameActive(false);
           
           setTimeout(() => {
             const isPlayerWin = move.player === playerNumber;
@@ -81,8 +95,10 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
           }, 500);
         }, 0);
       } else {
-        // Switch turns
-        setCurrentPlayer(move.player === 1 ? 2 : 1);
+        // Switch turns only if game is still active
+        if (gameActiveRef.current && winnerRef.current === 0) {
+          setCurrentPlayer(move.player === 1 ? 2 : 1);
+        }
       }
 
       return newBoard;
@@ -109,15 +125,18 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     const opponent = roomInfo.players.find(p => p.playerNumber !== playerNumber);
     setOpponentName(opponent?.name || 'Opponent');
 
-    // Set up move callback
+    // Set up move callback - use refs to check game state (avoids stale closure)
     multiplayerService.onMove = (move: GameMove) => {
-      applyMove({
-        row: move.row,
-        col: move.col,
-        player: move.player_number,
-        timestamp: new Date(move.timestamp).getTime(),
-        roomId: roomInfo.roomId
-      });
+      // Only apply moves if game is still active and no winner
+      if (gameActiveRef.current && winnerRef.current === 0) {
+        applyMove({
+          row: move.row,
+          col: move.col,
+          player: move.player_number,
+          timestamp: new Date(move.timestamp).getTime(),
+          roomId: roomInfo.roomId
+        });
+      }
     };
 
     // If roomId is missing, recover it immediately
@@ -153,8 +172,15 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
             setBoard(boardState);
             setCurrentPlayer(gameState.current_player);
             if (gameState.winner > 0) {
+              // Update refs when loading game state
+              gameActiveRef.current = false;
+              winnerRef.current = gameState.winner;
               setWinner(gameState.winner);
               setGameActive(false);
+            } else {
+              // Reset refs if game is active
+              gameActiveRef.current = gameState.is_game_active;
+              winnerRef.current = 0;
             }
           }
         } catch (error) {
@@ -330,7 +356,10 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
 
   // Handle canvas click
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!gameActive || winner > 0 || currentPlayer !== playerNumber) return;
+    // Disable moves if game is not active, someone has won, or it's not the player's turn
+    if (!gameActive || winner > 0 || currentPlayer !== playerNumber) {
+      return;
+    }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -376,14 +405,19 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
       if (winResult) {
         newWinner = currentPlayer;
         newGameActive = false;
+        // Immediately disable the game to prevent further moves
+        gameActiveRef.current = false;
+        winnerRef.current = newWinner;
         setWinner(newWinner);
         setGameActive(false);
         setWinMessage(newWinner === playerNumber ? 'You won! 🐝' : 'Opponent won! 🐝');
         setShowWinPopup(true);
         soundManager.playVictorySound();
       } else {
-        // Switch turns
-        setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
+        // Switch turns only if game is still active
+        if (gameActiveRef.current && winnerRef.current === 0) {
+          setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
+        }
       }
 
       // Send move to other players via Supabase
@@ -392,7 +426,7 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
       // Update game state in Supabase
       await multiplayerService.updateGameState(
         newBoard,
-        currentPlayer === 1 ? 2 : 1,
+        newGameActive ? (currentPlayer === 1 ? 2 : 1) : currentPlayer,
         newWinner,
         newGameActive
       );
@@ -445,12 +479,24 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     setAnimatingPieces(new Map());
     setShowWinPopup(false);
     setWinMessage('');
+    // Reset refs
+    gameActiveRef.current = true;
+    winnerRef.current = 0;
   };
 
   // Reset game (host only)
-  const resetGame = () => {
-    resetGameState();
+  const resetGame = async () => {
     soundManager.playClickSound();
+    
+    // Clear old moves in database and reset game state
+    await multiplayerService.resetGameState();
+    
+    // Reset local game state
+    resetGameState();
+    
+    // Update local board to sync with database
+    const emptyBoard = Array(10).fill(null).map(() => Array(10).fill(0));
+    await multiplayerService.updateGameState(emptyBoard, 1, 0, true);
   };
 
   // Leave game
