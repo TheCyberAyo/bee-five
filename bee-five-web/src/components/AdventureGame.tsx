@@ -76,7 +76,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const [gamesWon, setGamesWon] = useState(0);
   const [gamesCompleted, setGamesCompleted] = useState<number[]>([]);
   const [highestUnlockedGame, setHighestUnlockedGame] = useState(1); // Track the highest unlocked game (starts at 1)
-  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [progressLoadedUserId, setProgressLoadedUserId] = useState<string | null>(null); // Track which user's progress we've loaded
   const [showBeeFact, setShowBeeFact] = useState(false);
   const [currentBeeFact, setCurrentBeeFact] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(true);
@@ -189,10 +189,11 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     soundManager.setMuted(!soundEnabled);
   }, [volume, soundEnabled]);
 
-  // Load progress on mount if user is logged in
+  // Load progress on mount if user is logged in, or when user changes
   useEffect(() => {
     const loadProgress = async () => {
-      if (user && !progressLoaded) {
+      // If user is logged in and we haven't loaded their progress yet
+      if (user && progressLoadedUserId !== user.id) {
         try {
           const progress = await loadAdventureProgress(user.id);
           if (progress) {
@@ -201,22 +202,27 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
             setGamesCompleted(progress.games_completed);
             setGamesWon(progress.games_won);
           }
-          setProgressLoaded(true);
+          setProgressLoadedUserId(user.id);
         } catch (error) {
           console.error('Error loading progress:', error);
-          setProgressLoaded(true);
+          setProgressLoadedUserId(user.id); // Mark as attempted even on error
         }
       } else if (!user) {
-        setProgressLoaded(true);
+        // Reset progress when user logs out
+        setProgressLoadedUserId(null);
+        setCurrentGame(1);
+        setHighestUnlockedGame(1);
+        setGamesCompleted([]);
+        setGamesWon(0);
       }
     };
     loadProgress();
-  }, [user, progressLoaded]);
+  }, [user, progressLoadedUserId]);
 
   // Save progress when navigating away or component unmounts
   useEffect(() => {
     const saveProgressOnUnmount = () => {
-      if (user && progressLoaded) {
+      if (user && progressLoadedUserId === user.id) {
         // Use saveAdventureProgress directly (not autoSave) to ensure immediate save
         saveAdventureProgress(user.id, {
           current_game: currentGame,
@@ -234,18 +240,35 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     return () => {
       window.removeEventListener('beforeunload', saveProgressOnUnmount);
       // Save one more time on cleanup
-      if (user && progressLoaded) {
+      if (user && progressLoadedUserId === user.id) {
         saveProgressOnUnmount();
       }
     };
-  }, [user, progressLoaded, currentGame, highestUnlockedGame, gamesCompleted, gamesWon]);
+  }, [user, progressLoadedUserId, currentGame, highestUnlockedGame, gamesCompleted, gamesWon]);
 
   React.useEffect(() => {
-    if (!progressLoaded) return;
+    if (!progressLoadedUserId) return;
     setPlayerWins(0);
     setAiWins(0);
     setGameProcessed(false);
-  }, [progressLoaded]);
+  }, [progressLoadedUserId]);
+
+  // Auto-save progress whenever currentGame changes (for logged-in users)
+  useEffect(() => {
+    if (user && progressLoadedUserId === user.id) {
+      // Debounce the save to avoid too many saves
+      const timeoutId = setTimeout(() => {
+        autoSaveProgress(user.id, {
+          current_game: currentGame,
+          highest_unlocked_game: highestUnlockedGame,
+          games_completed: gamesCompleted,
+          games_won: gamesWon,
+        });
+      }, 1000); // 1 second debounce
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [user, progressLoadedUserId, currentGame, highestUnlockedGame, gamesCompleted, gamesWon]);
 
    // Handle start countdown (3 seconds before game starts)
    React.useEffect(() => {
@@ -1376,7 +1399,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
 
   // Helper function to save progress when returning to map
   const saveProgressOnMapReturn = () => {
-    if (user && progressLoaded) {
+    if (user && progressLoadedUserId === user.id) {
       autoSaveProgress(user.id, {
         current_game: currentGame,
         highest_unlocked_game: highestUnlockedGame,
