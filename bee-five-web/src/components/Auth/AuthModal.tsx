@@ -20,9 +20,8 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [justSignedIn, setJustSignedIn] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const { signUp, signIn, signInWithProvider, refreshProfile, user } = useAuth();
+  const { signUp, signIn, signInWithProvider, user } = useAuth();
   
   // Store callbacks in refs to avoid dependency array issues
   const onCloseRef = useRef(onClose);
@@ -151,8 +150,9 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         setError(null);
         
         // Update profile with username (after trigger creates it)
-        if (data?.user && supabase) {
+        if (data?.user?.id && supabase) {
           const supabaseClient = supabase; // Store in local variable for closure
+          const userId = data.user.id;
           // Try to update profile immediately
           setTimeout(async () => {
             if (!supabaseClient) return;
@@ -160,7 +160,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               const { error: updateError } = await supabaseClient
                 .from('user_profiles')
                 .update({ username: username.trim() })
-                .eq('id', data.user.id);
+                .eq('id', userId);
               
               if (updateError) {
                 console.warn('Could not update username immediately:', updateError);
@@ -174,7 +174,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                     const { error: retryError } = await supabaseClient
                       .from('user_profiles')
                       .update({ username: username.trim() })
-                      .eq('id', data.user.id);
+                      .eq('id', userId);
                     if (retryError && retries < 3) {
                       retryUpdate();
                     }
@@ -205,12 +205,10 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         if (error) {
           setError(error.message || 'Failed to sign in');
           setLoading(false);
-          setJustSignedIn(false);
           setIsClosing(false);
         } else {
           // Success - close modal immediately
           setError(null);
-          setJustSignedIn(true);
           setIsClosing(true);
           setLoading(false);
           
@@ -225,9 +223,9 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           }, 100);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Sign up/sign in error:', err);
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
       setLoading(false);
       setIsClosing(false);
     }
@@ -238,8 +236,8 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     try {
       await signInWithProvider(provider);
       // Provider sign-in redirects, so we don't need to handle success here
-    } catch (err: any) {
-      setError(err.message || `Failed to sign in with ${provider}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : `Failed to sign in with ${provider}`);
     }
   };
 
@@ -518,7 +516,6 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);
-              setJustSignedIn(false);
             }}
             style={{
               background: 'none',

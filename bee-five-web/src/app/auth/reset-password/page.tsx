@@ -170,9 +170,9 @@ export default function ResetPasswordPage() {
       setTimeout(() => {
         router.push('/');
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Password update error:', err);
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
       setSubmitting(false);
     }
   };

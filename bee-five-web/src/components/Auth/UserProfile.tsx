@@ -61,9 +61,9 @@ export default function UserProfile({ onClose }: UserProfileProps) {
       } else {
         setUsernameError(result.error || 'Failed to update username');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving username:', error);
-      setUsernameError(error.message || 'Failed to update username');
+      setUsernameError(error instanceof Error ? error.message : 'Failed to update username');
     } finally {
       setSaving(false);
     }

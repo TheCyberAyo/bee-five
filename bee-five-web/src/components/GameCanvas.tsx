@@ -77,6 +77,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     currentCanvasSize = CANVAS_SIZE;
   }
 
+  const drawWinningLine = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      // This would be enhanced to show the actual winning line
+      // For now, just highlight the winner
+      ctx.strokeStyle = gameState.winner === 1 ? effectivePlayer1Color : effectivePlayer2Color;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(2, 2, currentCanvasSize - 4, currentCanvasSize - 4);
+      ctx.setLineDash([]);
+    },
+    [currentCanvasSize, effectivePlayer1Color, effectivePlayer2Color, gameState.winner]
+  );
+
   // Optimized rendering function
   const drawGame = useCallback((ctx: CanvasRenderingContext2D) => {
     // Clear canvas
@@ -182,17 +195,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     if (gameState.winner > 0) {
       drawWinningLine(ctx);
     }
-  }, [gameState, hoveredCell, touchedCell, currentCellSize, currentCanvasSize, effectiveGridColor, effectivePlayer1Color, effectivePlayer2Color, gameNumber, currentTheme]);
-
-  const drawWinningLine = (ctx: CanvasRenderingContext2D) => {
-    // This would be enhanced to show the actual winning line
-    // For now, just highlight the winner
-    ctx.strokeStyle = gameState.winner === 1 ? effectivePlayer1Color : effectivePlayer2Color;
-    ctx.lineWidth = 4;
-    ctx.setLineDash([5, 5]);
-    ctx.strokeRect(2, 2, currentCanvasSize - 4, currentCanvasSize - 4);
-    ctx.setLineDash([]);
-  };
+  }, [currentCanvasSize, currentCellSize, drawWinningLine, effectiveGridColor, effectivePlayer1Color, effectivePlayer2Color, gameNumber, gameState, hoveredCell, touchedCell, currentTheme]);
 
   // Handle canvas click/touch
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {

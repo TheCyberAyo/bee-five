@@ -1,4 +1,5 @@
-import { supabase, GameRoom, GamePlayer, GameState, GameMove, isSupabaseConfigured } from '../lib/supabase';
+import type { PostgrestError, RealtimeChannel } from '@supabase/supabase-js';
+import { supabase, GamePlayer, GameState, GameMove, isSupabaseConfigured } from '../lib/supabase';
 
 export interface RoomInfo {
   roomId: string;
@@ -14,15 +15,44 @@ export interface PlayerInfo {
   isHost: boolean;
 }
 
+const extractStatusCode = (error: PostgrestError | null): number | undefined => {
+  if (!error) {
+    return undefined;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const statusValue = (error as unknown as Record<string, unknown>).status;
+    if (typeof statusValue === 'number') {
+      return statusValue;
+    }
+
+    const statusCodeValue = (error as unknown as Record<string, unknown>).statusCode;
+    if (typeof statusCodeValue === 'number') {
+      return statusCodeValue;
+    }
+  }
+
+  return undefined;
+};
+
+const isPostgrestError = (value: unknown): value is PostgrestError => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    typeof (value as { code: unknown }).code === 'string'
+  );
+};
+
 export class MultiplayerService {
   private roomId: string | null = null;
   private playerNumber: 1 | 2 = 1;
   private playerId: string | null = null; // Client-generated ID
   private databasePlayerId: string | null = null; // Database UUID for the player record
-  private roomSubscription: any = null;
-  private playerSubscription: any = null;
-  private moveSubscription: any = null;
-  private gameStateSubscription: any = null;
+  private roomSubscription: RealtimeChannel | null = null;
+  private playerSubscription: RealtimeChannel | null = null;
+  private moveSubscription: RealtimeChannel | null = null;
+  private gameStateSubscription: RealtimeChannel | null = null;
   private reconnectAttempts: Map<string, number> = new Map();
   private reconnectTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private maxReconnectAttempts = 5;
@@ -71,7 +101,8 @@ export class MultiplayerService {
       if (roomError) {
         // Provide more specific error messages based on error code
         let errorMessage = 'Failed to create room';
-        
+        const statusCode = extractStatusCode(roomError);
+
         if (roomError.code === '23505') {
           errorMessage = 'Room code already exists. Please try again.';
         } else if (roomError.code === 'PGRST301' || roomError.code === 'PGRST116') {
@@ -80,11 +111,11 @@ export class MultiplayerService {
           errorMessage = 'Database table not found. Please run the database setup script.';
         } else if (roomError.code === 'PGRST302') {
           errorMessage = 'Permission denied. Please check your Row Level Security policies.';
-        } else if ((roomError as any).statusCode === 401) {
+        } else if (statusCode === 401) {
           errorMessage = 'Authentication failed. Please check your Supabase API key in deployment settings.';
-        } else if ((roomError as any).statusCode === 403) {
+        } else if (statusCode === 403) {
           errorMessage = 'Permission denied. Please check your Row Level Security policies.';
-        } else if ((roomError as any).statusCode === 0 || (roomError as any).statusCode === undefined) {
+        } else if (statusCode === 0 || statusCode === undefined) {
           errorMessage = 'Network error. Please check your internet connection and try again.';
         } else if (roomError.message) {
           errorMessage = `Failed to create room: ${roomError.message}`;
@@ -469,7 +500,6 @@ export class MultiplayerService {
     }
 
     const maxRetries = 3;
-    let lastError: any = null;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -491,13 +521,10 @@ export class MultiplayerService {
         
         // Success - return early
         return;
-      } catch (error) {
-        lastError = error;
-        
+      } catch (error) {        
         // Don't retry on certain errors
-        if (error && typeof error === 'object' && 'code' in error) {
-          const errorCode = (error as any).code;
-          if (errorCode === '23505' || errorCode === '23503') {
+        if (isPostgrestError(error)) {
+          if (error.code === '23505' || error.code === '23503') {
             // Unique constraint violation or foreign key violation - don't retry
             break;
           }

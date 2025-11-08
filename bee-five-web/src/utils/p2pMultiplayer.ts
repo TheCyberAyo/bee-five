@@ -8,10 +8,18 @@ export interface GameMove {
   timestamp: number;
 }
 
-export interface P2PMessage {
-  type: 'game-move' | 'game-reset' | 'player-info' | 'room-joined' | 'game-start';
-  data: any;
+type EmptyPayload = Record<string, never>;
+
+interface PlayerInfoPayload {
+  playerId: string;
+  playerName: string;
 }
+
+export type P2PMessage =
+  | { type: 'game-move'; data: GameMove }
+  | { type: 'game-reset'; data: EmptyPayload }
+  | { type: 'player-info'; data: PlayerInfoPayload }
+  | { type: 'game-start'; data: EmptyPayload };
 
 export interface RoomInfo {
   roomId: string;
@@ -25,6 +33,15 @@ export interface PlayerInfo {
   name: string;
   playerNumber: 1 | 2;
   isHost: boolean;
+}
+
+interface StoredOffer {
+  type: 'offer';
+  offer: RTCSessionDescriptionInit;
+  playerName: string;
+  playerId: string;
+  timestamp: number;
+  expires: number;
 }
 
 class P2PMultiplayerClient {
@@ -424,7 +441,7 @@ class P2PMultiplayerClient {
     checkForOffers();
   }
 
-  private async handleIncomingOffer(data: any): Promise<void> {
+  private async handleIncomingOffer(data: StoredOffer): Promise<void> {
     try {
       await this.peerConnection!.setRemoteDescription(data.offer);
       

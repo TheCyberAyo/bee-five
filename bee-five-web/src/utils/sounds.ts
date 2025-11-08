@@ -1,5 +1,10 @@
 // Sound utility for generating bee-themed game sounds using Web Audio API
 
+type ExtendedWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
 class SoundGenerator {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -14,7 +19,14 @@ class SoundGenerator {
     if (!this.audioContext) {
       try {
         if (typeof window === 'undefined') return;
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const extendedWindow = window as ExtendedWindow;
+        const AudioContextConstructor =
+          extendedWindow.AudioContext ?? extendedWindow.webkitAudioContext;
+        if (!AudioContextConstructor) {
+          console.warn('Web Audio API is not supported in this browser.');
+          return;
+        }
+        this.audioContext = new AudioContextConstructor();
         this.masterGain = this.audioContext.createGain();
         this.masterGain.connect(this.audioContext.destination);
         this.masterGain.gain.value = this.volume;

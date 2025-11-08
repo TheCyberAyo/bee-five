@@ -78,9 +78,12 @@ export async function updateUserProfile(
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating profile:', error);
-    return { success: false, error: error.message || 'Failed to update profile' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update profile',
+    };
   }
 }
 

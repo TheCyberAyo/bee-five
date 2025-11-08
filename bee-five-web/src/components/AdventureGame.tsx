@@ -13,6 +13,135 @@ import { getStoryForGame, shouldShowStory, type StageStory } from '../data/stage
 import { useAuth } from '../contexts/AuthContext';
 import { loadAdventureProgress, saveAdventureProgress, autoSaveProgress } from '../services/progressService';
 
+const isMultipleOf10 = (gameNumber: number): boolean => gameNumber % 10 === 0;
+
+const isMultipleOf50 = (gameNumber: number): boolean => gameNumber % 50 === 0;
+
+const requiresMatchSystem = (gameNumber: number): boolean => isMultipleOf10(gameNumber);
+
+const getMatchType = (gameNumber: number): 'best-of-3' | 'best-of-5' | 'single' => {
+  if (isMultipleOf50(gameNumber)) {
+    return 'best-of-5';
+  }
+  if (requiresMatchSystem(gameNumber)) {
+    return 'best-of-3';
+  }
+  return 'single';
+};
+
+const getRequiredWins = (gameNumber: number): number => {
+  const matchType = getMatchType(gameNumber);
+  switch (matchType) {
+    case 'best-of-5':
+      return 3;
+    case 'best-of-3':
+      return 2;
+    default:
+      return 1;
+  }
+};
+
+const getTotalGames = (gameNumber: number): number => {
+  const matchType = getMatchType(gameNumber);
+  switch (matchType) {
+    case 'best-of-5':
+      return 5;
+    case 'best-of-3':
+      return 3;
+    default:
+      return 1;
+  }
+};
+
+const getMatchGridColor = (gameNumber: number, matchNumber: number): string => {
+  if (!requiresMatchSystem(gameNumber)) {
+    return '#87CEEB';
+  }
+
+  const matchType = getMatchType(gameNumber);
+
+  if (matchType === 'best-of-5') {
+    switch (matchNumber) {
+      case 1:
+        return '#FFFFFF';
+      case 2:
+        return '#FFA500';
+      case 3:
+        return '#87CEEB';
+      case 4:
+        return '#90EE90';
+      case 5:
+        return '#FFB6C1';
+      default:
+        return '#87CEEB';
+    }
+  }
+
+  if (matchType === 'best-of-3') {
+    switch (matchNumber) {
+      case 1:
+        return '#FFFFFF';
+      case 2:
+        return '#FFA500';
+      case 3:
+        return '#87CEEB';
+      default:
+        return '#87CEEB';
+    }
+  }
+
+  return '#87CEEB';
+};
+
+type AdventureProgressSnapshot = {
+  current_game: number;
+  highest_unlocked_game: number;
+  games_completed: number[];
+  games_won: number;
+};
+
+const getLocalProgressKey = (userId?: string | null) =>
+  userId ? `beeAdventureProgress:${userId}` : 'beeAdventureProgress:guest';
+
+const loadLocalAdventureProgress = (userId?: string | null): AdventureProgressSnapshot | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(getLocalProgressKey(userId));
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as AdventureProgressSnapshot | null;
+    if (!parsed) {
+      return null;
+    }
+    const { current_game, highest_unlocked_game, games_completed, games_won } = parsed;
+    return {
+      current_game: current_game ?? 1,
+      highest_unlocked_game: highest_unlocked_game ?? 1,
+      games_completed: Array.isArray(games_completed) ? games_completed : [],
+      games_won: games_won ?? 0,
+    };
+  } catch (error) {
+    console.warn('Failed to load local adventure progress', error);
+    return null;
+  }
+};
+
+const saveLocalAdventureProgress = (userId: string | null | undefined, progress: AdventureProgressSnapshot) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(getLocalProgressKey(userId), JSON.stringify(progress));
+  } catch (error) {
+    console.warn('Failed to save local adventure progress', error);
+  }
+};
+
 interface AdventureGameProps {
   onBackToMenu: () => void;
 }
@@ -69,9 +198,9 @@ const ADVENTURE_STAGES = [
     games: 1801
   }
 ];
-
 const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [currentGame, setCurrentGame] = useState(1);
   const [gamesWon, setGamesWon] = useState(0);
   const [gamesCompleted, setGamesCompleted] = useState<number[]>([]);
@@ -91,6 +220,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const [winMessage, setWinMessage] = useState('');
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [showResultsPopup, setShowResultsPopup] = useState(false);
+  const [localProgressInitialized, setLocalProgressInitialized] = useState(false);
   
   const [currentMatch, setCurrentMatch] = useState(1);
   const [playerWins, setPlayerWins] = useState(0);
@@ -114,80 +244,22 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   });
 
   const { currentTheme } = useTheme({ gameNumber: currentGame });
-  const isMultipleOf10 = (gameNumber: number): boolean => {
-    return gameNumber % 10 === 0;
-  };
-
-  const isMultipleOf50 = (gameNumber: number): boolean => {
-    return gameNumber % 50 === 0;
-  };
-
-  const requiresMatchSystem = (gameNumber: number): boolean => {
-    return isMultipleOf10(gameNumber);
-  };
-
-  const getMatchType = (gameNumber: number): 'best-of-3' | 'best-of-5' | 'single' => {
-    if (isMultipleOf50(gameNumber)) {
-      return 'best-of-5';
-    }
-    if (requiresMatchSystem(gameNumber)) {
-      return 'best-of-3';
-    }
-    return 'single';
-  };
-
-  const getRequiredWins = (gameNumber: number): number => {
-    const matchType = getMatchType(gameNumber);
-    switch (matchType) {
-      case 'best-of-5': return 3;
-      case 'best-of-3': return 2;
-      default: return 1;
-    }
-  };
-
-  const getTotalGames = (gameNumber: number): number => {
-    const matchType = getMatchType(gameNumber);
-    switch (matchType) {
-      case 'best-of-5': return 5;
-      case 'best-of-3': return 3;
-      default: return 1;
-    }
-  };
-
-  const getMatchGridColor = (gameNumber: number, matchNumber: number): string => {
-    if (!requiresMatchSystem(gameNumber)) {
-      return '#87CEEB';
-    }
-
-    const matchType = getMatchType(gameNumber);
-    
-    if (matchType === 'best-of-5') {
-      switch (matchNumber) {
-        case 1: return '#FFFFFF';
-        case 2: return '#FFA500';
-        case 3: return '#87CEEB';
-        case 4: return '#90EE90';
-        case 5: return '#FFB6C1';
-        default: return '#87CEEB';
-      }
-    }
-    
-    if (matchType === 'best-of-3') {
-      switch (matchNumber) {
-        case 1: return '#FFFFFF';
-        case 2: return '#FFA500';
-        case 3: return '#87CEEB';
-        default: return '#87CEEB';
-      }
-    }
-    
-    return '#87CEEB';
-  };
-
   React.useEffect(() => {
     soundManager.setVolume(volume);
     soundManager.setMuted(!soundEnabled);
   }, [volume, soundEnabled]);
+
+  // Load local progress snapshot immediately when user changes (provides fast resume even before remote fetch)
+  useEffect(() => {
+    const localProgress = loadLocalAdventureProgress(userId);
+    if (localProgress) {
+      setCurrentGame(localProgress.current_game);
+      setHighestUnlockedGame(localProgress.highest_unlocked_game);
+      setGamesCompleted(localProgress.games_completed);
+      setGamesWon(localProgress.games_won);
+    }
+    setLocalProgressInitialized(true);
+  }, [userId]);
 
   // Load progress on mount if user is logged in, or when user changes
   useEffect(() => {
@@ -210,10 +282,18 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       } else if (!user) {
         // Reset progress when user logs out
         setProgressLoadedUserId(null);
-        setCurrentGame(1);
-        setHighestUnlockedGame(1);
-        setGamesCompleted([]);
-        setGamesWon(0);
+        const guestProgress = loadLocalAdventureProgress(null);
+        if (guestProgress) {
+          setCurrentGame(guestProgress.current_game);
+          setHighestUnlockedGame(guestProgress.highest_unlocked_game);
+          setGamesCompleted(guestProgress.games_completed);
+          setGamesWon(guestProgress.games_won);
+        } else {
+          setCurrentGame(1);
+          setHighestUnlockedGame(1);
+          setGamesCompleted([]);
+          setGamesWon(0);
+        }
       }
     };
     loadProgress();
@@ -269,6 +349,20 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       return () => clearTimeout(timeoutId);
     }
   }, [user, progressLoadedUserId, currentGame, highestUnlockedGame, gamesCompleted, gamesWon]);
+
+  // Persist progress snapshot locally for both authenticated and guest players
+  useEffect(() => {
+    if (!localProgressInitialized) return;
+
+    const snapshot: AdventureProgressSnapshot = {
+      current_game: currentGame,
+      highest_unlocked_game: highestUnlockedGame,
+      games_completed: gamesCompleted,
+      games_won: gamesWon,
+    };
+
+    saveLocalAdventureProgress(userId, snapshot);
+  }, [localProgressInitialized, userId, currentGame, highestUnlockedGame, gamesCompleted, gamesWon]);
 
    // Handle start countdown (3 seconds before game starts)
    React.useEffect(() => {
@@ -335,8 +429,12 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       clearTimeout(winPopupTimerRef.current);
       winPopupTimerRef.current = null;
     }
+
+    if (gameProcessed) {
+      return;
+    }
     
-    if (gameState.winner > 0 && !gameProcessed) {
+    if (gameState.winner > 0) {
       setGameProcessed(true);
       
       if (gameState.winner === 1) {
@@ -469,7 +567,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
           winPopupTimerRef.current = null;
         }, 1000);
       }
-    } else if (!gameState.isGameActive && gameState.winner === 0 && !gameProcessed) {
+    } else if (!gameState.isGameActive && gameState.winner === 0) {
       setGameProcessed(true);
       
       setWinMessage('Draw! 🐝');
@@ -496,7 +594,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         setShowWinPopup(true);
         winPopupTimerRef.current = null;
       }, 1000);
-    } else if (gameState.timeLeft === 0 && !gameProcessed) {
+    } else if (gameState.timeLeft === 0) {
       setGameProcessed(true);
       
       const winText = gameState.currentPlayer === 1 ? 'Time\'s Up - You Lost' : 'Time\'s Up - You Won!';
@@ -635,51 +733,25 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         winPopupTimerRef.current = null;
       }
     };
-  }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer, currentGame, currentMatch, showStartCountdown, showStoryCarousel, showBeeFact, soundEnabled, gameInitialized]);
+  }, [
+    gameState.winner,
+    gameState.isGameActive,
+    gameState.timeLeft,
+    gameState.currentPlayer,
+    currentGame,
+    currentMatch,
+    showStartCountdown,
+    showStoryCarousel,
+    showBeeFact,
+    soundEnabled,
+    gameInitialized,
+    gameProcessed,
+    gamesCompleted,
+    gamesWon,
+    highestUnlockedGame,
+    user,
+  ]);
 
-  React.useEffect(() => {
-    if (gameState.currentPlayer === 2 && gameState.isGameActive && gameState.winner === 0 && gameStarted && !showStartCountdown && !showStoryCarousel && !showBeeFact && gameInitialized) {
-      // AI must play in 1000ms for games 1801-2000, otherwise use 1500ms
-      const aiDelay = (currentGame >= 1801 && currentGame <= 2000) ? 1000 : 1500;
-      const timer = setTimeout(() => {
-        makeAdventureAIMove();
-      }, aiDelay);
-      return () => clearTimeout(timer);
-    }
-  }, [gameState.currentPlayer, gameState.isGameActive, gameState.winner, gameState.board, gameState.isBlindPlay, gameState.mudZones, gameStarted, showStartCountdown, showStoryCarousel, showBeeFact, gameInitialized]);
-
-  const makeAdventureAIMove = () => {
-    const availableCells = [];
-    for (let row = 0; row < 10; row++) {
-      for (let col = 0; col < 10; col++) {
-        if (gameState.board[row][col] === 0) {
-          if (gameState.isBlindPlay && isInMudZone(row, col, gameState.mudZones)) {
-            continue;
-          }
-          availableCells.push({ row, col });
-        }
-      }
-    }
-
-    if (availableCells.length === 0) return;
-
-    const selectedCell = gameState.isBlindPlay ? getRandomAIMove(availableCells) : getAdventureAIMove(availableCells);
-    handleCellClick(selectedCell.row, selectedCell.col);
-  };
-
-
-  const getAdventureAIMove = (availableCells: {row: number, col: number}[]) => {
-    // Use hard AI for levels 601 and above
-    if (currentGame >= 601) {
-      return getHardAIMove(availableCells);
-    }
-    return getMediumAIMove(availableCells);
-  };
-
-  const getRandomAIMove = (availableCells: {row: number, col: number}[]) => {
-    const randomIndex = Math.floor(Math.random() * availableCells.length);
-    return availableCells[randomIndex];
-  };
 
   const getMediumAIMove = (availableCells: {row: number, col: number}[]) => {
     for (let cell of availableCells) {
@@ -917,6 +989,11 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     console.log('Hard AI: Fallback random move');
     return availableCells[Math.floor(Math.random() * availableCells.length)];
   };
+
+  const getMediumAIMoveRef = React.useRef(getMediumAIMove);
+  const getHardAIMoveRef = React.useRef(getHardAIMove);
+  getMediumAIMoveRef.current = getMediumAIMove;
+  getHardAIMoveRef.current = getHardAIMove;
 
   // Helper function to find gap blocking moves (block 3-in-a-row with gaps on either side)
   const findGapBlockingMoves = (availableCells: {row: number, col: number}[]): {row: number, col: number}[] => {
@@ -1254,6 +1331,64 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     return posEndValid || negEndValid;
   };
 
+  React.useEffect(() => {
+    if (
+      gameState.currentPlayer === 2 &&
+      gameState.isGameActive &&
+      gameState.winner === 0 &&
+      gameStarted &&
+      !showStartCountdown &&
+      !showStoryCarousel &&
+      !showBeeFact &&
+      gameInitialized
+    ) {
+      // AI must play in 1000ms for games 1801-2000, otherwise use 1500ms
+      const aiDelay = currentGame >= 1801 && currentGame <= 2000 ? 1000 : 1500;
+      const timer = setTimeout(() => {
+        const availableCells: { row: number; col: number }[] = [];
+        for (let row = 0; row < 10; row++) {
+          for (let col = 0; col < 10; col++) {
+            if (gameState.board[row][col] === 0) {
+              if (gameState.isBlindPlay && isInMudZone(row, col, gameState.mudZones)) {
+                continue;
+              }
+              availableCells.push({ row, col });
+            }
+          }
+        }
+
+        if (availableCells.length === 0) {
+          return;
+        }
+
+        const hardMove = getHardAIMoveRef.current;
+        const mediumMove = getMediumAIMoveRef.current;
+        if (!hardMove || !mediumMove) {
+          return;
+        }
+        const selectedCell = gameState.isBlindPlay
+          ? availableCells[Math.floor(Math.random() * availableCells.length)]
+          : (currentGame >= 601 ? hardMove(availableCells) : mediumMove(availableCells));
+        handleCellClick(selectedCell.row, selectedCell.col);
+      }, aiDelay);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [
+    currentGame,
+    gameInitialized,
+    gameStarted,
+    gameState.board,
+    gameState.currentPlayer,
+    gameState.isBlindPlay,
+    gameState.isGameActive,
+    gameState.mudZones,
+    gameState.winner,
+    handleCellClick,
+    showBeeFact,
+    showStartCountdown,
+    showStoryCarousel,
+  ]);
 
 
    const handleNextGame = () => {

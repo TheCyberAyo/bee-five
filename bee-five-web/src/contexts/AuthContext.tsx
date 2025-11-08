@@ -1,17 +1,22 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, AuthResponse, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { loadUserProfile, UserProfile } from '../services/profileService';
+
+type SignUpResult = {
+  data: AuthResponse['data'];
+  error: AuthError | null;
+};
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, username?: string) => Promise<{ data: any; error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, username?: string) => Promise<SignUpResult>;
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   signInWithProvider: (provider: 'google' | 'github') => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -86,9 +91,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, username?: string) => {
+  const signUp = async (email: string, password: string, username?: string): Promise<SignUpResult> => {
     if (!supabase) {
-      return { data: null, error: { message: 'Supabase is not configured' } };
+      return {
+        data: { user: null, session: null },
+        error: {
+          message: 'Supabase is not configured',
+          name: 'AuthConfigurationError',
+          status: 500,
+        } as AuthError,
+      };
     }
     
     // Get the redirect URL - use environment variable if set, otherwise use window.location.origin
@@ -121,9 +133,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { data, error };
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<{ error: AuthError | null }> => {
     if (!supabase) {
-      return { error: { message: 'Supabase is not configured' } };
+      return {
+        error: {
+          message: 'Supabase is not configured',
+          name: 'AuthConfigurationError',
+          status: 500,
+        } as AuthError,
+      };
     }
     const { error } = await supabase.auth.signInWithPassword({
       email,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useGameLogic } from '../hooks/useGameLogic';
 import GameCanvas from './GameCanvas';
 import { soundManager } from '../utils/sounds';
@@ -67,93 +67,6 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
     soundManager.setMuted(!soundEnabled);
   }, [volume, soundEnabled]);
 
-  // Show popup when individual game ends
-  useEffect(() => {
-    // Don't process if series is complete or modals are showing
-    if (seriesComplete || showGameOverModal) return;
-
-    if (gameState.winner > 0 && gameSeries) {
-      const winnerName = gameState.winner === 1 ? gameSeries.player1Name : gameSeries.player2Name;
-      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame}! 🐝`);
-      setShowWinPopup(true);
-      
-      if (gameState.winner === 1) {
-        soundManager.playVictorySound();
-      } else {
-        soundManager.playDefeatSound();
-      }
-
-      // Only start countdown if there are more games
-      if (gameSeries.currentGame < gameSeries.totalGames) {
-        // Auto-proceed to next game after 3 seconds with countdown
-        setCountdown(3);
-        const countdownInterval = setInterval(() => {
-          setCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(countdownInterval);
-              startNextGame();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-        return () => clearInterval(countdownInterval);
-      } else {
-        // Last game - no countdown, just show the popup
-        setCountdown(0);
-      }
-
-    } else if (!gameState.isGameActive && gameState.winner === 0 && gameSeries) {
-      setWinMessage(`Game ${gameSeries.currentGame} - Draw! 🐝`);
-      setShowWinPopup(true);
-
-      // Only start countdown if there are more games
-      if (gameSeries.currentGame < gameSeries.totalGames) {
-        // Auto-proceed to next game after 3 seconds for draws too
-        setCountdown(3);
-        const countdownInterval = setInterval(() => {
-          setCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(countdownInterval);
-              startNextGame();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-        return () => clearInterval(countdownInterval);
-      } else {
-        // Last game - no countdown, just show the popup
-        setCountdown(0);
-      }
-    } else if (gameState.timeLeft === 0 && gameSeries) {
-      const winner = gameState.currentPlayer === 1 ? 2 : 1;
-      const winnerName = winner === 1 ? gameSeries.player1Name : gameSeries.player2Name;
-      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame} due to time limit! 🐝`);
-      setShowWinPopup(true);
-
-      // Only start countdown if there are more games
-      if (gameSeries.currentGame < gameSeries.totalGames) {
-        // Auto-proceed to next game after 3 seconds for time limit wins too
-        setCountdown(3);
-        const countdownInterval = setInterval(() => {
-          setCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(countdownInterval);
-              startNextGame();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-        return () => clearInterval(countdownInterval);
-      } else {
-        // Last game - no countdown, just show the popup
-        setCountdown(0);
-      }
-    }
-  }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer, gameSeries, seriesComplete, showGameOverModal]);
-
   const startNewGameSeries = (player1Name: string, player2Name: string, totalGames: number) => {
     const newSeries: GameSeries = {
       player1Name,
@@ -175,8 +88,8 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
     if (soundEnabled) soundManager.playClickSound();
   };
 
-  const handleGameEnd = () => {
-    if (!gameSeries) return;
+  const handleGameEnd = useCallback(() => {
+    if (!gameSeries) return undefined;
 
     const gameResult = {
       gameNumber: gameSeries.currentGame,
@@ -202,9 +115,9 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
     }
 
     return updatedSeries; // Return the updated series for immediate use
-  };
+  }, [gameSeries, gameState.winner]);
 
-  const startNextGame = () => {
+  const startNextGame = useCallback(() => {
     if (!gameSeries) return;
     
     // Don't allow starting a new game if series is complete
@@ -225,7 +138,71 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
     setCountdown(3);
     
     if (soundEnabled) soundManager.playClickSound();
-  };
+  }, [gameSeries, seriesComplete, handleGameEnd, resetGame, soundEnabled]);
+
+  // Show popup when individual game ends
+  useEffect(() => {
+    if (!gameSeries || seriesComplete || showGameOverModal) {
+      return;
+    }
+
+    const scheduleNextGame = () => {
+      setCountdown(3);
+      const countdownInterval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            startNextGame();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(countdownInterval);
+    };
+
+    if (gameState.winner > 0) {
+      const winnerName = gameState.winner === 1 ? gameSeries.player1Name : gameSeries.player2Name;
+      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame}! 🐝`);
+      setShowWinPopup(true);
+      if (gameState.winner === 1) {
+        soundManager.playVictorySound();
+      } else {
+        soundManager.playDefeatSound();
+      }
+      if (gameSeries.currentGame < gameSeries.totalGames) {
+        return scheduleNextGame();
+      }
+      setCountdown(0);
+    } else if (!gameState.isGameActive && gameState.winner === 0) {
+      setWinMessage(`Game ${gameSeries.currentGame} - Draw! 🐝`);
+      setShowWinPopup(true);
+      if (gameSeries.currentGame < gameSeries.totalGames) {
+        return scheduleNextGame();
+      }
+      setCountdown(0);
+    } else if (gameState.timeLeft === 0) {
+      const winner = gameState.currentPlayer === 1 ? 2 : 1;
+      const winnerName = winner === 1 ? gameSeries.player1Name : gameSeries.player2Name;
+      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame} due to time limit! 🐝`);
+      setShowWinPopup(true);
+      if (gameSeries.currentGame < gameSeries.totalGames) {
+        return scheduleNextGame();
+      }
+      setCountdown(0);
+    }
+
+    return undefined;
+  }, [
+    gameSeries,
+    gameState.currentPlayer,
+    gameState.isGameActive,
+    gameState.timeLeft,
+    gameState.winner,
+    seriesComplete,
+    showGameOverModal,
+    startNextGame,
+  ]);
 
 
   const getSeriesWinner = () => {

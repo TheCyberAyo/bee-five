@@ -36,7 +36,6 @@ export default function AuthCallbackPage() {
         // Get tokens from hash (Supabase typically uses hash fragments)
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
-        const type = hashParams.get('type');
 
         // If we have tokens in the hash, set the session
         if (accessToken && refreshToken) {

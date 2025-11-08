@@ -12,7 +12,7 @@ interface ProfileProps {
 }
 
 export default function Profile({ onBackToMenu, isMobile }: ProfileProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   return (

@@ -5,6 +5,15 @@ import { soundManager } from '../utils/sounds';
 import { useTheme, ADVENTURE_THEMES } from '../hooks/useTheme';
 import BeeLifeStageEffects from './BeeLifeStageEffects';
 
+const getMapMetrics = () => {
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+  return {
+    isMobile,
+    spacing: isMobile ? 140 : 160,
+    totalHeight: isMobile ? 280000 : 320000,
+  };
+};
+
 interface BeeAdventureMapProps {
   currentGame: number;
   gamesCompleted: number[];
@@ -125,16 +134,43 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
   const [currentStageBasedOnScroll, setCurrentStageBasedOnScroll] = useState(0);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   
+  const computeMinScrollTop = React.useCallback(
+    (container: HTMLDivElement) => {
+      const { spacing, totalHeight } = getMapMetrics();
+      const normalizedGame = Math.max(1, Math.min(highestUnlockedGame, 2000));
+      const gameIndex = normalizedGame - 1;
+      const rawY = totalHeight - (gameIndex * spacing);
+      const containerHeight = container.clientHeight || 0;
+      const maxScrollTop = Math.max(0, container.scrollHeight - containerHeight);
+
+      if (containerHeight === 0) {
+        return 0;
+      }
+
+      const desiredMinScroll = rawY - containerHeight * 0.5;
+      const minScrollTop = Math.min(maxScrollTop, Math.max(0, desiredMinScroll));
+
+      return Number.isFinite(minScrollTop) ? minScrollTop : 0;
+    },
+    [highestUnlockedGame]
+  );
+
+  const clampScrollTop = React.useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const minScrollTop = computeMinScrollTop(scrollContainerRef.current);
+    if (scrollContainerRef.current.scrollTop < minScrollTop) {
+      scrollContainerRef.current.scrollTop = minScrollTop;
+    }
+  }, [computeMinScrollTop]);
+
   // Use theme system
   const { currentTheme } = useTheme({ gameNumber: currentGame });
 
   // Auto-scroll to current game position when map opens
   React.useEffect(() => {
     if (scrollContainerRef.current) {
-      const isMobile = window.innerWidth <= 768;
-      const spacing = isMobile ? 140 : 160;
+      const { spacing, totalHeight } = getMapMetrics();
       const gameIndex = currentGame - 1;
-      const totalHeight = isMobile ? 280000 : 320000;
       
       // Calculate the Y position of the current game
       const gameY = totalHeight - (gameIndex * spacing);
@@ -142,19 +178,32 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
       // Scroll to position the current game in the center of the viewport
       const containerHeight = scrollContainerRef.current.clientHeight;
       const scrollToPosition = Math.max(0, gameY - containerHeight / 2);
+      const minScrollTop = computeMinScrollTop(scrollContainerRef.current);
+      const targetPosition = Math.max(minScrollTop, scrollToPosition);
       
       // Smooth scroll to the current game position
       scrollContainerRef.current.scrollTo({
-        top: scrollToPosition,
+        top: targetPosition,
         behavior: 'smooth'
       });
     }
-  }, [currentGame]);
+  }, [currentGame, computeMinScrollTop]);
+
+  React.useEffect(() => {
+    clampScrollTop();
+  }, [highestUnlockedGame, clampScrollTop]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const id = window.setTimeout(() => clampScrollTop(), 0);
+    return () => window.clearTimeout(id);
+  }, [clampScrollTop]);
 
   // Scroll listener for dynamic color changes
   React.useEffect(() => {
     const handleScroll = () => {
       if (scrollContainerRef.current) {
+        clampScrollTop();
         const scrollTop = scrollContainerRef.current.scrollTop;
         
         // Calculate current stage based on scroll position
@@ -171,7 +220,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
       scrollContainer.addEventListener('scroll', handleScroll);
       return () => scrollContainer.removeEventListener('scroll', handleScroll);
     }
-  }, []);
+  }, [clampScrollTop]);
 
 
 
@@ -1433,8 +1482,40 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
         background: 'rgba(255, 255, 255, 0.9)',
         padding: '1rem',
         borderRadius: '10px',
-        marginTop: '1rem'
+        marginTop: '1rem',
+        gap: '1rem',
+        flexWrap: 'wrap'
       }}>
+        <button
+          onClick={() => {
+            if (currentGame > highestUnlockedGame) {
+              return;
+            }
+            onGameSelect(currentGame);
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          disabled={currentGame > highestUnlockedGame}
+          style={{
+            padding: '0.75rem 1.5rem',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            backgroundColor: currentGame > highestUnlockedGame ? '#cccccc' : '#4CAF50',
+            color: currentGame > highestUnlockedGame ? '#666666' : '#ffffff',
+            border: '2px solid black',
+            borderRadius: '8px',
+            cursor: currentGame > highestUnlockedGame ? 'not-allowed' : 'pointer',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+            minWidth: '180px',
+            justifyContent: 'center'
+          }}
+          title={currentGame > highestUnlockedGame ? 'Unlock this game to continue' : `Resume Game ${currentGame}`}
+        >
+          ▶️ Play Game {currentGame}
+        </button>
         {/* Back Button */}
         <button
           onClick={() => {

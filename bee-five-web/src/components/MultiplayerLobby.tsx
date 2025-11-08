@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { multiplayerService, type RoomInfo, type PlayerInfo } from '../services/multiplayerService';
+import { multiplayerService, type RoomInfo } from '../services/multiplayerService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { soundManager } from '../utils/sounds';
 

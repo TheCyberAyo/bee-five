@@ -27,17 +27,11 @@ export async function isUsernameAvailable(username: string): Promise<{ available
     // Normalize username for comparison (lowercase, trimmed)
     const normalizedUsername = username.trim().toLowerCase();
     
+    type UsernameRow = { username: string | null };
     // Fetch all usernames and check case-insensitively
-    // Add timeout to prevent hanging
-    const queryPromise = supabase
+    const { data, error } = await supabase
       .from('user_profiles')
       .select('username');
-    
-    const timeoutPromise = new Promise<any>((resolve) => 
-      setTimeout(() => resolve({ data: [], error: null }), 5000)
-    );
-    
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
     if (error) {
       console.error('Error checking username:', error);
@@ -46,9 +40,8 @@ export async function isUsernameAvailable(username: string): Promise<{ available
     }
 
     // Check if any existing username matches (case-insensitive)
-    const exists = data?.some((profile: any) => 
-      profile.username?.toLowerCase() === normalizedUsername
-    ) || false;
+    const exists =
+      (data as UsernameRow[] | null)?.some((profile) => profile.username?.toLowerCase() === normalizedUsername) || false;
 
     return { available: !exists };
   } catch (error) {

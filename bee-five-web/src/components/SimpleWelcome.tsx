@@ -27,7 +27,6 @@ export default function SimpleWelcome() {
   const [currentRoom, setCurrentRoom] = useState<RoomInfo | null>(null);
   const [playerNumber, setPlayerNumber] = useState<1 | 2>(1);
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
-  const [showClassicModal, setShowClassicModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');
   const [aiDifficulty, setAiDifficulty] = useState('medium');
@@ -37,7 +36,7 @@ export default function SimpleWelcome() {
   const [isMounted, setIsMounted] = useState(false);
   
   // Auth state
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   
   // Competition system state (fresh tournament implementation)
@@ -48,7 +47,7 @@ export default function SimpleWelcome() {
   const [timerOption, setTimerOption] = useState<3 | 15 | 30 | 0>(15);
   const [competitionScores, setCompetitionScores] = useState({ player1: 0, player2: 0 });
   const [competitionGamesPlayed, setCompetitionGamesPlayed] = useState(0);
-  const [competitionWinner, setCompetitionWinner] = useState('');
+  const [, setCompetitionWinner] = useState('');
   const [showCompetitionWinnerModal, setShowCompetitionWinnerModal] = useState(false);
 
   // Initialize mobile detection and mount state
