@@ -1335,7 +1335,29 @@ export default function SimpleWelcome() {
             margin: '0 0 clamp(1rem, 3vw, 1.5rem) 0',
             fontWeight: 'bold'
           }}>
-            Your favourite version of Connect-Five!
+            Your favourite version of{' '}
+            <span
+              style={{
+                fontWeight: 900,
+                color: '#ff4d4f',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                textShadow: '0 3px 8px rgba(0,0,0,0.4)'
+              }}
+            >
+              Connect-Five
+            </span>
+            <span
+              style={{
+                fontWeight: 900,
+                color: '#ffffff',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                textShadow: '0 3px 8px rgba(0,0,0,0.4)'
+              }}
+            >
+              !
+            </span>
           </p>
         </div>
 

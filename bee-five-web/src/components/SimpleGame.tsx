@@ -13,7 +13,6 @@ interface SimpleGameProps {
 export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }: SimpleGameProps) {
   const [timeLimit] = useState(15);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [volume, setVolume] = useState(0.3);
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [winMessage, setWinMessage] = useState('');
   const [isMobile, setIsMobile] = useState(false);
@@ -37,9 +36,8 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
 
   // Initialize sound manager settings
   React.useEffect(() => {
-    soundManager.setVolume(volume);
     soundManager.setMuted(!soundEnabled);
-  }, [volume, soundEnabled]);
+  }, [soundEnabled]);
 
   // Show popup when game ends
   React.useEffect(() => {
@@ -200,41 +198,6 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
             />
         </div>
       </div>
-
-      {/* Volume control (only when sound is enabled) */}
-      {soundEnabled && (
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.9)',
-          padding: '0.5rem 1rem',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '1rem',
-          fontSize: '0.85rem',
-          borderTop: '1px solid rgba(0,0,0,0.1)'
-        }}>
-          <span style={{ color: '#333', fontWeight: 'bold' }}>🔊 Volume:</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={volume}
-            onChange={(e) => {
-              const newVolume = parseFloat(e.target.value);
-              setVolume(newVolume);
-              soundManager.setVolume(newVolume);
-            }}
-            style={{ 
-              width: isMobile ? '120px' : '150px',
-              accentColor: '#FFC30B'
-            }}
-          />
-          <span style={{ color: '#666', fontSize: '0.8em' }}>
-            {Math.round(volume * 100)}%
-          </span>
-        </div>
-      )}
 
       {/* Winning Popup Modal */}
       {showWinPopup && (

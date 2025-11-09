@@ -22,16 +22,14 @@ const AdventureMap: React.FC<AdventureMapProps> = ({
 }) => {
   const [selectedGame, setSelectedGame] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [volume, setVolume] = useState(0.3);
   
   // Use theme system
   const { currentTheme, getStageIndex } = useTheme({ gameNumber: currentGame });
 
   // Initialize sound manager settings
   React.useEffect(() => {
-    soundManager.setVolume(volume);
     soundManager.setMuted(!soundEnabled);
-  }, [volume, soundEnabled]);
+  }, [soundEnabled]);
 
   const getGameStatus = (gameNumber: number): 'completed' | 'current' | 'available' => {
     // Unlock all stages for development
@@ -552,31 +550,7 @@ const AdventureMap: React.FC<AdventureMapProps> = ({
           >
             {soundEnabled ? '🔊' : '🔇'}
           </button>
-          
-          {soundEnabled && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Volume:</span>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={volume}
-                onChange={(e) => {
-                  const newVolume = parseFloat(e.target.value);
-                  setVolume(newVolume);
-                  soundManager.setVolume(newVolume);
-                }}
-                style={{ 
-                  width: '100px',
-                  accentColor: '#FFC30B'
-                }}
-              />
-              <span style={{ fontSize: '0.8rem', color: '#666' }}>
-                {Math.round(volume * 100)}%
-              </span>
-            </div>
-          )}
+ 
         </div>
 
         {/* Back Button */}

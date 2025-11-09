@@ -15,7 +15,6 @@ interface AIGameProps {
 export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', initialTimer = 15, backgroundColor = 'yellow' }: AIGameProps) {
   const [timeLimit] = useState(initialTimer);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [volume, setVolume] = useState(0.3);
   const [aiDifficulty, setAiDifficulty] = useState(initialDifficulty);
   // const [playerSkillLevel, setPlayerSkillLevel] = useState(0); // Dynamic difficulty tracking (currently unused)
   const [showWinPopup, setShowWinPopup] = useState(false);
@@ -43,9 +42,8 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
 
   // Initialize sound manager settings
   React.useEffect(() => {
-    soundManager.setVolume(volume);
     soundManager.setMuted(!soundEnabled);
-  }, [volume, soundEnabled]);
+  }, [soundEnabled]);
 
   // Show popup when game ends
   React.useEffect(() => {
@@ -805,41 +803,6 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
         </div>
       </div>
 
-      {/* Volume control (only when sound is enabled) */}
-      {soundEnabled && (
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.9)',
-          padding: '0.5rem 1rem',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '1rem',
-          fontSize: '0.85rem',
-          borderTop: '1px solid rgba(0,0,0,0.1)'
-        }}>
-          <span style={{ color: '#333', fontWeight: 'bold' }}>🔊 Volume:</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={volume}
-            onChange={(e) => {
-              const newVolume = parseFloat(e.target.value);
-              setVolume(newVolume);
-              soundManager.setVolume(newVolume);
-            }}
-            style={{ 
-              width: isMobile ? '120px' : '150px',
-              accentColor: '#FFC30B'
-            }}
-          />
-          <span style={{ color: '#666', fontSize: '0.8em' }}>
-            {Math.round(volume * 100)}%
-          </span>
-        </div>
-      )}
-
       {/* Mobile Settings Dropdown */}
       {isMobile && showMobileSettings && (
         <div style={{
@@ -933,39 +896,6 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
             </button>
           </div>
 
-          {/* Volume Control */}
-          {soundEnabled && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '0.5rem'
-            }}>
-              <span style={{ fontWeight: 'bold', color: '#333' }}>Volume:</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={volume}
-                  onChange={(e) => {
-                    const newVolume = parseFloat(e.target.value);
-                    setVolume(newVolume);
-                    soundManager.setVolume(newVolume);
-                  }}
-                  style={{ 
-                    width: '80px',
-                    accentColor: '#FFC30B'
-                  }}
-                />
-                <span style={{ color: '#666', fontSize: '0.8em', minWidth: '30px' }}>
-                  {Math.round(volume * 100)}%
-                </span>
-              </div>
-            </div>
-          )}
-
           {/* Close button */}
           <button
             onClick={() => setShowMobileSettings(false)}
@@ -1038,7 +968,7 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
               color: '#333',
               marginBottom: '30px'
             }}>
-              {winMessage.includes('You win') ? 'Sweet victory! 🍯' : winMessage.includes('AI win') ? 'The AI strikes back! 🍯' : 'Great game! 🍯'}
+              {winMessage.includes('You win') ? 'You outplayed the AI! 🍯' : winMessage.includes('AI win') ? 'The AI strikes back! 🍯' : 'Great game! 🍯'}
             </p>
             
             {/* Action Buttons */}

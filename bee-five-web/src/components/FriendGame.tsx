@@ -29,7 +29,6 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
   const [showSetupModal, setShowSetupModal] = useState(true);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [volume, setVolume] = useState(0.3);
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [winMessage, setWinMessage] = useState('');
   const [countdown, setCountdown] = useState(3);
@@ -63,9 +62,8 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
 
   // Initialize sound manager settings
   useEffect(() => {
-    soundManager.setVolume(volume);
     soundManager.setMuted(!soundEnabled);
-  }, [volume, soundEnabled]);
+  }, [soundEnabled]);
 
   const startNewGameSeries = (player1Name: string, player2Name: string, totalGames: number) => {
     const newSeries: GameSeries = {
@@ -772,41 +770,6 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
           />
         </div>
       </div>
-
-      {/* Volume control */}
-      {soundEnabled && (
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.9)',
-          padding: '0.5rem 1rem',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '1rem',
-          fontSize: '0.85rem',
-          borderTop: '1px solid rgba(0,0,0,0.1)'
-        }}>
-          <span style={{ color: '#333', fontWeight: 'bold' }}>🔊 Volume:</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={volume}
-            onChange={(e) => {
-              const newVolume = parseFloat(e.target.value);
-              setVolume(newVolume);
-              soundManager.setVolume(newVolume);
-            }}
-            style={{ 
-              width: isMobile ? '120px' : '150px',
-              accentColor: '#FFC30B'
-            }}
-          />
-          <span style={{ color: '#666', fontSize: '0.8em' }}>
-            {Math.round(volume * 100)}%
-          </span>
-        </div>
-      )}
 
       {/* Game Win Popup */}
       {showWinPopup && gameSeries && (

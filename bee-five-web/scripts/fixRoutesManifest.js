@@ -8,10 +8,14 @@ try {
   const manifest = JSON.parse(raw);
   let mutated = false;
 
-  if (!Array.isArray(manifest.dataRoutes)) {
-    manifest.dataRoutes = [];
-    mutated = true;
-  }
+  const arrayProps = ['dataRoutes', 'dynamicRoutes', 'staticRoutes'];
+
+  arrayProps.forEach((prop) => {
+    if (!Array.isArray(manifest[prop])) {
+      manifest[prop] = [];
+      mutated = true;
+    }
+  });
 
   if (mutated) {
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
