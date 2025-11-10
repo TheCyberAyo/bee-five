@@ -233,6 +233,9 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameInitialized, setGameInitialized] = useState(false); // Track if a game has been selected from map
   const winPopupTimerRef = React.useRef<number | null>(null);
+  const matchResultsTimerRef = React.useRef<number | null>(null);
+  const [pendingResultsPopup, setPendingResultsPopup] = useState(false);
+  const popupScheduledRef = React.useRef<boolean>(false);
   
   const { gameState, handleCellClick, resetGame } = useGameLogic({
     timeLimit: getTimeLimitForLevel(currentGame),
@@ -242,10 +245,27 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     pauseTimer: showStartCountdown || showMap // Pause timer while map is showing
   });
 
+  const adventureTurnLabel = React.useMemo(() => {
+    if (!gameState.isGameActive) {
+      if (gameState.winner !== 0) {
+        return 'Game Over';
+      }
+      return 'Paused';
+    }
+    return gameState.currentPlayer === 1 ? 'Your Turn' : "AI's Turn";
+  }, [gameState.currentPlayer, gameState.isGameActive, gameState.winner]);
+
   const { currentTheme } = useTheme({ gameNumber: currentGame });
   React.useEffect(() => {
     soundManager.setMuted(!soundEnabled);
   }, [soundEnabled]);
+
+  React.useEffect(() => {
+    if (pendingResultsPopup && !showWinPopup) {
+      setShowResultsPopup(true);
+      setPendingResultsPopup(false);
+    }
+  }, [pendingResultsPopup, showWinPopup]);
 
   // Load local progress snapshot immediately when user changes (provides fast resume even before remote fetch)
   useEffect(() => {
@@ -329,6 +349,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     setPlayerWins(0);
     setAiWins(0);
     setGameProcessed(false);
+    popupScheduledRef.current = false;
   }, [progressLoadedUserId]);
 
   // Auto-save progress whenever currentGame changes (for logged-in users)
@@ -400,6 +421,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
        setIsWaitingForNextGame(false);
        setCurrentMatch(prev => prev + 1);
        setGameProcessed(false);
+       popupScheduledRef.current = false;
        resetGame();
        setStartCountdown(3);
        setShowStartCountdown(true);
@@ -422,18 +444,31 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       return;
     }
     
-    // Clear any existing win popup timer
-    if (winPopupTimerRef.current) {
-      clearTimeout(winPopupTimerRef.current);
-      winPopupTimerRef.current = null;
+    // If we've already processed and scheduled a popup, don't do anything
+    if (gameProcessed && popupScheduledRef.current) {
+      return;
     }
 
-    if (gameProcessed) {
-      return;
+    // Only clear timers if we haven't scheduled a popup yet
+    if (!popupScheduledRef.current) {
+      if (winPopupTimerRef.current) {
+        clearTimeout(winPopupTimerRef.current);
+        winPopupTimerRef.current = null;
+      }
+      if (matchResultsTimerRef.current) {
+        clearTimeout(matchResultsTimerRef.current);
+        matchResultsTimerRef.current = null;
+      }
     }
     
     if (gameState.winner > 0) {
+      // Don't process again if we've already scheduled the popup
+      if (popupScheduledRef.current) {
+        return;
+      }
+      
       setGameProcessed(true);
+      popupScheduledRef.current = true;
       
       if (gameState.winner === 1) {
         soundManager.playVictorySound();
@@ -441,9 +476,16 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         soundManager.playDefeatSound();
       }
       
-       if (requiresMatchSystem(currentGame)) {
-         // Update scores first
-         if (gameState.winner === 1) {
+      if (requiresMatchSystem(currentGame)) {
+        const winText = gameState.winner === 1 ? 'You Won!' : 'You Lost';
+        setWinMessage(`${winText} 🐝`);
+        winPopupTimerRef.current = window.setTimeout(() => {
+          setShowWinPopup(true);
+          winPopupTimerRef.current = null;
+        }, 1000);
+
+        // Update scores first
+        if (gameState.winner === 1) {
            setPlayerWins(prev => {
              const newPlayerWins = prev + 1;
              const requiredWins = getRequiredWins(currentGame);
@@ -482,11 +524,11 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                  return newCompleted;
                });
                
-               // Show results popup for best-of-3 matches with 1 second delay
-               winPopupTimerRef.current = window.setTimeout(() => {
-                 setShowResultsPopup(true);
-                 winPopupTimerRef.current = null;
-               }, 1000);
+              // Queue results popup to appear after the win popup closes
+              matchResultsTimerRef.current = window.setTimeout(() => {
+                setPendingResultsPopup(true);
+                matchResultsTimerRef.current = null;
+              }, 1000);
              } else {
                setIsWaitingForNextGame(true);
                setCountdownTimer(3);
@@ -511,11 +553,11 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                  return prev;
                });
                
-               // Show results popup for best-of-3 matches with 1 second delay
-               winPopupTimerRef.current = window.setTimeout(() => {
-                 setShowResultsPopup(true);
-                 winPopupTimerRef.current = null;
-               }, 1000);
+              // Queue results popup to appear after the win popup closes
+              matchResultsTimerRef.current = window.setTimeout(() => {
+                setPendingResultsPopup(true);
+                matchResultsTimerRef.current = null;
+              }, 1000);
              } else {
                setIsWaitingForNextGame(true);
                setCountdownTimer(3);
@@ -566,7 +608,13 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         }, 1000);
       }
     } else if (!gameState.isGameActive && gameState.winner === 0) {
+      // Don't process again if we've already scheduled the popup
+      if (popupScheduledRef.current) {
+        return;
+      }
+      
       setGameProcessed(true);
+      popupScheduledRef.current = true;
       
       setWinMessage('Draw! 🐝');
       
@@ -593,13 +641,24 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         winPopupTimerRef.current = null;
       }, 1000);
     } else if (gameState.timeLeft === 0) {
+      // Don't process again if we've already scheduled the popup
+      if (popupScheduledRef.current) {
+        return;
+      }
+      
       setGameProcessed(true);
+      popupScheduledRef.current = true;
       
       const winText = gameState.currentPlayer === 1 ? 'Time\'s Up - You Lost' : 'Time\'s Up - You Won!';
       setWinMessage(`${winText} 🐝`);
       
-       if (requiresMatchSystem(currentGame)) {
-         // Update scores first
+      if (requiresMatchSystem(currentGame)) {
+        winPopupTimerRef.current = window.setTimeout(() => {
+          setShowWinPopup(true);
+          winPopupTimerRef.current = null;
+        }, 1000);
+
+        // Update scores first
          if (gameState.currentPlayer === 2) {
            setPlayerWins(prev => {
              const newPlayerWins = prev + 1;
@@ -639,11 +698,11 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                  return newCompleted;
                });
                
-               // Show results popup for best-of-3 matches with 1 second delay
-               winPopupTimerRef.current = window.setTimeout(() => {
-                 setShowResultsPopup(true);
-                 winPopupTimerRef.current = null;
-               }, 1000);
+              // Queue results popup to appear after the win popup closes
+              matchResultsTimerRef.current = window.setTimeout(() => {
+                setPendingResultsPopup(true);
+                matchResultsTimerRef.current = null;
+              }, 1000);
              } else {
                setIsWaitingForNextGame(true);
                setCountdownTimer(3);
@@ -668,11 +727,11 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                  return prev;
                });
                
-               // Show results popup for best-of-3 matches with 1 second delay
-               winPopupTimerRef.current = window.setTimeout(() => {
-                 setShowResultsPopup(true);
-                 winPopupTimerRef.current = null;
-               }, 1000);
+              // Queue results popup to appear after the win popup closes
+              matchResultsTimerRef.current = window.setTimeout(() => {
+                setPendingResultsPopup(true);
+                matchResultsTimerRef.current = null;
+              }, 1000);
              } else {
                setIsWaitingForNextGame(true);
                setCountdownTimer(3);
@@ -725,10 +784,17 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     }
     
     // Cleanup function to clear timeout on unmount or re-run
+    // Only clear timers if we haven't already scheduled a popup
     return () => {
-      if (winPopupTimerRef.current) {
-        clearTimeout(winPopupTimerRef.current);
-        winPopupTimerRef.current = null;
+      if (!popupScheduledRef.current) {
+        if (winPopupTimerRef.current) {
+          clearTimeout(winPopupTimerRef.current);
+          winPopupTimerRef.current = null;
+        }
+        if (matchResultsTimerRef.current) {
+          clearTimeout(matchResultsTimerRef.current);
+          matchResultsTimerRef.current = null;
+        }
       }
     };
   }, [
@@ -1391,6 +1457,17 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
 
    const handleNextGame = () => {
      setShowWinPopup(false);
+    if (winPopupTimerRef.current) {
+      clearTimeout(winPopupTimerRef.current);
+      winPopupTimerRef.current = null;
+    }
+    if (matchResultsTimerRef.current) {
+      clearTimeout(matchResultsTimerRef.current);
+      matchResultsTimerRef.current = null;
+    }
+    setPendingResultsPopup(false);
+    setShowResultsPopup(false);
+    popupScheduledRef.current = false;
      
      if (requiresMatchSystem(currentGame) && !isMatchComplete && !isWaitingForNextGame) {
        const requiredWins = getRequiredWins(currentGame);
@@ -1430,6 +1507,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         setCountdownTimer(0);
         setIsWaitingForNextGame(false);
         setGameProcessed(false);
+        popupScheduledRef.current = false;
       } else {
         saveProgressOnMapReturn(); // Save progress when returning to map
         setShowMap(true);
@@ -1443,6 +1521,12 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
    };
 
   const handleResultsPopupNext = () => {
+    if (matchResultsTimerRef.current) {
+      clearTimeout(matchResultsTimerRef.current);
+      matchResultsTimerRef.current = null;
+    }
+    setPendingResultsPopup(false);
+
     const nextGame = currentGame + 1;
     setCurrentGame(nextGame);
     
@@ -1466,6 +1550,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     setCountdownTimer(0);
     setIsWaitingForNextGame(false);
     setGameProcessed(false);
+    popupScheduledRef.current = false;
     setShowResultsPopup(false);
     if (soundEnabled) soundManager.playClickSound();
   };
@@ -1473,6 +1558,17 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const handleGameSelect = (gameNumber: number) => {
     setCurrentGame(gameNumber);
     setShowMap(false);
+    if (winPopupTimerRef.current) {
+      clearTimeout(winPopupTimerRef.current);
+      winPopupTimerRef.current = null;
+    }
+    if (matchResultsTimerRef.current) {
+      clearTimeout(matchResultsTimerRef.current);
+      matchResultsTimerRef.current = null;
+    }
+    setPendingResultsPopup(false);
+    setShowResultsPopup(false);
+    popupScheduledRef.current = false;
     
     // Save progress when selecting a game
     if (user) {
@@ -1498,6 +1594,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         setCountdownTimer(0);
         setIsWaitingForNextGame(false);
         setGameProcessed(false);
+        popupScheduledRef.current = false;
         return;
       }
     }
@@ -1523,6 +1620,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     setCountdownTimer(0);
     setIsWaitingForNextGame(false);
     setGameProcessed(false);
+    popupScheduledRef.current = false;
   };
 
   const handleStageTransitionClose = () => {
@@ -2061,21 +2159,35 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
           {/* Timer positioned to the left on desktop, above on mobile */}
           <div style={{
             padding: isMobile ? '0.75rem 1rem' : '1rem 1.25rem',
-            fontSize: isMobile ? '1.4em' : '1.8em',
             backgroundColor: currentTheme.cardBackground,
             color: 'black',
             border: '3px solid black',
             borderRadius: '10px',
             fontWeight: 'bold',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            gap: '0.5rem',
+            gap: isMobile ? '0.35rem' : '0.45rem',
             minWidth: isMobile ? '140px' : '180px',
             justifyContent: 'center',
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             textAlign: 'center'
           }}>
-            ⏱️ {gameState.timeLeft}s
+            <span style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: isMobile ? '1.4em' : '1.8em'
+            }}>
+              ⏱️ {gameState.timeLeft}s
+            </span>
+            <span style={{
+              fontSize: isMobile ? '1.1em' : '1.4em',
+              fontWeight: 700,
+              color: '#FFC107'
+            }}>
+              {adventureTurnLabel}
+            </span>
           </div>
 
           <div style={{
@@ -2425,6 +2537,17 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                     <button 
                       onClick={() => {
                         setShowWinPopup(false);
+                        if (winPopupTimerRef.current) {
+                          clearTimeout(winPopupTimerRef.current);
+                          winPopupTimerRef.current = null;
+                        }
+                        if (matchResultsTimerRef.current) {
+                          clearTimeout(matchResultsTimerRef.current);
+                          matchResultsTimerRef.current = null;
+                        }
+                        setPendingResultsPopup(false);
+                        setShowResultsPopup(false);
+                        popupScheduledRef.current = false;
                         const nextGame = currentGame + 1;
                         setCurrentGame(nextGame);
                         
@@ -2470,11 +2593,22 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                     <button 
                       onClick={() => {
                         setShowWinPopup(false);
+                        if (winPopupTimerRef.current) {
+                          clearTimeout(winPopupTimerRef.current);
+                          winPopupTimerRef.current = null;
+                        }
+                        if (matchResultsTimerRef.current) {
+                          clearTimeout(matchResultsTimerRef.current);
+                          matchResultsTimerRef.current = null;
+                        }
+                        setPendingResultsPopup(false);
+                        setShowResultsPopup(false);
                         resetGame();
                         setStartCountdown(3);
                         setShowStartCountdown(true);
                         setGameStarted(false);
                         setGameProcessed(false);
+                        popupScheduledRef.current = false;
                         if (soundEnabled) soundManager.playClickSound();
                       }}
                       style={{
@@ -2497,6 +2631,16 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                   <button 
                     onClick={() => {
                       setShowWinPopup(false);
+                      if (winPopupTimerRef.current) {
+                        clearTimeout(winPopupTimerRef.current);
+                        winPopupTimerRef.current = null;
+                      }
+                      if (matchResultsTimerRef.current) {
+                        clearTimeout(matchResultsTimerRef.current);
+                        matchResultsTimerRef.current = null;
+                      }
+                      setPendingResultsPopup(false);
+                      setShowResultsPopup(false);
                       saveProgressOnMapReturn(); // Save progress before going back to menu
                       onBackToMenu();
                     }}
@@ -2686,6 +2830,11 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
               
               <button 
                 onClick={() => {
+                  if (matchResultsTimerRef.current) {
+                    clearTimeout(matchResultsTimerRef.current);
+                    matchResultsTimerRef.current = null;
+                  }
+                  setPendingResultsPopup(false);
                   setShowResultsPopup(false);
                   saveProgressOnMapReturn(); // Save progress before going back to menu
                   onBackToMenu();
@@ -2718,7 +2867,14 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
             </div>
             
             <button
-              onClick={() => setShowResultsPopup(false)}
+              onClick={() => {
+                if (matchResultsTimerRef.current) {
+                  clearTimeout(matchResultsTimerRef.current);
+                  matchResultsTimerRef.current = null;
+                }
+                setPendingResultsPopup(false);
+                setShowResultsPopup(false);
+              }}
               style={{
                 position: 'absolute',
                 top: '15px',

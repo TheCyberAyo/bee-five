@@ -28,6 +28,20 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
     pauseTimer: timeLimit === 0 // Pause timer if "No timer" is selected
   });
 
+  const turnAnnouncement = React.useMemo(() => {
+    if (!gameState.isGameActive) {
+      if (gameState.winner === 1) {
+        return 'Game Over';
+      }
+      if (gameState.winner === 2) {
+        return 'Game Over';
+      }
+      return 'Game Paused';
+    }
+
+    return gameState.currentPlayer === 1 ? 'Your Turn' : "AI's Turn";
+  }, [gameState.currentPlayer, gameState.isGameActive, gameState.winner]);
+
   // Initialize mobile detection
   useEffect(() => {
     const checkMobile = () => {
@@ -779,13 +793,42 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
       <div style={{
         flex: 1,
         display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
         justifyContent: 'center',
         alignItems: 'center',
         padding: isMobile ? '1rem' : '2rem',
-        position: 'relative'
+        position: 'relative',
+        gap: isMobile ? '1.25rem' : '2.5rem'
       }}>
+        {/* Turn indicator positioned beside the game board */}
+        <section
+          aria-live="polite"
+          role="status"
+          style={{
+            order: isMobile ? 2 : 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            border: '3px solid #FFC30B',
+            borderRadius: '16px',
+            padding: isMobile ? '0.8rem 1rem' : '1.1rem 1.6rem',
+            minWidth: isMobile ? '230px' : '260px',
+            maxWidth: isMobile ? '80vw' : '280px',
+            boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            fontSize: isMobile ? '1.15rem' : '1.35rem',
+            fontWeight: 800,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: '#FFC30B'
+          }}
+        >
+          {turnAnnouncement}
+        </section>
+
         {/* Game board with responsive sizing */}
         <div style={{
+          order: 1,
           position: 'relative',
           display: 'flex',
           justifyContent: 'center',
