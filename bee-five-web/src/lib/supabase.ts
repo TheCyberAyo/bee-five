@@ -79,6 +79,8 @@ export interface GameState {
   current_player: 1 | 2;
   winner: 0 | 1 | 2;
   is_game_active: boolean;
+  stop_game_requested_by: 1 | 2 | null;
+  next_first_player: 1 | 2;
   updated_at: string;
 }
 

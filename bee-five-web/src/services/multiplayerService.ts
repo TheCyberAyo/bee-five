@@ -66,6 +66,9 @@ export class MultiplayerService {
   public onPlayerLeft?: (playerId: string) => void;
   public onError?: (error: string) => void;
   public onConnectionStatusChange?: (isConnected: boolean) => void;
+  public onStopGameRequested?: (requestedBy: 1 | 2) => void;
+  public onStopGameRequestCancelled?: () => void;
+  public onStopGameAccepted?: () => void;
 
   // Generate a unique player ID
   private generatePlayerId(): string {
@@ -394,6 +397,24 @@ export class MultiplayerService {
         { event: '*', schema: 'public', table: 'game_state', filter: `room_id=eq.${roomId}` },
         (payload) => {
           const gameState = payload.new as GameState;
+          const oldState = payload.old as GameState | undefined;
+          
+          // Handle stop game request notifications
+          if (gameState.stop_game_requested_by && 
+              gameState.stop_game_requested_by !== this.playerNumber &&
+              (!oldState || oldState.stop_game_requested_by !== gameState.stop_game_requested_by)) {
+            // Opponent requested to stop game
+            if (this.onStopGameRequested) {
+              this.onStopGameRequested(gameState.stop_game_requested_by);
+            }
+          } else if (!gameState.stop_game_requested_by && 
+                     oldState && oldState.stop_game_requested_by) {
+            // Stop game request was cancelled
+            if (this.onStopGameRequestCancelled) {
+              this.onStopGameRequestCancelled();
+            }
+          }
+          
           if (this.onGameStateUpdate) {
             this.onGameStateUpdate(gameState);
           }
@@ -566,7 +587,14 @@ export class MultiplayerService {
   }
 
   // Update game state
-  async updateGameState(board: (0 | 1 | 2)[][], currentPlayer: 1 | 2, winner: 0 | 1 | 2, isGameActive: boolean): Promise<void> {
+  async updateGameState(
+    board: (0 | 1 | 2)[][], 
+    currentPlayer: 1 | 2, 
+    winner: 0 | 1 | 2, 
+    isGameActive: boolean,
+    stopGameRequestedBy?: 1 | 2 | null,
+    nextFirstPlayer?: 1 | 2
+  ): Promise<void> {
     if (!this.roomId || !isSupabaseConfigured()) return;
 
     try {
@@ -577,7 +605,7 @@ export class MultiplayerService {
         .eq('room_id', this.roomId)
         .single();
 
-      const gameStateData = {
+      const gameStateData: any = {
         room_id: this.roomId,
         board_state: JSON.stringify(board),
         current_player: currentPlayer,
@@ -585,6 +613,19 @@ export class MultiplayerService {
         is_game_active: isGameActive,
         updated_at: new Date().toISOString()
       };
+
+      // Only update stop_game_requested_by if explicitly provided
+      if (stopGameRequestedBy !== undefined) {
+        gameStateData.stop_game_requested_by = stopGameRequestedBy;
+      }
+
+      // Only update next_first_player if explicitly provided
+      if (nextFirstPlayer !== undefined) {
+        gameStateData.next_first_player = nextFirstPlayer;
+      } else if (!existingState) {
+        // Set default for new game state
+        gameStateData.next_first_player = 1;
+      }
 
       if (existingState) {
         const { error } = await supabase!
@@ -608,7 +649,7 @@ export class MultiplayerService {
   }
 
   // Reset game state (clears moves and resets game state)
-  async resetGameState(): Promise<void> {
+  async resetGameState(alternateFirstPlayer: boolean = false): Promise<void> {
     if (!this.roomId || !isSupabaseConfigured()) {
       return;
     }
@@ -617,14 +658,139 @@ export class MultiplayerService {
       // Clear old moves first
       await this.clearOldMoves();
 
-      // Reset game state to empty board
+      // Get current game state to determine next first player
+      const currentState = await this.fetchGameState(this.roomId);
+      let nextFirstPlayer: 1 | 2 = 1;
+
+      if (alternateFirstPlayer && currentState) {
+        // Alternate: if last game started with player 1, next starts with player 2
+        // We track this in next_first_player field
+        nextFirstPlayer = currentState.next_first_player === 1 ? 2 : 1;
+      } else if (currentState) {
+        // Use existing next_first_player if not alternating
+        nextFirstPlayer = currentState.next_first_player || 1;
+      }
+
+      // Reset game state to empty board with new first player
       const emptyBoard = Array(10).fill(null).map(() => Array(10).fill(0));
-      await this.updateGameState(emptyBoard, 1, 0, true);
+      await this.updateGameState(
+        emptyBoard, 
+        nextFirstPlayer, 
+        0, 
+        true, 
+        null, // Clear stop game request
+        nextFirstPlayer
+      );
     } catch (error) {
       if (this.onError) {
         this.onError('Failed to reset game state');
       }
     }
+  }
+
+  // Request to stop the game
+  async requestStopGame(): Promise<void> {
+    if (!this.roomId || !isSupabaseConfigured()) {
+      return;
+    }
+
+    try {
+      const { data: existingState } = await supabase!
+        .from('game_state')
+        .select('*')
+        .eq('room_id', this.roomId)
+        .single();
+
+      if (existingState) {
+        const { error } = await supabase!
+          .from('game_state')
+          .update({
+            stop_game_requested_by: this.playerNumber,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingState.id);
+
+        if (error) throw error;
+      }
+    } catch (error) {
+      if (this.onError) {
+        this.onError('Failed to request stop game');
+      }
+    }
+  }
+
+  // Cancel stop game request
+  async cancelStopGameRequest(): Promise<void> {
+    if (!this.roomId || !isSupabaseConfigured()) {
+      return;
+    }
+
+    try {
+      const { data: existingState } = await supabase!
+        .from('game_state')
+        .select('*')
+        .eq('room_id', this.roomId)
+        .single();
+
+      if (existingState) {
+        const { error } = await supabase!
+          .from('game_state')
+          .update({
+            stop_game_requested_by: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingState.id);
+
+        if (error) throw error;
+      }
+    } catch (error) {
+      if (this.onError) {
+        this.onError('Failed to cancel stop game request');
+      }
+    }
+  }
+
+  // Accept stop game request (opponent accepts)
+  async acceptStopGame(): Promise<void> {
+    if (!this.roomId || !isSupabaseConfigured()) {
+      return;
+    }
+
+    try {
+      // First, stop the game by setting is_game_active to false
+      const { data: existingState } = await supabase!
+        .from('game_state')
+        .select('*')
+        .eq('room_id', this.roomId)
+        .single();
+
+      if (existingState) {
+        const { error } = await supabase!
+          .from('game_state')
+          .update({
+            is_game_active: false,
+            stop_game_requested_by: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingState.id);
+
+        if (error) throw error;
+
+        // Notify that stop was accepted
+        if (this.onStopGameAccepted) {
+          this.onStopGameAccepted();
+        }
+      }
+    } catch (error) {
+      if (this.onError) {
+        this.onError('Failed to accept stop game');
+      }
+    }
+  }
+
+  // Reject stop game request
+  async rejectStopGameRequest(): Promise<void> {
+    await this.cancelStopGameRequest();
   }
 
   // Leave the room

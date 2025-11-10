@@ -47,6 +47,9 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
   const [winMessage, setWinMessage] = useState('');
   const [connectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected');
   const [opponentName, setOpponentName] = useState<string>('');
+  const [playerName, setPlayerName] = useState<string>('');
+  const [stopGameRequestedBy, setStopGameRequestedBy] = useState<1 | 2 | null>(null);
+  const [showStopGameModal, setShowStopGameModal] = useState(false);
 
   // Use refs to track game state for callback checks (avoid stale closure)
   const gameActiveRef = useRef(true);
@@ -84,7 +87,10 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
           
           setTimeout(() => {
             const isPlayerWin = move.player === playerNumber;
-            setWinMessage(isPlayerWin ? 'You Win!' : 'Opponent Wins!');
+            // Get winner name from roomInfo for reliability
+            const winnerPlayer = roomInfo.players.find(p => p.playerNumber === move.player);
+            const winnerName = winnerPlayer?.name || (isPlayerWin ? playerName : opponentName);
+            setWinMessage(`${winnerName} Wins! 🎉`);
             setShowWinPopup(true);
             
             if (isPlayerWin) {
@@ -117,13 +123,15 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     if (move.player !== playerNumber) {
       soundManager.playBuzzSound();
     }
-  }, [playerNumber]);
+  }, [playerNumber, roomInfo, playerName, opponentName]);
 
   // Initialize multiplayer event handlers
   useEffect(() => {
-    // Find opponent name
+    // Find opponent name and player name
     const opponent = roomInfo.players.find(p => p.playerNumber !== playerNumber);
+    const currentPlayerInfo = roomInfo.players.find(p => p.playerNumber === playerNumber);
     setOpponentName(opponent?.name || 'Opponent');
+    setPlayerName(currentPlayerInfo?.name || 'You');
 
     // Set up move callback - use refs to check game state (avoids stale closure)
     multiplayerService.onMove = (move: GameMove) => {
@@ -136,6 +144,39 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
           timestamp: new Date(move.timestamp).getTime(),
           roomId: roomInfo.roomId
         });
+      }
+    };
+
+    // Set up stop game request handlers
+    multiplayerService.onStopGameRequested = (requestedBy: 1 | 2) => {
+      setStopGameRequestedBy(requestedBy);
+      setShowStopGameModal(true);
+    };
+
+    multiplayerService.onStopGameRequestCancelled = () => {
+      setStopGameRequestedBy(null);
+      setShowStopGameModal(false);
+    };
+
+    multiplayerService.onStopGameAccepted = () => {
+      setGameActive(false);
+      gameActiveRef.current = false;
+      setStopGameRequestedBy(null);
+      setShowStopGameModal(false);
+    };
+
+    // Set up game state update handler to sync stop game requests
+    multiplayerService.onGameStateUpdate = (gameState) => {
+      if (gameState.stop_game_requested_by !== stopGameRequestedBy) {
+        setStopGameRequestedBy(gameState.stop_game_requested_by);
+        if (gameState.stop_game_requested_by && gameState.stop_game_requested_by !== playerNumber) {
+          setShowStopGameModal(true);
+        }
+      }
+      // Update game active status if game was stopped
+      if (!gameState.is_game_active && gameActive) {
+        setGameActive(false);
+        gameActiveRef.current = false;
       }
     };
 
@@ -177,11 +218,18 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
               winnerRef.current = gameState.winner;
               setWinner(gameState.winner);
               setGameActive(false);
+              // Set winner message with actual name from roomInfo (more reliable than state)
+              const winnerPlayer = roomInfo.players.find(p => p.playerNumber === gameState.winner);
+              const winnerName = winnerPlayer?.name || (gameState.winner === playerNumber ? 'You' : 'Opponent');
+              setWinMessage(`${winnerName} won! 🎉`);
+              setShowWinPopup(true);
             } else {
               // Reset refs if game is active
               gameActiveRef.current = gameState.is_game_active;
               winnerRef.current = 0;
             }
+            // Sync stop game request
+            setStopGameRequestedBy(gameState.stop_game_requested_by);
           }
         } catch (error) {
           // If game state parsing fails, apply moves individually
@@ -410,9 +458,16 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
         winnerRef.current = newWinner;
         setWinner(newWinner);
         setGameActive(false);
-        setWinMessage(newWinner === playerNumber ? 'You won! 🐝' : 'Opponent won! 🐝');
+        // Get winner name from roomInfo for reliability
+        const winnerPlayer = roomInfo.players.find(p => p.playerNumber === newWinner);
+        const winnerName = winnerPlayer?.name || (newWinner === playerNumber ? playerName : opponentName);
+        setWinMessage(`${winnerName} won! 🎉`);
         setShowWinPopup(true);
-        soundManager.playVictorySound();
+        if (newWinner === playerNumber) {
+          soundManager.playVictorySound();
+        } else {
+          soundManager.playDefeatSound();
+        }
       } else {
         // Switch turns only if game is still active
         if (gameActiveRef.current && winnerRef.current === 0) {
@@ -423,12 +478,15 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
       // Send move to other players via Supabase
       await multiplayerService.sendMove(row, col);
       
-      // Update game state in Supabase
+      // Update game state in Supabase (preserve stop game request if exists)
+      const currentState = await multiplayerService.fetchGameState(multiplayerService.getCurrentRoomId()!);
       await multiplayerService.updateGameState(
         newBoard,
         newGameActive ? (currentPlayer === 1 ? 2 : 1) : currentPlayer,
         newWinner,
-        newGameActive
+        newGameActive,
+        currentState?.stop_game_requested_by || null,
+        currentState?.next_first_player || 1
       );
       
       // Play sound
@@ -484,19 +542,59 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     winnerRef.current = 0;
   };
 
-  // Reset game (host only)
+  // Reset game (both players can restart)
   const resetGame = async () => {
     soundManager.playClickSound();
     
-    // Clear old moves in database and reset game state
-    await multiplayerService.resetGameState();
+    // Clear old moves in database and reset game state with alternating first player
+    await multiplayerService.resetGameState(true);
     
-    // Reset local game state
+    // Reset local game state - will be synced from database
     resetGameState();
+    setStopGameRequestedBy(null);
+    setShowStopGameModal(false);
     
-    // Update local board to sync with database
-    const emptyBoard = Array(10).fill(null).map(() => Array(10).fill(0));
-    await multiplayerService.updateGameState(emptyBoard, 1, 0, true);
+    // Fetch the new game state to get the correct first player
+    const roomId = multiplayerService.getCurrentRoomId();
+    if (roomId) {
+      const newState = await multiplayerService.fetchGameState(roomId);
+      if (newState) {
+        setCurrentPlayer(newState.current_player);
+        setBoard(JSON.parse(newState.board_state) as (0 | 1 | 2)[][]);
+        gameActiveRef.current = newState.is_game_active;
+        winnerRef.current = 0;
+      }
+    }
+  };
+
+  // Request to stop the game
+  const handleRequestStopGame = async () => {
+    soundManager.playClickSound();
+    await multiplayerService.requestStopGame();
+    setStopGameRequestedBy(playerNumber);
+  };
+
+  // Cancel stop game request
+  const handleCancelStopRequest = async () => {
+    soundManager.playClickSound();
+    await multiplayerService.cancelStopGameRequest();
+    setStopGameRequestedBy(null);
+  };
+
+  // Accept stop game request
+  const handleAcceptStopGame = async () => {
+    soundManager.playClickSound();
+    await multiplayerService.acceptStopGame();
+    setStopGameRequestedBy(null);
+    setShowStopGameModal(false);
+  };
+
+  // Reject stop game request
+  const handleRejectStopGame = async () => {
+    soundManager.playClickSound();
+    await multiplayerService.rejectStopGameRequest();
+    setStopGameRequestedBy(null);
+    setShowStopGameModal(false);
   };
 
   // Leave game
@@ -565,8 +663,49 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
       
 
       
-      <div style={{ display: 'flex', gap: '15px' }}>
-        {isHost && (
+      <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Stop Game Button - shown for both players when game is active and no stop request */}
+        {gameActive && !stopGameRequestedBy && (
+          <button 
+            onClick={handleRequestStopGame}
+            disabled={connectionStatus !== 'connected' || winner > 0}
+            style={{
+              padding: '10px 20px',
+              fontSize: '1em',
+              backgroundColor: '#ff9800',
+              color: 'white',
+              border: '2px solid black',
+              borderRadius: '8px',
+              cursor: (connectionStatus !== 'connected' || winner > 0) ? 'not-allowed' : 'pointer',
+              opacity: (connectionStatus !== 'connected' || winner > 0) ? 0.5 : 1
+            }}
+          >
+            ⏸️ Stop Game
+          </button>
+        )}
+
+        {/* Cancel Stop Request Button - shown when current player requested stop */}
+        {stopGameRequestedBy === playerNumber && (
+          <button 
+            onClick={handleCancelStopRequest}
+            disabled={connectionStatus !== 'connected'}
+            style={{
+              padding: '10px 20px',
+              fontSize: '1em',
+              backgroundColor: '#ff9800',
+              color: 'white',
+              border: '2px solid black',
+              borderRadius: '8px',
+              cursor: connectionStatus !== 'connected' ? 'not-allowed' : 'pointer',
+              opacity: connectionStatus !== 'connected' ? 0.5 : 1
+            }}
+          >
+            ❌ Cancel Stop Request
+          </button>
+        )}
+
+        {/* Restart Game Button - shown for both players when game is not active, after win, or when game is stopped */}
+        {(!gameActive || winner > 0) && (
           <button 
             onClick={resetGame}
             disabled={connectionStatus !== 'connected'}
@@ -680,28 +819,27 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
               justifyContent: 'center',
               flexWrap: 'wrap'
             }}>
-              {isHost && (
-                <button 
-                  onClick={() => {
-                    resetGame();
-                    setShowWinPopup(false);
-                  }}
-                  style={{
-                    padding: '12px 24px',
-                    fontSize: '1.1em',
-                    fontWeight: 'bold',
-                    backgroundColor: '#4CAF50',
-                    color: 'white',
-                    border: '2px solid black',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    minWidth: '120px'
-                  }}
-                >
-                  Play Again
-                </button>
-              )}
+              {/* Restart button available for both players */}
+              <button 
+                onClick={() => {
+                  resetGame();
+                  setShowWinPopup(false);
+                }}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '1.1em',
+                  fontWeight: 'bold',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: '2px solid black',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  minWidth: '120px'
+                }}
+              >
+                Play Again
+              </button>
               
               <button 
                 onClick={handleLeaveGame}
@@ -739,6 +877,104 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
             >
               ×
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Stop Game Request Modal */}
+      {showStopGameModal && stopGameRequestedBy && stopGameRequestedBy !== playerNumber && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1001,
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: '#FFC30B',
+            padding: '40px',
+            borderRadius: '20px',
+            border: '4px solid black',
+            textAlign: 'center',
+            minWidth: '300px',
+            maxWidth: '90vw',
+            position: 'relative',
+            animation: 'popIn 0.5s ease-out',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+          }}>
+            <h2 style={{
+              fontSize: '1.8em',
+              color: 'black',
+              marginBottom: '20px',
+              textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+            }}>
+              Stop Game Request
+            </h2>
+            
+            <p style={{
+              fontSize: '1.2em',
+              color: '#333',
+              marginBottom: '30px'
+            }}>
+              {opponentName} wants to stop the game.
+            </p>
+            
+            <p style={{
+              fontSize: '1em',
+              color: '#666',
+              marginBottom: '30px'
+            }}>
+              Do you accept?
+            </p>
+            
+            <div style={{
+              display: 'flex',
+              gap: '15px',
+              justifyContent: 'center',
+              flexWrap: 'wrap'
+            }}>
+              <button 
+                onClick={handleAcceptStopGame}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '1.1em',
+                  fontWeight: 'bold',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: '2px solid black',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  minWidth: '120px'
+                }}
+              >
+                Accept
+              </button>
+              
+              <button 
+                onClick={handleRejectStopGame}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '1.1em',
+                  fontWeight: 'bold',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: '2px solid black',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  minWidth: '120px'
+                }}
+              >
+                Reject
+              </button>
+            </div>
           </div>
         </div>
       )}
