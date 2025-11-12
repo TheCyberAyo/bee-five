@@ -49,9 +49,15 @@ export default function BattleGame({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Determine starting player (alternate each game)
-  // Game 1: Player 1 starts, Game 2: Player 2 starts, Game 3: Player 1 starts, etc.
-  const startingPlayer = (battleGamesPlayed % 2) === 0 ? 1 : 2;
+  // Track the current starting player separately to avoid triggering useGameLogic reset
+  const [currentStartingPlayer, setCurrentStartingPlayer] = useState<1 | 2>(1);
+  
+  // Determine starting player based on games played for display purposes
+  // Game 1 (0 games played): Player 1 starts
+  // Game 2 (1 game played): Player 2 starts  
+  // Game 3 (2 games played): Player 1 starts
+  // Formula: (battleGamesPlayed % 2) === 0 → Player 1, otherwise Player 2
+  const startingPlayer = currentStartingPlayer;
 
   const { gameState, handleCellClick, resetGame } = useGameLogic({
     timeLimit,
@@ -60,23 +66,12 @@ export default function BattleGame({
     pauseTimer: timeLimit === 0 // Pause timer if "No timer" is selected
   });
 
-  // Track if component has mounted to avoid initial reset
-  const hasMountedRef = useRef(false);
-
-  // Update starting player when battleGamesPlayed changes
-  useEffect(() => {
-    if (hasMountedRef.current) {
-      resetGame(startingPlayer);
-    } else {
-      hasMountedRef.current = true;
-    }
-  }, [battleGamesPlayed, resetGame, startingPlayer]);
-
   const [winMessage, setWinMessage] = useState('');
   const [showWinPopup, setShowWinPopup] = useState(false);
   const gameCompletedRef = useRef(false);
   const [battleComplete, setBattleComplete] = useState(false);
   const isResettingRef = useRef(false);
+  const pendingWinnerRef = useRef<0 | 1 | 2>(0); // Store winner until Next Game is clicked
 
   // Wrapper for handleCellClick that prevents moves when battle is complete
   const handleCellClickWrapper = (row: number, col: number) => {
@@ -86,72 +81,184 @@ export default function BattleGame({
     handleCellClick(row, col);
   };
 
-  // Handle game completion
+  // Handle game completion - only show popup, don't update scores yet
   useEffect(() => {
     // Don't process any more games if battle is complete or winner modal is showing or if we're resetting
     if (battleComplete || showBattleWinnerModal || isResettingRef.current) return;
 
+    // Check if this is the last game
+    const isLastGame = (battleGamesPlayed + 1) >= battleLength;
+
     if (gameState.winner > 0 && !gameCompletedRef.current) {
       gameCompletedRef.current = true;
+      pendingWinnerRef.current = gameState.winner;
       
-      const winnerName = gameState.winner === 1 ? player1Name : player2Name;
-      setWinMessage(`${winnerName} wins! 🎉`);
-      setShowWinPopup(true);
-      
-      // Update battle scores
-      const newScores = { ...battleScores };
-      if (gameState.winner === 1) {
-        newScores.player1 += 1;
+      // If this is the last game, skip the popup and go directly to final winner modal
+      if (isLastGame) {
+        // Update scores immediately
+        setBattleScores(prevScores => {
+          const newScores = { ...prevScores };
+          if (gameState.winner === 1) {
+            newScores.player1 += 1;
+          } else {
+            newScores.player2 += 1;
+          }
+          
+          // Update games played and show final winner modal
+          setBattleGamesPlayed(battleGamesPlayed + 1);
+          setTimeout(() => {
+            const battleWinner = newScores.player1 > newScores.player2 ? player1Name : player2Name;
+            setBattleWinner(battleWinner);
+            setBattleComplete(true);
+            setShowBattleWinnerModal(true);
+          }, 100);
+          
+          return newScores;
+        });
       } else {
-        newScores.player2 += 1;
+        // Not the last game - show popup as usual
+        const winnerName = gameState.winner === 1 ? player1Name : player2Name;
+        setWinMessage(`${winnerName} wins! 🎉`);
+        setShowWinPopup(true);
+        
+        if (gameState.winner === 1) {
+          soundManager.playVictorySound();
+        } else {
+          soundManager.playDefeatSound();
+        }
       }
-      setBattleScores(newScores);
+    } else if (!gameState.isGameActive && gameState.winner === 0 && !battleComplete && !gameCompletedRef.current) {
+      // Handle draws
+      gameCompletedRef.current = true;
+      pendingWinnerRef.current = 0; // 0 means draw
       
-      // Update games played
-      const newGamesPlayed = battleGamesPlayed + 1;
-      setBattleGamesPlayed(newGamesPlayed);
-      
-      // Check if battle is complete
-      if (newGamesPlayed >= battleLength) {
-        const battleWinner = newScores.player1 > newScores.player2 ? player1Name : player2Name;
-        setBattleWinner(battleWinner);
-        setBattleComplete(true);
-        // Close win popup and show final winner modal after a short delay
+      // If this is the last game, skip the popup and go directly to final winner modal
+      if (isLastGame) {
+        // Update games played and show final winner modal (no score change for draw)
+        setBattleGamesPlayed(battleGamesPlayed + 1);
         setTimeout(() => {
-          setShowWinPopup(false);
-          setShowBattleWinnerModal(true);
-        }, 2000);
-      }
-      
-      if (gameState.winner === 1) {
-        soundManager.playVictorySound();
+          setBattleScores(currentScores => {
+            const battleWinner = currentScores.player1 > currentScores.player2 ? player1Name : 
+                                currentScores.player2 > currentScores.player1 ? player2Name : null;
+            setBattleWinner(battleWinner || 'Tie');
+            setBattleComplete(true);
+            setShowBattleWinnerModal(true);
+            return currentScores;
+          });
+        }, 100);
       } else {
-        soundManager.playDefeatSound();
+        // Not the last game - show popup as usual
+        setWinMessage('Game Over - Draw! 🐝');
+        setShowWinPopup(true);
       }
-    } else if (!gameState.isGameActive && gameState.winner === 0 && !battleComplete) {
-      setWinMessage('Game Over - Draw! 🐝');
-      setShowWinPopup(true);
-    } else if (gameState.timeLeft === 0 && !battleComplete && timeLimit > 0) {
-      const winner = gameState.currentPlayer === 1 ? player2Name : player1Name;
-      setWinMessage(`${winner} wins due to time limit! 🐝`);
-      setShowWinPopup(true);
+    } else if (gameState.timeLeft === 0 && !battleComplete && timeLimit > 0 && !gameCompletedRef.current) {
+      // Handle time limit wins
+      gameCompletedRef.current = true;
+      const winner = gameState.currentPlayer === 1 ? 2 : 1;
+      pendingWinnerRef.current = winner;
+      
+      // If this is the last game, skip the popup and go directly to final winner modal
+      if (isLastGame) {
+        // Update scores immediately
+        setBattleScores(prevScores => {
+          const newScores = { ...prevScores };
+          if (winner === 1) {
+            newScores.player1 += 1;
+          } else {
+            newScores.player2 += 1;
+          }
+          
+          // Update games played and show final winner modal
+          setBattleGamesPlayed(battleGamesPlayed + 1);
+          setTimeout(() => {
+            const battleWinner = newScores.player1 > newScores.player2 ? player1Name : player2Name;
+            setBattleWinner(battleWinner);
+            setBattleComplete(true);
+            setShowBattleWinnerModal(true);
+          }, 100);
+          
+          return newScores;
+        });
+      } else {
+        // Not the last game - show popup as usual
+        const winnerName = winner === 1 ? player1Name : player2Name;
+        setWinMessage(`${winnerName} wins due to time limit! 🐝`);
+        setShowWinPopup(true);
+      }
     }
     
     // Reset the ref when a new game starts (but only if battle is not complete)
-    if (gameState.isGameActive && gameState.winner === 0 && !battleComplete) {
+    if (gameState.isGameActive && gameState.winner === 0 && !battleComplete && !showWinPopup) {
       gameCompletedRef.current = false;
+      pendingWinnerRef.current = 0;
     }
-  }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer, player1Name, player2Name, battleLength, battleComplete, showBattleWinnerModal, battleScores, battleGamesPlayed, timeLimit]);
+  }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer, player1Name, player2Name, battleComplete, showBattleWinnerModal, timeLimit, showWinPopup, battleGamesPlayed, battleLength]);
 
   const handleNextGame = () => {
     // Don't allow next game if battle is complete
     if (battleGamesPlayed >= battleLength) {
       return;
     }
+    
+    // Close the popup first
     setShowWinPopup(false);
-    // Calculate the starting player for the next game
-    const nextStartingPlayer = ((battleGamesPlayed + 1) % 2) === 0 ? 1 : 2;
-    resetGame(nextStartingPlayer);
+    
+    // Update scores based on the pending winner (stored when game ended)
+    const winner = pendingWinnerRef.current;
+    if (winner > 0) {
+      // Update battle scores
+      setBattleScores(prevScores => {
+        const newScores = { ...prevScores };
+        if (winner === 1) {
+          newScores.player1 += 1;
+        } else {
+          newScores.player2 += 1;
+        }
+        return newScores;
+      });
+    }
+    
+    // Calculate the new games played count and next starting player
+    const newGamesPlayed = battleGamesPlayed + 1;
+    
+    // Calculate next starting player (alternate)
+    // Game 1 (0 games played): Player 1 starts
+    // Game 2 (1 game played): Player 2 starts
+    // Game 3 (2 games played): Player 1 starts
+    const nextStartingPlayer = (newGamesPlayed % 2) === 0 ? 1 : 2;
+    
+    // Check if battle is complete
+    if (newGamesPlayed >= battleLength) {
+      // Battle is complete - update games played and show modal
+      setBattleGamesPlayed(newGamesPlayed);
+      setTimeout(() => {
+        setBattleScores(currentScores => {
+          const battleWinner = currentScores.player1 > currentScores.player2 ? player1Name : player2Name;
+          setBattleWinner(battleWinner);
+          setBattleComplete(true);
+          setShowBattleWinnerModal(true);
+          return currentScores;
+        });
+      }, 100);
+      return;
+    }
+    
+    // Update games played
+    setBattleGamesPlayed(newGamesPlayed);
+    
+    // Reset for next game
+    gameCompletedRef.current = false;
+    pendingWinnerRef.current = 0;
+    
+    // Update starting player and reset the game
+    // Do this in a way that prevents useGameLogic from double-resetting
+    setCurrentStartingPlayer(nextStartingPlayer);
+    
+    // Reset the game with the new starting player after a brief delay
+    // This ensures state updates are processed first
+    setTimeout(() => {
+      resetGame(nextStartingPlayer);
+    }, 10);
   };
 
   const handlePlayAgain = () => {
@@ -165,11 +272,13 @@ export default function BattleGame({
     // Reset all states
     setBattleComplete(false);
     gameCompletedRef.current = false;
+    pendingWinnerRef.current = 0;
     setWinMessage('');
     
     // Reset scores and games played
     setBattleScores({ player1: 0, player2: 0 });
     setBattleGamesPlayed(0);
+    setCurrentStartingPlayer(1); // Start with player 1
     
     // Reset game board after a short delay to ensure state updates complete
     setTimeout(() => {

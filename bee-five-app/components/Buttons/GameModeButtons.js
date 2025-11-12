@@ -16,7 +16,13 @@ export default function GameModeButtons({ onGameModeSelect }) {
         <TouchableOpacity
           key={mode.id}
           style={[styles.button, { backgroundColor: mode.color }]}
-          onPress={() => onGameModeSelect && onGameModeSelect(mode.id)}
+          onPress={() => {
+            if (mode.id === 'local') {
+              onGameModeSelect && onGameModeSelect('take-turns-submenu');
+            } else {
+              onGameModeSelect && onGameModeSelect(mode.id);
+            }
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.emoji}>{mode.emoji}</Text>

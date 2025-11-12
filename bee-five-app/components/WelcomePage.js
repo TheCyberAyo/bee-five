@@ -247,7 +247,7 @@ export default function WelcomePage({ onGameModeSelect }) {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.button, styles.takeTurnsButton]}
-            onPress={() => onGameModeSelect && onGameModeSelect('local')}
+            onPress={() => onGameModeSelect && onGameModeSelect('take-turns-submenu')}
             activeOpacity={0.8}
           >
             <Text style={styles.buttonEmoji}>👥</Text>
