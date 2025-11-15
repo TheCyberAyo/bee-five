@@ -113,7 +113,7 @@ class SimpleMultiplayerClient {
                 // console.log(`🔍 Polling: Ignoring own move:`, move);
               }
             } catch (error) {
-              // console.error('Error parsing move:', error);
+              console.error('Error parsing simple multiplayer move payload:', error);
             }
           }
         }
@@ -134,7 +134,7 @@ class SimpleMultiplayerClient {
             lastStateTime = stateTime;
           }
         } catch (error) {
-          // console.error('Error parsing game state:', error);
+          console.error('Error parsing simple multiplayer game state:', error);
         }
       }
     }, 100); // Poll every 100ms for real-time feel

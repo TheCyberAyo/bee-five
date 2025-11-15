@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack --hostname 0.0.0.0",
     "build": "next build",
-    "start": "node scripts/fixRoutesManifest.js && next start",
+    "start": "node scripts/fixRoutesManifest.mjs && next start",
     "lint": "eslint"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { soundManager } from '../utils/sounds';
 
 type GameMode = 'menu' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us' | 'local-multiplayer' | 'online-lobby' | 'online-game' | 'ai-game' | 'adventure-game' | 'show-take-turns-submenu' | 'show-ai-submenu' | 'competition';
@@ -65,16 +66,16 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
           alignItems: 'center',
           justifyContent: 'flex-start'
         }}>
-          <img 
-            src="/BEE-FIVE.png" 
-            alt="BEE-FIVE" 
-            style={{
-              maxWidth: '120px',
-              height: 'auto',
-              maxHeight: '2rem',
-              objectFit: 'contain'
-            }}
-          />
+          <div style={{ position: 'relative', width: '120px', height: '32px' }}>
+            <Image 
+              src="/BEE-FIVE.png" 
+              alt="BEE-FIVE logo" 
+              fill
+              style={{ objectFit: 'contain' }}
+              sizes="120px"
+              priority
+            />
+          </div>
         </div>
 
         {/* Hamburger menu button */}

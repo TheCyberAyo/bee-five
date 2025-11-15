@@ -10,7 +10,7 @@ interface BattleGameProps {
   player1Name: string;
   player2Name: string;
   battleScores: { player1: number; player2: number };
-  setBattleScores: (scores: { player1: number; player2: number }) => void;
+  setBattleScores: React.Dispatch<React.SetStateAction<{ player1: number; player2: number }>>;
   battleGamesPlayed: number;
   setBattleGamesPlayed: (games: number) => void;
   setBattleWinner: (winner: string) => void;
@@ -34,7 +34,6 @@ export default function BattleGame({
   onBackToMenu,
   timeLimit = 15 
 }: BattleGameProps) {
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
   // Initialize mobile detection
@@ -192,7 +191,7 @@ export default function BattleGame({
       gameCompletedRef.current = false;
       pendingWinnerRef.current = 0;
     }
-  }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer, player1Name, player2Name, battleComplete, showBattleWinnerModal, timeLimit, showWinPopup, battleGamesPlayed, battleLength]);
+  }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer, player1Name, player2Name, battleComplete, showBattleWinnerModal, timeLimit, showWinPopup, battleGamesPlayed, battleLength, setBattleScores, setBattleGamesPlayed, setBattleWinner, setShowBattleWinnerModal]);
 
   const handleNextGame = () => {
     // Don't allow next game if battle is complete
@@ -667,8 +666,6 @@ export default function BattleGame({
       {/* Final Winner Announcement Modal */}
       {showBattleWinnerModal && (() => {
         const finalWinner = battleScores.player1 > battleScores.player2 ? player1Name : player2Name;
-        const finalWinnerScore = battleScores.player1 > battleScores.player2 ? battleScores.player1 : battleScores.player2;
-        const finalLoserScore = battleScores.player1 > battleScores.player2 ? battleScores.player2 : battleScores.player1;
         const isTie = battleScores.player1 === battleScores.player2;
         
         return (

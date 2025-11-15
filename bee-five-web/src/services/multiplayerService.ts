@@ -44,6 +44,17 @@ const isPostgrestError = (value: unknown): value is PostgrestError => {
   );
 };
 
+type GameStateUpdatePayload = {
+  room_id: string;
+  board_state: string;
+  current_player: 1 | 2;
+  winner: 0 | 1 | 2;
+  is_game_active: boolean;
+  updated_at: string;
+  stop_game_requested_by?: 1 | 2 | null;
+  next_first_player?: 1 | 2;
+};
+
 export class MultiplayerService {
   private roomId: string | null = null;
   private playerNumber: 1 | 2 = 1;
@@ -605,7 +616,7 @@ export class MultiplayerService {
         .eq('room_id', this.roomId)
         .single();
 
-      const gameStateData: any = {
+      const gameStateData: GameStateUpdatePayload = {
         room_id: this.roomId,
         board_state: JSON.stringify(board),
         current_player: currentPlayer,
@@ -642,6 +653,7 @@ export class MultiplayerService {
         if (error) throw error;
       }
     } catch (error) {
+      console.error('Failed to update game state:', error);
       if (this.onError) {
         this.onError('Failed to update game state');
       }
@@ -682,6 +694,7 @@ export class MultiplayerService {
         nextFirstPlayer
       );
     } catch (error) {
+      console.error('Failed to reset game state:', error);
       if (this.onError) {
         this.onError('Failed to reset game state');
       }
@@ -713,6 +726,7 @@ export class MultiplayerService {
         if (error) throw error;
       }
     } catch (error) {
+      console.error('Failed to request stop game:', error);
       if (this.onError) {
         this.onError('Failed to request stop game');
       }
@@ -744,6 +758,7 @@ export class MultiplayerService {
         if (error) throw error;
       }
     } catch (error) {
+      console.error('Failed to cancel stop game request:', error);
       if (this.onError) {
         this.onError('Failed to cancel stop game request');
       }
@@ -782,6 +797,7 @@ export class MultiplayerService {
         }
       }
     } catch (error) {
+      console.error('Failed to accept stop game request:', error);
       if (this.onError) {
         this.onError('Failed to accept stop game');
       }
@@ -855,11 +871,13 @@ export class MultiplayerService {
         .order('created_at', { ascending: true });
 
       if (error) {
+        console.error('Failed to fetch existing moves:', error);
         return [];
       }
 
       return moves || [];
     } catch (error) {
+      console.error('Unexpected error fetching existing moves:', error);
       return [];
     }
   }
@@ -878,11 +896,15 @@ export class MultiplayerService {
         .single();
 
       if (error || !gameState) {
+        if (error) {
+          console.error('Failed to fetch game state:', error);
+        }
         return null;
       }
 
       return gameState;
     } catch (error) {
+      console.error('Unexpected error fetching game state:', error);
       return null;
     }
   }
@@ -901,6 +923,9 @@ export class MultiplayerService {
         .single();
 
       if (error || !room) {
+        if (error) {
+          console.error('Failed to recover room from code:', error);
+        }
         return;
       }
 
@@ -911,7 +936,8 @@ export class MultiplayerService {
         this.setupSubscriptions(room.id);
       }
     } catch (error) {
-      // Silent fail for recovery
+      console.error('Unexpected error recovering room from code:', error);
+      // Silent fail for recovery after logging
     }
   }
 

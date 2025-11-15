@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import Image from 'next/image';
 import { soundManager } from '../utils/sounds';
 
 type GameMode = 'menu' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us' | 'local-multiplayer' | 'online-lobby' | 'online-game' | 'ai-game' | 'adventure-game' | 'show-take-turns-submenu' | 'show-ai-submenu' | 'competition';
@@ -54,16 +55,16 @@ export default function SidebarMenu({ onMenuItemClick, isMobile }: SidebarMenuPr
         justifyContent: 'center',
         alignItems: 'center'
       }}>
-        <img 
-          src="/BEE-FIVE.png" 
-          alt="BEE-FIVE" 
-          style={{
-            maxWidth: '100%',
-            height: 'auto',
-            maxHeight: 'clamp(2rem, 4vw, 3rem)',
-            objectFit: 'contain'
-          }}
-        />
+        <div style={{ position: 'relative', width: '100%', maxWidth: '160px', height: '48px' }}>
+          <Image 
+            src="/BEE-FIVE.png" 
+            alt="BEE-FIVE logo" 
+            fill
+            sizes="160px"
+            style={{ objectFit: 'contain' }}
+            priority
+          />
+        </div>
       </div>
       
       {menuItems.map((item) => (

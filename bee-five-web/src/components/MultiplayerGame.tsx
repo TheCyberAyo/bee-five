@@ -232,6 +232,7 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
             setStopGameRequestedBy(gameState.stop_game_requested_by);
           }
         } catch (error) {
+          console.error('Failed to parse persisted game state:', error);
           // If game state parsing fails, apply moves individually
           for (const move of existingMoves) {
             applyMove({
@@ -262,7 +263,7 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     return () => {
       // Don't clear onMove handler - let it persist during the game
     };
-  }, [roomInfo, playerNumber, applyMove]);
+  }, [roomInfo, playerNumber, applyMove, gameActive, stopGameRequestedBy]);
 
   // Check for win condition
 
@@ -390,7 +391,7 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     if (needsRedraw) {
       animationFrameRef.current = requestAnimationFrame(drawGame);
     }
-  }, [board, animatingPieces, hoveredCell, gameActive, currentPlayer, playerNumber]);
+  }, [board, animatingPieces, hoveredCell, gameActive, currentPlayer, playerNumber, winningPieces, CELL_SIZE, CANVAS_SIZE]);
 
   // Start animation loop
   useEffect(() => {
@@ -603,10 +604,6 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
     soundManager.playClickSound();
     onBackToLobby();
   };
-
-
-  const isHost = roomInfo.players.find(p => p.playerNumber === playerNumber)?.isHost || false;
-
   return (
     <div style={{ 
       backgroundColor: '#FFC30B', 

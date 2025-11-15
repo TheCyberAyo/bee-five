@@ -2,6 +2,7 @@
   "expo": {
     "name": "bee-five-app",
     "slug": "bee-five-app",
+    "scheme": "beefiveapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,6 +25,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6eede607-7028-4158-a810-f8ba98cfd7fc"
+      }
+    },
+    "owner": "ayohcoder"
   }
 }

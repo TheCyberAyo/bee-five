@@ -8,10 +8,14 @@ import WelcomePage from './components/WelcomePageExpoGo';
 import TakeTurnsSubmenu from './components/TakeTurnsSubmenu';
 import SimpleGame from './components/SimpleGame';
 import BattleGame from './components/BattleGame';
+import PlayAISubmenu from './components/PlayAISubmenu';
+import ClassicAIGame from './components/ClassicAIGame';
 
 export default function App() {
   const [gameMode, setGameMode] = useState(null);
   const [showTakeTurnsSubmenu, setShowTakeTurnsSubmenu] = useState(false);
+  const [showPlayAISubmenu, setShowPlayAISubmenu] = useState(false);
+  const [classicAIConfig, setClassicAIConfig] = useState(null);
   
   // Battle state
   const [battleOptions, setBattleOptions] = useState(null);
@@ -23,6 +27,9 @@ export default function App() {
   const handleGameModeSelect = (mode, options = {}) => {
     if (mode === 'take-turns-submenu') {
       setShowTakeTurnsSubmenu(true);
+      return;
+    } else if (mode === 'ai') {
+      setShowPlayAISubmenu(true);
       return;
     }
 
@@ -58,6 +65,14 @@ export default function App() {
     setBattleGamesPlayed(0);
     setBattleWinner('');
     setShowBattleWinnerModal(false);
+    setShowPlayAISubmenu(false);
+    setClassicAIConfig(null);
+  };
+
+  const handleStartClassicAI = ({ difficulty, timer }) => {
+    setClassicAIConfig({ difficulty, timer });
+    setShowPlayAISubmenu(false);
+    setGameMode('ai-classic');
   };
 
   // Handle local multiplayer game mode
@@ -93,12 +108,37 @@ export default function App() {
     );
   }
 
+  // Handle AI classic mode
+  if (gameMode === 'ai-classic' && classicAIConfig) {
+    return (
+      <View style={styles.container}>
+        <ClassicAIGame
+          onBackToMenu={handleBackToMenu}
+          difficulty={classicAIConfig.difficulty}
+          timeLimit={classicAIConfig.timer}
+        />
+        <StatusBar style="dark" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {showTakeTurnsSubmenu ? (
         <TakeTurnsSubmenu 
           onBackToMenu={handleBackToMenu}
           onGameModeSelect={handleGameModeSelect}
+        />
+      ) : showPlayAISubmenu ? (
+        <PlayAISubmenu
+          onBackToMenu={handleBackToMenu}
+          onStartClassicGame={handleStartClassicAI}
+          onAdventureSelect={() =>
+            Alert.alert(
+              'Adventure Mode',
+              'Adventure mode is coming to Expo soon! 🐝'
+            )
+          }
         />
       ) : (
         <WelcomePage onGameModeSelect={handleGameModeSelect} />

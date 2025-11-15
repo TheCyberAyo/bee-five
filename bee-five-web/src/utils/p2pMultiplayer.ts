@@ -179,7 +179,7 @@ class P2PMultiplayerClient {
         await this.setupPeerConnection();
         // console.log('🔗 WebRTC setup completed in background');
       } catch (webrtcError) {
-        // console.warn('⚠️ WebRTC setup failed, but continuing with simplified mode:', webrtcError);
+        console.warn('WebRTC setup failed; continuing in simplified mode:', webrtcError);
       }
 
     } catch (error) {
@@ -245,7 +245,6 @@ class P2PMultiplayerClient {
 
     this.peerConnection = new RTCPeerConnection(configuration);
 
-    let iceGatheringComplete = false;
     let connectionTimeout: ReturnType<typeof setTimeout> | null = null;
     const CONNECTION_TIMEOUT = 30000; // 30 seconds
 
@@ -256,7 +255,6 @@ class P2PMultiplayerClient {
         this.storeIceCandidate(event.candidate);
       } else {
         // ICE gathering complete
-        iceGatheringComplete = true;
         if (connectionTimeout) {
           clearTimeout(connectionTimeout);
         }
@@ -346,7 +344,7 @@ class P2PMultiplayerClient {
         // console.log('📨 Received message:', message.type);
         this.handleMessage(message);
       } catch (error) {
-        // console.error('Error parsing message:', error);
+        console.error('Error parsing P2P message:', error);
       }
     };
 
@@ -429,7 +427,7 @@ class P2PMultiplayerClient {
             return;
           }
         } catch (error) {
-          // console.error('Error parsing connection data:', error);
+          console.error('Error parsing connection data:', error);
           localStorage.removeItem(`bee5_connection_${this.currentRoom!.roomId}`);
         }
       }
@@ -482,7 +480,7 @@ class P2PMultiplayerClient {
       }, 1000);
 
     } catch (error) {
-      // console.error('Error handling offer:', error);
+      console.error('Error handling incoming offer:', error);
     }
   }
 

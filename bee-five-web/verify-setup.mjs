@@ -1,13 +1,14 @@
 /**
  * Supabase Setup Verification Script
- * 
+ *
  * This script verifies that your Supabase setup is working correctly.
- * Run it with: node verify-setup.js
+ * Run it with: node verify-setup.mjs
  */
 
-require('dotenv').config({ path: '.env.local' });
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
-const { createClient } = require('@supabase/supabase-js');
+dotenv.config({ path: '.env.local' });
 
 // Colors for console output
 const colors = {
@@ -29,10 +30,6 @@ function error(message) {
 
 function warning(message) {
   console.log(`${colors.yellow}⚠️  ${message}${colors.reset}`);
-}
-
-function info(message) {
-  console.log(`${colors.cyan}ℹ️  ${message}${colors.reset}`);
 }
 
 function section(title) {
@@ -101,7 +98,7 @@ async function main() {
   
   try {
     // Simple query to test connection
-    const { data, error: dbError } = await supabase
+    const { error: dbError } = await supabase
       .from('game_rooms')
       .select('count')
       .limit(1);
@@ -234,7 +231,7 @@ async function main() {
         .channel('test-verification')
         .on('postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'game_moves' },
-          (payload) => {
+          () => {
             subscriptionReceived = true;
             success('Real-time subscription received INSERT event');
           }
@@ -272,7 +269,9 @@ async function main() {
         // Wait for subscription to receive event
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        if (!subscriptionReceived) {
+        if (moveError) {
+          warning(`Failed to insert move for real-time test: ${moveError.message}`);
+        } else if (!subscriptionReceived) {
           warning('Real-time subscription did not receive event (this might be OK if real-time is not enabled)');
           warning('Check that real-time is enabled in Supabase Dashboard → Database → Replication');
         }
@@ -312,7 +311,7 @@ async function main() {
       success('Successfully created test room');
 
       // Add a test player
-      const { data: createdPlayer, error: playerError } = await supabase
+      const { error: playerError } = await supabase
         .from('game_players')
         .insert({
           room_id: createdRoom.id,
@@ -331,7 +330,7 @@ async function main() {
 
         // Test game state
         const testBoard = JSON.stringify(Array(10).fill(null).map(() => Array(10).fill(0)));
-        const { data: gameState, error: stateError } = await supabase
+        const { error: stateError } = await supabase
           .from('game_state')
           .insert({
             room_id: createdRoom.id,
