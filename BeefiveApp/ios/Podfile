@@ -1,0 +1,62 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'BeefiveApp' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  # Google Mobile Ads SDK (required for mediation)
+  pod 'Google-Mobile-Ads-SDK', '~> 12.0'
+
+  # Mediation Adapters - Add/remove based on your AdMob console configuration
+  # Meta Audience Network (Facebook)
+  pod 'GoogleMobileAdsMediationFacebook', '~> 6.16.0'
+  
+  # Unity Ads
+  pod 'GoogleMobileAdsMediationUnity', '~> 4.12.3'
+  
+  # AppLovin MAX
+  pod 'GoogleMobileAdsMediationAppLovin', '~> 13.0.0'
+  
+  # AdColony
+  pod 'GoogleMobileAdsMediationAdColony', '~> 4.9.0'
+  
+  # Vungle
+  pod 'GoogleMobileAdsMediationVungle', '~> 7.3.0'
+  
+  # IronSource
+  pod 'GoogleMobileAdsMediationIronSource', '~> 8.3.1'
+  
+  # Chartboost
+  pod 'GoogleMobileAdsMediationChartboost', '~> 9.7.0'
+  
+  # InMobi
+  pod 'GoogleMobileAdsMediationInMobi', '~> 10.7.0'
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+  end
+end
