@@ -130,18 +130,18 @@ dependencies {
     // AppLovin MAX
     implementation 'com.google.ads.mediation:applovin:13.0.0.0'
     
-    // AdColony
-    implementation 'com.google.ads.mediation:adcolony:4.9.0.0'
+    // AdColony - Temporarily disabled (version not available)
+    // implementation 'com.google.ads.mediation:adcolony:4.9.0.0'
     
     // Vungle
     implementation 'com.google.ads.mediation:vungle:7.3.0.0'
     
-    // IronSource
-    implementation 'com.google.ads.mediation:ironsource:8.3.1.0.0'
+    // IronSource - Temporarily disabled (version not available)
+    // implementation 'com.google.ads.mediation:ironsource:8.3.1.0.0'
     
-    // Chartboost
-    implementation 'com.google.ads.mediation:chartboost:9.7.0.0'
+    // Chartboost - Temporarily disabled (version not available)
+    // implementation 'com.google.ads.mediation:chartboost:9.7.0.0'
     
-    // InMobi
-    implementation 'com.google.ads.mediation:inmobi:10.7.0.0'
+    // InMobi - Temporarily disabled (version not available)
+    // implementation 'com.google.ads.mediation:inmobi:10.7.0.0'
 }

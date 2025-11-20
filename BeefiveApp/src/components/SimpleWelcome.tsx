@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,13 @@ import {
   TextInput,
   Dimensions,
   useColorScheme,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SimpleGame from './SimpleGame';
+import BattleGame from './BattleGame';
+import ClassicAIGame from './ClassicAIGame';
+import AdventureGame from './AdventureGame';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isMobile = SCREEN_WIDTH <= 768;
@@ -50,25 +55,397 @@ export default function SimpleWelcome() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  // Animated bees
+  const bee1X = useRef(new Animated.Value(0)).current;
+  const bee1Y = useRef(new Animated.Value(0)).current;
+  const bee1ScaleX = useRef(new Animated.Value(1)).current; // For left/right facing
+  
+  const bee2X = useRef(new Animated.Value(0)).current;
+  const bee2Y = useRef(new Animated.Value(0)).current;
+  const bee2ScaleX = useRef(new Animated.Value(1)).current; // For left/right facing
+  
+  const bee3X = useRef(new Animated.Value(0)).current;
+  const bee3Y = useRef(new Animated.Value(0)).current;
+  const bee3ScaleX = useRef(new Animated.Value(1)).current; // For left/right facing
+
+  // Bee animation functions
+  useEffect(() => {
+    // Bee 1 animation - Path 1 (faster: 3000ms per segment)
+    // Path: Start at left, move right, then left, then right, then left
+    // Note: Bee emoji naturally faces left, so scaleX: 1 = left, scaleX: -1 = right
+    const animateBee1 = () => {
+      bee1X.setValue(0);
+      bee1ScaleX.setValue(-1); // Start facing right (flipped from natural left)
+      
+      const createPath1 = () => {
+        return Animated.parallel([
+          Animated.sequence([
+            // Move right (0 -> 0.8)
+            Animated.parallel([
+              Animated.timing(bee1X, {
+                toValue: SCREEN_WIDTH * 0.8,
+                duration: 3000,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee1ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move left (0.8 -> 0.2)
+            Animated.parallel([
+              Animated.timing(bee1X, {
+                toValue: SCREEN_WIDTH * 0.2,
+                duration: 3000,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee1ScaleX, {
+                toValue: 1, // Face left (natural)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move right (0.2 -> 0.6)
+            Animated.parallel([
+              Animated.timing(bee1X, {
+                toValue: SCREEN_WIDTH * 0.6,
+                duration: 3000,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee1ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move left (0.6 -> 0)
+            Animated.parallel([
+              Animated.timing(bee1X, {
+                toValue: 0,
+                duration: 3000,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee1ScaleX, {
+                toValue: 1, // Face left (natural)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+          ]),
+          Animated.sequence([
+            Animated.timing(bee1Y, {
+              toValue: SCREEN_HEIGHT * 0.2,
+              duration: 3000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee1Y, {
+              toValue: SCREEN_HEIGHT * 0.7,
+              duration: 3000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee1Y, {
+              toValue: SCREEN_HEIGHT * 0.5,
+              duration: 3000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee1Y, {
+              toValue: 0,
+              duration: 3000,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]);
+      };
+      
+      Animated.loop(createPath1()).start();
+    };
+
+    // Bee 2 animation - Path 2 (faster: 3750ms per segment)
+    // Path: Start at right, move left, then right, then left, then right
+    // Note: Bee emoji naturally faces left, so scaleX: 1 = left, scaleX: -1 = right
+    const animateBee2 = () => {
+      bee2X.setValue(SCREEN_WIDTH * 0.95);
+      bee2ScaleX.setValue(1); // Start facing left (natural)
+      
+      const createPath2 = () => {
+        return Animated.parallel([
+          Animated.sequence([
+            // Move left (0.95 -> 0.1)
+            Animated.parallel([
+              Animated.timing(bee2X, {
+                toValue: SCREEN_WIDTH * 0.1,
+                duration: 3750,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee2ScaleX, {
+                toValue: 1, // Face left (natural)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move right (0.1 -> 0.7)
+            Animated.parallel([
+              Animated.timing(bee2X, {
+                toValue: SCREEN_WIDTH * 0.7,
+                duration: 3750,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee2ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move left (0.7 -> 0.3)
+            Animated.parallel([
+              Animated.timing(bee2X, {
+                toValue: SCREEN_WIDTH * 0.3,
+                duration: 3750,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee2ScaleX, {
+                toValue: 1, // Face left (natural)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move right (0.3 -> 0.5)
+            Animated.parallel([
+              Animated.timing(bee2X, {
+                toValue: SCREEN_WIDTH * 0.5,
+                duration: 3750,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee2ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move right (0.5 -> 0.95)
+            Animated.parallel([
+              Animated.timing(bee2X, {
+                toValue: SCREEN_WIDTH * 0.95,
+                duration: 3750,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee2ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+          ]),
+          Animated.sequence([
+            Animated.timing(bee2Y, {
+              toValue: SCREEN_HEIGHT * 0.1,
+              duration: 3750,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee2Y, {
+              toValue: SCREEN_HEIGHT * 0.3,
+              duration: 3750,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee2Y, {
+              toValue: SCREEN_HEIGHT * 0.8,
+              duration: 3750,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee2Y, {
+              toValue: SCREEN_HEIGHT * 0.9,
+              duration: 3750,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee2Y, {
+              toValue: SCREEN_HEIGHT * 0.5,
+              duration: 3750,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]);
+      };
+      
+      Animated.loop(createPath2()).start();
+    };
+
+    // Bee 3 animation - Path 3 (faster: 4500ms per segment)
+    // Path: Start at center, move right, then left, then right, then left, then right, then left
+    // Note: Bee emoji naturally faces left, so scaleX: 1 = left, scaleX: -1 = right
+    const animateBee3 = () => {
+      bee3X.setValue(SCREEN_WIDTH * 0.5);
+      bee3ScaleX.setValue(-1); // Start facing right (flipped)
+      
+      const createPath3 = () => {
+        return Animated.parallel([
+          Animated.sequence([
+            // Move right (0.5 -> 0.9)
+            Animated.parallel([
+              Animated.timing(bee3X, {
+                toValue: SCREEN_WIDTH * 0.9,
+                duration: 4500,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee3ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move left (0.9 -> 0.05)
+            Animated.parallel([
+              Animated.timing(bee3X, {
+                toValue: SCREEN_WIDTH * 0.05,
+                duration: 4500,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee3ScaleX, {
+                toValue: 1, // Face left (natural)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move right (0.05 -> 0.4)
+            Animated.parallel([
+              Animated.timing(bee3X, {
+                toValue: SCREEN_WIDTH * 0.4,
+                duration: 4500,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee3ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move right (0.4 -> 0.85)
+            Animated.parallel([
+              Animated.timing(bee3X, {
+                toValue: SCREEN_WIDTH * 0.85,
+                duration: 4500,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee3ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move left (0.85 -> 0.6)
+            Animated.parallel([
+              Animated.timing(bee3X, {
+                toValue: SCREEN_WIDTH * 0.6,
+                duration: 4500,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee3ScaleX, {
+                toValue: 1, // Face left (natural)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move left (0.6 -> 0.25)
+            Animated.parallel([
+              Animated.timing(bee3X, {
+                toValue: SCREEN_WIDTH * 0.25,
+                duration: 4500,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee3ScaleX, {
+                toValue: 1, // Face left (natural)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            // Move right (0.25 -> 0.5)
+            Animated.parallel([
+              Animated.timing(bee3X, {
+                toValue: SCREEN_WIDTH * 0.5,
+                duration: 4500,
+                useNativeDriver: true,
+              }),
+              Animated.timing(bee3ScaleX, {
+                toValue: -1, // Face right (flipped)
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+          ]),
+          Animated.sequence([
+            Animated.timing(bee3Y, {
+              toValue: SCREEN_HEIGHT * 0.6,
+              duration: 4500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee3Y, {
+              toValue: SCREEN_HEIGHT * 0.2,
+              duration: 4500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee3Y, {
+              toValue: SCREEN_HEIGHT * 0.4,
+              duration: 4500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee3Y, {
+              toValue: SCREEN_HEIGHT * 0.9,
+              duration: 4500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee3Y, {
+              toValue: SCREEN_HEIGHT * 0.8,
+              duration: 4500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee3Y, {
+              toValue: SCREEN_HEIGHT * 0.1,
+              duration: 4500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bee3Y, {
+              toValue: SCREEN_HEIGHT * 0.95,
+              duration: 4500,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]);
+      };
+      
+      Animated.loop(createPath3()).start();
+    };
+
+    // Start all bee animations
+    animateBee1();
+    animateBee2();
+    // Delay bee 3 to create variety
+    setTimeout(() => animateBee3(), 10000);
+  }, []);
+
   // Handle local multiplayer mode
   if (gameMode === 'local-multiplayer') {
-    // TODO: Implement SimpleGame component
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Local Multiplayer</Text>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => setGameMode('menu')}
-        >
-          <Text style={styles.buttonText}>Back to Menu</Text>
-        </TouchableOpacity>
-      </View>
+      <SimpleGame 
+        onBackToMenu={() => setGameMode('menu')} 
+        backgroundColor={backgroundColor} 
+      />
     );
   }
 
   // Handle AI game mode
   if (gameMode === 'ai-game') {
-    // TODO: Implement AIGame component
+    return (
+      <ClassicAIGame 
+        onBackToMenu={() => setGameMode('menu')} 
+        initialDifficulty={aiDifficulty as 'easy' | 'medium' | 'hard'}
+        initialTimer={aiTimer}
+        backgroundColor={backgroundColor}
+      />
+    );
+  }
+
+  // Old AI game placeholder (removed)
+  if (false && gameMode === 'ai-game-old') {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>AI Game</Text>
@@ -84,33 +461,19 @@ export default function SimpleWelcome() {
 
   // Handle Adventure game mode
   if (gameMode === 'adventure-game') {
-    // TODO: Implement AdventureGame component
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Adventure Game</Text>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => setGameMode('menu')}
-        >
-          <Text style={styles.buttonText}>Back to Menu</Text>
-        </TouchableOpacity>
-      </View>
-    );
+    return <AdventureGame onBackToMenu={() => setGameMode('menu')} />;
   }
 
   // Handle Competition mode
   if (gameMode === 'competition') {
-    // TODO: Implement BattleGame component
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Competition</Text>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => setGameMode('menu')}
-        >
-          <Text style={styles.buttonText}>Back to Menu</Text>
-        </TouchableOpacity>
-      </View>
+      <BattleGame
+        battleLength={competitionLength}
+        player1Name={competitor1Name}
+        player2Name={competitor2Name}
+        onBackToMenu={() => setGameMode('menu')}
+        timeLimit={timerOption === 0 ? undefined : timerOption}
+      />
     );
   }
 
@@ -443,6 +806,57 @@ export default function SimpleWelcome() {
   // Main menu
   return (
     <SafeAreaView style={styles.safeArea}>
+      {gameMode === 'menu' && (
+        <View style={styles.beeContainer}>
+          {/* Animated Bee 1 */}
+          <Animated.View
+            style={[
+              styles.bee,
+              {
+                transform: [
+                  { translateX: bee1X },
+                  { translateY: bee1Y },
+                  { scaleX: bee1ScaleX },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.beeEmoji}>🐝</Text>
+          </Animated.View>
+
+          {/* Animated Bee 2 */}
+          <Animated.View
+            style={[
+              styles.bee,
+              {
+                transform: [
+                  { translateX: bee2X },
+                  { translateY: bee2Y },
+                  { scaleX: bee2ScaleX },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.beeEmoji}>🐝</Text>
+          </Animated.View>
+
+          {/* Animated Bee 3 */}
+          <Animated.View
+            style={[
+              styles.bee,
+              {
+                transform: [
+                  { translateX: bee3X },
+                  { translateY: bee3Y },
+                  { scaleX: bee3ScaleX },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.beeEmoji}>🐝</Text>
+          </Animated.View>
+        </View>
+      )}
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}
@@ -498,6 +912,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFC30B',
   },
+  beeContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
+  bee: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  beeEmoji: {
+    fontSize: 24,
+  },
   scrollView: {
     flex: 1,
   },
@@ -523,6 +956,7 @@ const styles = StyleSheet.create({
     minHeight: 400,
     alignItems: 'center',
     justifyContent: 'space-between',
+    zIndex: 2,
   },
   submenuContainer: {
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
@@ -769,5 +1203,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+
+
+
+
+
+
+
 
 

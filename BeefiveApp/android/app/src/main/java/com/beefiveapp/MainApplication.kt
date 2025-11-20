@@ -6,7 +6,8 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
-import com.google.android.gms.ads.MobileAds
+// Temporarily disabled Google Mobile Ads
+// import com.google.android.gms.ads.MobileAds
 
 class MainApplication : Application(), ReactApplication {
 
@@ -24,12 +25,13 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     
+    // Temporarily disabled Google Mobile Ads initialization
     // Initialize Google Mobile Ads SDK for mediation
     // This must be called before loading any ads
-    MobileAds.initialize(this) { initializationStatus ->
-      // Initialization complete
-      // You can check initializationStatus.adapterStatusMap to see which adapters loaded
-    }
+    // MobileAds.initialize(this) { initializationStatus ->
+    //   // Initialization complete
+    //   // You can check initializationStatus.adapterStatusMap to see which adapters loaded
+    // }
     
     loadReactNative(this)
   }
