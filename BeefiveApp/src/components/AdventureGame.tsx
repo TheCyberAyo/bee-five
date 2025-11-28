@@ -11,7 +11,48 @@ import {
   Animated,
   Modal,
 } from 'react-native';
-import { getGameRules, GameRules } from '../utils/adventureGameRules';
+import { getGameRules, GameRules, getTimeLimitForLevel, getAIDifficulty, getAdventureStartingPlayer } from '../utils/adventureGameRules';
+import ClassicAIGame from './ClassicAIGame';
+
+// Match system helper functions
+const isMultipleOf10 = (gameNumber: number): boolean => gameNumber % 10 === 0;
+const isMultipleOf50 = (gameNumber: number): boolean => gameNumber % 50 === 0;
+
+const requiresMatchSystem = (gameNumber: number): boolean => isMultipleOf10(gameNumber);
+
+const getMatchType = (gameNumber: number): 'best-of-3' | 'best-of-5' | 'single' => {
+  if (isMultipleOf50(gameNumber)) {
+    return 'best-of-5';
+  }
+  if (requiresMatchSystem(gameNumber)) {
+    return 'best-of-3';
+  }
+  return 'single';
+};
+
+const getRequiredWins = (gameNumber: number): number => {
+  const matchType = getMatchType(gameNumber);
+  switch (matchType) {
+    case 'best-of-5':
+      return 3;
+    case 'best-of-3':
+      return 2;
+    default:
+      return 1;
+  }
+};
+
+const getTotalGames = (gameNumber: number): number => {
+  const matchType = getMatchType(gameNumber);
+  switch (matchType) {
+    case 'best-of-5':
+      return 5;
+    case 'best-of-3':
+      return 3;
+    default:
+      return 1;
+  }
+};
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isMobile = SCREEN_WIDTH <= 768;
@@ -42,7 +83,26 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
   const [scrollY, setScrollY] = useState(0);
   const [selectedGameRules, setSelectedGameRules] = useState<GameRules | null>(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
+  const [isPlayingGame, setIsPlayingGame] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  
+  // Match system state
+  const [currentMatch, setCurrentMatch] = useState(1);
+  const [playerWins, setPlayerWins] = useState(0);
+  const [aiWins, setAiWins] = useState(0);
+  const [isMatchComplete, setIsMatchComplete] = useState(false);
+  const [isWaitingForNextGame, setIsWaitingForNextGame] = useState(false);
+  const [countdownTimer, setCountdownTimer] = useState(0);
+  const [showMatchWinnerAnnouncement, setShowMatchWinnerAnnouncement] = useState(false);
+  const [matchWinnerMessage, setMatchWinnerMessage] = useState('');
+  const lastAnnouncedMatchRef = useRef<string>('');
+  const [gameProcessed, setGameProcessed] = useState(false);
+  const popupScheduledRef = useRef<boolean>(false);
+  const winPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const matchResultsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [pendingResultsPopup, setPendingResultsPopup] = useState(false);
+  const [showResultsPopup, setShowResultsPopup] = useState(false);
+  const [gameInitialized, setGameInitialized] = useState(false);
   
   // Calculate visible range based on scroll position
   const getVisibleRange = () => {
@@ -137,6 +197,7 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
     const isCurrent = gameNumber === currentGame;
     const isLocked = gameNumber > highestUnlockedGame;
     const stage = getStageForGame(gameNumber);
+    // For rules modal, we don't need match-specific rules, so currentMatch is optional
     const rules = getGameRules(gameNumber);
 
     return (
@@ -155,8 +216,20 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
           onPress={() => {
             if (!isLocked) {
               setCurrentGame(gameNumber);
-              setSelectedGameRules(rules);
-              setShowRulesModal(true);
+              // Reset match state if starting a new game series
+              if (requiresMatchSystem(gameNumber)) {
+                setCurrentMatch(1);
+                setPlayerWins(0);
+                setAiWins(0);
+                setIsMatchComplete(false);
+                setIsWaitingForNextGame(false);
+                setCountdownTimer(0);
+              }
+              // Directly start the game when clicked (like bee-five-web)
+              setIsPlayingGame(true);
+              setGameInitialized(false); // Will be set to true when countdown starts
+              setGameProcessed(false);
+              popupScheduledRef.current = false;
             }
           }}
           disabled={isLocked}
@@ -183,30 +256,424 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
           ]}
         />
         
-        {/* Game number label */}
-        <View style={styles.gameLabel}>
-          <Text style={styles.gameNumberText}>{gameNumber}</Text>
-        </View>
+        {/* Game number label - clickable */}
+        <TouchableOpacity
+          onPress={() => {
+            if (!isLocked) {
+              setCurrentGame(gameNumber);
+              // Reset match state if starting a new game series
+              if (requiresMatchSystem(gameNumber)) {
+                setCurrentMatch(1);
+                setPlayerWins(0);
+                setAiWins(0);
+                setIsMatchComplete(false);
+                setIsWaitingForNextGame(false);
+                setCountdownTimer(0);
+              }
+              // Directly start the game when clicked
+              setIsPlayingGame(true);
+              setGameInitialized(false); // Will be set to true when countdown starts
+              setGameProcessed(false);
+              popupScheduledRef.current = false;
+            }
+          }}
+          disabled={isLocked}
+          style={styles.gameLabel}
+        >
+          <Text style={[styles.gameNumberText, isLocked && styles.gameNumberTextLocked]}>
+            {gameNumber}
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   };
 
-  // Auto-scroll to current game
+  // Auto-scroll to current game when map opens or currentGame changes
   useEffect(() => {
-    if (scrollViewRef.current) {
-      const position = getGamePosition(currentGame);
-      const scrollToY = Math.max(0, position.top - SCREEN_HEIGHT / 2);
+    if (scrollViewRef.current && !isPlayingGame) {
+      const spacing = isMobile ? 60 : 80;
+      const totalHeight = TOTAL_GAMES * spacing;
       
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({
-          y: scrollToY,
-          animated: true,
-        });
+      // Calculate the Y position of the current game (from bottom to top)
+      const gameIndex = currentGame - 1;
+      const gameY = totalHeight - (gameIndex * spacing);
+      
+      // Scroll to position the current game in the center of the viewport
+      const scrollToY = Math.max(0, gameY - SCREEN_HEIGHT / 2);
+      
+      // Use multiple timeouts to ensure the ScrollView is fully rendered and laid out
+      const timeoutId1 = setTimeout(() => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({
+            y: scrollToY,
+            animated: false, // First scroll without animation for immediate positioning
+          });
+        }
       }, 100);
+      
+      const timeoutId2 = setTimeout(() => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({
+            y: scrollToY,
+            animated: true, // Then smooth scroll to final position
+          });
+        }
+      }, 400);
+      
+      return () => {
+        clearTimeout(timeoutId1);
+        clearTimeout(timeoutId2);
+      };
     }
-  }, [currentGame]);
+  }, [currentGame, isPlayingGame]);
 
   const totalHeight = TOTAL_GAMES * (isMobile ? 60 : 80);
+
+  // Handle starting a game
+  const handleStartGame = () => {
+    if (currentGame <= highestUnlockedGame) {
+      // Reset match state if starting a new game series
+      if (requiresMatchSystem(currentGame)) {
+        setCurrentMatch(1);
+        setPlayerWins(0);
+        setAiWins(0);
+        setIsMatchComplete(false);
+        setIsWaitingForNextGame(false);
+        setCountdownTimer(0);
+        setShowMatchWinnerAnnouncement(false);
+        lastAnnouncedMatchRef.current = 0;
+      }
+      setIsPlayingGame(true);
+    }
+  };
+
+  // Handle game completion - return to map
+  const handleGameComplete = (won: boolean = false) => {
+    setIsPlayingGame(false);
+    
+    // For match games, update match scores
+    if (requiresMatchSystem(currentGame)) {
+      if (won) {
+        setPlayerWins(prev => prev + 1);
+      } else {
+        setAiWins(prev => prev + 1);
+      }
+    }
+    
+    // Mark game as completed if not already
+    if (!gamesCompleted.includes(currentGame)) {
+      setGamesCompleted([...gamesCompleted, currentGame]);
+    }
+    
+    // For non-match games, unlock next game if needed
+    if (!requiresMatchSystem(currentGame)) {
+      if (currentGame === highestUnlockedGame && highestUnlockedGame < TOTAL_GAMES) {
+        setHighestUnlockedGame(highestUnlockedGame + 1);
+      }
+    }
+  };
+
+  // Handle game win (for match system) - matches bee-five-web exactly
+  const handleGameWin = (won: boolean) => {
+    // Don't process if already processed
+    if (gameProcessed && popupScheduledRef.current) {
+      return;
+    }
+    
+    setGameProcessed(true);
+    popupScheduledRef.current = true;
+    
+    if (!requiresMatchSystem(currentGame)) {
+      // Non-match game: proceed normally
+      if (won) {
+        // Unlock next game when current game is won
+        setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
+      }
+      setGamesCompleted(prev => {
+        if (!prev.includes(currentGame)) {
+          return [...prev, currentGame];
+        }
+        return prev;
+      });
+      return;
+    }
+    
+    // Match game: update scores (matches bee-five-web logic exactly)
+    if (won) {
+      setPlayerWins(prev => {
+        const newPlayerWins = prev + 1;
+        const requiredWins = getRequiredWins(currentGame);
+        const totalGames = getTotalGames(currentGame);
+        
+        // Check if match is complete after this win
+        if (newPlayerWins >= requiredWins || currentMatch >= totalGames) {
+          setIsMatchComplete(true);
+          // Unlock next game when match is won
+          setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
+          setGamesCompleted(prev => {
+            if (!prev.includes(currentGame)) {
+              return [...prev, currentGame];
+            }
+            return prev;
+          });
+          // Queue results popup to appear after the win popup closes (only when series is complete)
+          matchResultsTimerRef.current = setTimeout(() => {
+            setPendingResultsPopup(true);
+            matchResultsTimerRef.current = null;
+          }, 1000);
+        } else {
+          // Match not complete: show winner announcement for 2 seconds, then countdown for 3 seconds
+          const matchKey = `${currentGame}-${currentMatch}`;
+          if (lastAnnouncedMatchRef.current !== matchKey) {
+            setMatchWinnerMessage(`You won Match ${currentMatch}/${totalGames}! 🎉`);
+            setShowMatchWinnerAnnouncement(true);
+            lastAnnouncedMatchRef.current = matchKey;
+            // After 2 seconds, hide announcement and start countdown
+            setTimeout(() => {
+              setShowMatchWinnerAnnouncement(false);
+              setIsWaitingForNextGame(true);
+              setCountdownTimer(3);
+            }, 2000); // Show announcement for 2 seconds
+          }
+        }
+        return newPlayerWins;
+      });
+    } else {
+      setAiWins(prev => {
+        const newAiWins = prev + 1;
+        const requiredWins = getRequiredWins(currentGame);
+        const totalGames = getTotalGames(currentGame);
+        
+        // Check if match is complete after this win (AI won the match)
+        if (newAiWins >= requiredWins || currentMatch >= totalGames) {
+          setIsMatchComplete(true);
+          setGamesCompleted(prev => {
+            if (!prev.includes(currentGame)) {
+              return [...prev, currentGame];
+            }
+            return prev;
+          });
+          // Queue results popup to appear after the win popup closes (only when series is complete)
+          // This will show the loss popup with "Play Again" and "Menu" options
+          matchResultsTimerRef.current = setTimeout(() => {
+            setPendingResultsPopup(true);
+            matchResultsTimerRef.current = null;
+          }, 1000);
+        } else {
+          // Match not complete: show winner announcement for 2 seconds, then countdown for 3 seconds
+          const matchKey = `${currentGame}-${currentMatch}`;
+          if (lastAnnouncedMatchRef.current !== matchKey) {
+            setMatchWinnerMessage(`AI won Match ${currentMatch}/${totalGames}! 😔`);
+            setShowMatchWinnerAnnouncement(true);
+            lastAnnouncedMatchRef.current = matchKey;
+            // After 2 seconds, hide announcement and start countdown
+            setTimeout(() => {
+              setShowMatchWinnerAnnouncement(false);
+              setIsWaitingForNextGame(true);
+              setCountdownTimer(3);
+            }, 2000); // Show announcement for 2 seconds
+          }
+        }
+        return newAiWins;
+      });
+    }
+  };
+
+  // Handle proceeding to next match or next game (matches bee-five-web)
+  const handleNextGame = () => {
+    setIsPlayingGame(false);
+    if (winPopupTimerRef.current) {
+      clearTimeout(winPopupTimerRef.current);
+      winPopupTimerRef.current = null;
+    }
+    if (matchResultsTimerRef.current) {
+      clearTimeout(matchResultsTimerRef.current);
+      matchResultsTimerRef.current = null;
+    }
+    setPendingResultsPopup(false);
+    setShowResultsPopup(false);
+    popupScheduledRef.current = false;
+    
+    if (requiresMatchSystem(currentGame) && !isMatchComplete && !isWaitingForNextGame) {
+      const requiredWins = getRequiredWins(currentGame);
+      const totalGames = getTotalGames(currentGame);
+      
+      if (playerWins >= requiredWins || aiWins >= requiredWins || currentMatch >= totalGames) {
+        setIsMatchComplete(true);
+        setIsPlayingGame(false);
+        setGameInitialized(false);
+      } else {
+        setIsWaitingForNextGame(true);
+        setCountdownTimer(3);
+      }
+    } else if (requiresMatchSystem(currentGame) && isMatchComplete) {
+      const nextGame = currentGame + 1;
+      if (requiresMatchSystem(nextGame)) {
+        setCurrentGame(nextGame);
+        setCurrentMatch(1);
+        setPlayerWins(0);
+        setAiWins(0);
+        setIsMatchComplete(false);
+        setCountdownTimer(0);
+        setIsWaitingForNextGame(false);
+        setGameProcessed(false);
+        popupScheduledRef.current = false;
+        setGameInitialized(false);
+      } else {
+        setIsPlayingGame(false);
+        setGameInitialized(false);
+      }
+    } else {
+      setIsPlayingGame(false);
+      setGameInitialized(false);
+    }
+  };
+
+  // Handle results popup next (matches bee-five-web)
+  const handleResultsPopupNext = () => {
+    if (matchResultsTimerRef.current) {
+      clearTimeout(matchResultsTimerRef.current);
+      matchResultsTimerRef.current = null;
+    }
+    setPendingResultsPopup(false);
+    setShowResultsPopup(false);
+    
+    // Check if player won or lost
+    const requiredWins = getRequiredWins(currentGame);
+    const playerWon = playerWins >= requiredWins;
+    
+    if (playerWon) {
+      // Player won: continue to next game
+      const nextGame = currentGame + 1;
+      if (nextGame <= TOTAL_GAMES) {
+        setHighestUnlockedGame(prev => Math.max(prev, nextGame));
+        setCurrentGame(nextGame);
+        setCurrentMatch(1);
+        setPlayerWins(0);
+        setAiWins(0);
+        setIsMatchComplete(false);
+        setCountdownTimer(0);
+        setIsWaitingForNextGame(false);
+        setGameProcessed(false);
+        popupScheduledRef.current = false;
+        setGameInitialized(false);
+        // Game will restart automatically via key prop change
+      } else {
+        // Reached end of adventure
+        setIsPlayingGame(false);
+      }
+    } else {
+      // Player lost: restart the same match series
+      setCurrentMatch(1);
+      setPlayerWins(0);
+      setAiWins(0);
+      setIsMatchComplete(false);
+      setCountdownTimer(0);
+      setIsWaitingForNextGame(false);
+      setGameProcessed(false);
+      popupScheduledRef.current = false;
+      setGameInitialized(false);
+      // Game will restart automatically via key prop change
+    }
+  };
+
+  // Handle pending results popup (matches bee-five-web)
+  useEffect(() => {
+    if (pendingResultsPopup) {
+      // Don't set isPlayingGame to false here - we need to show the popup while still in game mode
+      // The popup will be shown in ClassicAIGame which is still rendered
+      setShowResultsPopup(true);
+      setPendingResultsPopup(false);
+    }
+  }, [pendingResultsPopup]);
+
+  // Handle countdown for next match (matches bee-five-web)
+  useEffect(() => {
+    if (isWaitingForNextGame && countdownTimer > 0) {
+      const timer = setTimeout(() => {
+        setCountdownTimer(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (isWaitingForNextGame && countdownTimer === 0) {
+      // Reset waiting state and countdown before incrementing match to prevent duplicate countdown
+      setIsWaitingForNextGame(false);
+      setCountdownTimer(0);
+      // Reset gameInitialized to ensure proper initialization of next match
+      setGameInitialized(false);
+      // Immediately increment match - no delay needed as countdown already finished
+      setCurrentMatch(prev => prev + 1);
+      setGameProcessed(false);
+      popupScheduledRef.current = false;
+      // Game will restart automatically via key prop change
+    }
+  }, [isWaitingForNextGame, countdownTimer]);
+
+  // If playing a game, render the game component
+  if (isPlayingGame) {
+    // Pass currentMatch to getGameRules so it can determine blind play for multiples of 50 match 2
+    const gameRules = getGameRules(currentGame, isMatchGame ? currentMatch : undefined);
+    const isMatchGame = requiresMatchSystem(currentGame);
+    
+    return (
+      <ClassicAIGame
+        key={`${currentGame}-${currentMatch}`} // Force remount when game number or match changes
+        onBackToMenu={onBackToMenu} // Go to main menu
+        onBackToMap={() => handleGameComplete(false)} // Go back to adventure map
+        initialDifficulty={gameRules.aiDifficulty}
+        initialTimer={gameRules.timeLimit}
+        backgroundColor={gameRules.startingPlayer === 1 ? 'yellow' : 'black'}
+        onNextGame={handleNextGame} // Handle next game/map navigation
+        onGameWin={handleGameWin} // Handle match win tracking
+        showCountdown={isMatchGame ? (currentMatch === 1 && !isWaitingForNextGame) : true} // Only show start countdown for first match or non-match games, and not during between-match countdown
+        gameNumber={currentGame} // Pass game number to enable obstacles
+        currentMatch={isMatchGame ? currentMatch : undefined} // Pass current match for match games
+        playerWins={isMatchGame ? playerWins : undefined}
+        aiWins={isMatchGame ? aiWins : undefined}
+        requiredWins={isMatchGame ? getRequiredWins(currentGame) : undefined}
+        totalGames={isMatchGame ? getTotalGames(currentGame) : undefined}
+        isMatchComplete={isMatchGame ? isMatchComplete : undefined}
+        isWaitingForNextGame={isMatchGame ? isWaitingForNextGame : undefined}
+        countdownTimer={isMatchGame ? countdownTimer : undefined}
+        showMatchWinnerAnnouncement={isMatchGame ? showMatchWinnerAnnouncement : undefined}
+        matchWinnerMessage={isMatchGame ? matchWinnerMessage : undefined}
+        onGameInitialized={() => setGameInitialized(true)} // Callback when game is initialized
+        gameInitialized={gameInitialized} // Pass initialization state
+        showResultsPopup={isMatchGame && showResultsPopup && isMatchComplete}
+        onResultsPopupNext={handleResultsPopupNext}
+        onCloseResultsPopup={() => setShowResultsPopup(false)}
+        onContinueToNextGame={() => {
+          // Continue button: go directly to next game (matches bee-five-web)
+          // Note: win popup is managed in ClassicAIGame, so we don't need to close it here
+          setPendingResultsPopup(false);
+          setShowResultsPopup(false);
+          popupScheduledRef.current = false;
+          
+          // Mark current game as completed and unlock next game
+          if (!gamesCompleted.includes(currentGame)) {
+            setGamesCompleted(prev => [...prev, currentGame]);
+          }
+          const nextGame = currentGame + 1;
+          if (nextGame <= TOTAL_GAMES) {
+            // Unlock next game
+            setHighestUnlockedGame(prev => Math.max(prev, nextGame));
+            setCurrentGame(nextGame);
+            setCurrentMatch(1);
+            setPlayerWins(0);
+            setAiWins(0);
+            setIsMatchComplete(false);
+            setCountdownTimer(0);
+            setIsWaitingForNextGame(false);
+            setGameProcessed(false);
+            setGameInitialized(false);
+            // Game will restart automatically via key prop change, which will trigger countdown
+          } else {
+            // If we've reached the end, go back to map
+            setIsPlayingGame(false);
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -367,12 +834,7 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
             styles.playButton,
             currentGame > highestUnlockedGame && styles.playButtonDisabled,
           ]}
-          onPress={() => {
-            if (currentGame <= highestUnlockedGame) {
-              // TODO: Start game
-              console.log(`Starting game ${currentGame}`);
-            }
-          }}
+          onPress={handleStartGame}
           disabled={currentGame > highestUnlockedGame}
         >
           <Text style={styles.playButtonText}>
@@ -500,8 +962,7 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
                 style={[styles.modalButton, styles.playModalButton]}
                 onPress={() => {
                   setShowRulesModal(false);
-                  // TODO: Start game with these rules
-                  console.log(`Starting game ${currentGame} with rules:`, selectedGameRules);
+                  handleStartGame();
                 }}
               >
                 <Text style={styles.modalButtonText}>▶️ Play Game</Text>
@@ -690,6 +1151,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: '#2E8B57',
+  },
+  gameNumberTextLocked: {
+    color: '#999999',
   },
   stageMarker: {
     position: 'absolute',

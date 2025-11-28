@@ -209,15 +209,23 @@ export const isMultipleOf10Match1From60 = (gameNumber: number, currentMatch: num
          currentMatch === 1;
 };
 
-// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 110 in match 1/3 (for blind play after 21 moves)
-export const isMultipleOf10Match1From110 = (gameNumber: number, currentMatch: number): boolean => {
-  return gameNumber >= 110 && 
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 60 in match 1/3 (for blind play after 17 moves)
+export const isMultipleOf10Match1From60 = (gameNumber: number, currentMatch: number): boolean => {
+  return gameNumber >= 60 && 
          gameNumber % 10 === 0 && 
          gameNumber % 50 !== 0 && 
          currentMatch === 1;
 };
 
-// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 810 in match 1/3 (for blind play after 17 moves)
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 210 in match 1/3 (for blind play after 15 moves)
+export const isMultipleOf10Match1From210 = (gameNumber: number, currentMatch: number): boolean => {
+  return gameNumber >= 210 && 
+         gameNumber % 10 === 0 && 
+         gameNumber % 50 !== 0 && 
+         currentMatch === 1;
+};
+
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 810 in match 1/3 (for blind play after 13 moves)
 export const isMultipleOf10Match1From810 = (gameNumber: number, currentMatch: number): boolean => {
   return gameNumber >= 810 && 
          gameNumber % 10 === 0 && 
@@ -225,7 +233,15 @@ export const isMultipleOf10Match1From810 = (gameNumber: number, currentMatch: nu
          currentMatch === 1;
 };
 
-// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 30 in match 2/3 (for piece swapping every 17 moves)
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 1210 in match 1/3 (for blind play after 9 moves)
+export const isMultipleOf10Match1From1210 = (gameNumber: number, currentMatch: number): boolean => {
+  return gameNumber >= 1210 && 
+         gameNumber % 10 === 0 && 
+         gameNumber % 50 !== 0 && 
+         currentMatch === 1;
+};
+
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 30 in match 2/3 (for piece swapping every 9 moves)
 export const isMultipleOf10Match2From30 = (gameNumber: number, currentMatch: number): boolean => {
   return gameNumber >= 30 && 
          gameNumber % 10 === 0 && 
@@ -233,9 +249,17 @@ export const isMultipleOf10Match2From30 = (gameNumber: number, currentMatch: num
          currentMatch === 2;
 };
 
-// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 1200 in match 2/3 (for piece swapping every 15 moves)
-export const isMultipleOf10Match2From1200 = (gameNumber: number, currentMatch: number): boolean => {
-  return gameNumber >= 1200 && 
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 330 in match 2/3 (for piece swapping every 7 moves)
+export const isMultipleOf10Match2From330 = (gameNumber: number, currentMatch: number): boolean => {
+  return gameNumber >= 330 && 
+         gameNumber % 10 === 0 && 
+         gameNumber % 50 !== 0 && 
+         currentMatch === 2;
+};
+
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 730 in match 2/3 (for piece swapping every 5 moves)
+export const isMultipleOf10Match2From730 = (gameNumber: number, currentMatch: number): boolean => {
+  return gameNumber >= 730 && 
          gameNumber % 10 === 0 && 
          gameNumber % 50 !== 0 && 
          currentMatch === 2;
@@ -793,42 +817,31 @@ export const swapOpponentPiecePairs = (board: (0 | 1 | 2 | 3)[][], pieceAges: nu
     }
   }
   
-  // Need at least 2 pieces from each player to swap
-  if (player1Pieces.length < 2 || player2Pieces.length < 2) {
+  // Need at least 1 piece from each player to swap
+  if (player1Pieces.length < 1 || player2Pieces.length < 1) {
     return { board: newBoard, pieceAges: newPieceAges };
   }
   
-  // Perform 2 swaps - each swap exchanges one AI piece with one human piece
-  for (let swap = 0; swap < 2; swap++) {
-    // Pick 1 random piece from player 1 (AI)
-    const player1Index = Math.floor(Math.random() * player1Pieces.length);
-    // Pick 1 random piece from player 2 (Human)
-    const player2Index = Math.floor(Math.random() * player2Pieces.length);
-    
-    const player1Piece = player1Pieces[player1Index];
-    const player2Piece = player2Pieces[player2Index];
-    
-    // Store the original values and ages
-    const player1Value = newBoard[player1Piece.row][player1Piece.col];
-    const player2Value = newBoard[player2Piece.row][player2Piece.col];
-    const player1Age = newPieceAges[player1Piece.row][player1Piece.col];
-    const player2Age = newPieceAges[player2Piece.row][player2Piece.col];
-    
-    // Swap the pieces: AI piece goes to human position, human piece goes to AI position
-    newBoard[player1Piece.row][player1Piece.col] = player2Value; // Human piece in AI position
-    newBoard[player2Piece.row][player2Piece.col] = player1Value; // AI piece in human position
-    newPieceAges[player1Piece.row][player1Piece.col] = player2Age; // Human age in AI position
-    newPieceAges[player2Piece.row][player2Piece.col] = player1Age; // AI age in human position
-    
-    // Remove the swapped pieces from the arrays to avoid double-swapping
-    player1Pieces.splice(player1Index, 1);
-    player2Pieces.splice(player2Index, 1);
-    
-    // Break if we don't have enough pieces for another swap
-    if (player1Pieces.length === 0 || player2Pieces.length === 0) {
-      break;
-    }
-  }
+  // Perform 1 swap - exchange one AI piece with one human piece
+  // Pick 1 random piece from player 1 (AI)
+  const player1Index = Math.floor(Math.random() * player1Pieces.length);
+  // Pick 1 random piece from player 2 (Human)
+  const player2Index = Math.floor(Math.random() * player2Pieces.length);
+  
+  const player1Piece = player1Pieces[player1Index];
+  const player2Piece = player2Pieces[player2Index];
+  
+  // Store the original values and ages
+  const player1Value = newBoard[player1Piece.row][player1Piece.col];
+  const player2Value = newBoard[player2Piece.row][player2Piece.col];
+  const player1Age = newPieceAges[player1Piece.row][player1Piece.col];
+  const player2Age = newPieceAges[player2Piece.row][player2Piece.col];
+  
+  // Swap the pieces: AI piece goes to human position, human piece goes to AI position
+  newBoard[player1Piece.row][player1Piece.col] = player2Value; // Human piece in AI position
+  newBoard[player2Piece.row][player2Piece.col] = player1Value; // AI piece in human position
+  newPieceAges[player1Piece.row][player1Piece.col] = player2Age; // Human age in AI position
+  newPieceAges[player2Piece.row][player2Piece.col] = player1Age; // AI age in human position
   
   return { board: newBoard, pieceAges: newPieceAges };
 };

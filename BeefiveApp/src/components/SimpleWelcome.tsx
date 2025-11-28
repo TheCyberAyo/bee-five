@@ -16,6 +16,9 @@ import SimpleGame from './SimpleGame';
 import BattleGame from './BattleGame';
 import ClassicAIGame from './ClassicAIGame';
 import AdventureGame from './AdventureGame';
+import MultiplayerLobby from './MultiplayerLobby';
+import MultiplayerGame from './MultiplayerGame';
+import { type RoomInfo } from '../services/multiplayerService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isMobile = SCREEN_WIDTH <= 768;
@@ -51,6 +54,8 @@ export default function SimpleWelcome() {
   const [competitor1Name, setCompetitor1Name] = useState('A');
   const [competitor2Name, setCompetitor2Name] = useState('B');
   const [timerOption, setTimerOption] = useState<3 | 15 | 30 | 0>(15);
+  const [multiplayerRoomInfo, setMultiplayerRoomInfo] = useState<RoomInfo | null>(null);
+  const [multiplayerPlayerNumber, setMultiplayerPlayerNumber] = useState<1 | 2>(1);
   
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -479,17 +484,26 @@ export default function SimpleWelcome() {
 
   // Handle online multiplayer lobby
   if (gameMode === 'online-lobby') {
-    // TODO: Implement MultiplayerLobby component
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Online Multiplayer</Text>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => setGameMode('menu')}
-        >
-          <Text style={styles.buttonText}>Back to Menu</Text>
-        </TouchableOpacity>
-      </View>
+      <MultiplayerLobby
+        onGameStart={(roomInfo: RoomInfo, playerNumber: 1 | 2) => {
+          setMultiplayerRoomInfo(roomInfo);
+          setMultiplayerPlayerNumber(playerNumber);
+          setGameMode('online-game');
+        }}
+        onBackToMenu={() => setGameMode('menu')}
+      />
+    );
+  }
+
+  // Handle online multiplayer game
+  if (gameMode === 'online-game' && multiplayerRoomInfo) {
+    return (
+      <MultiplayerGame
+        roomInfo={multiplayerRoomInfo}
+        playerNumber={multiplayerPlayerNumber}
+        onBackToLobby={() => setGameMode('online-lobby')}
+      />
     );
   }
 

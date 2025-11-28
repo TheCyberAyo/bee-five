@@ -48,9 +48,13 @@ export const hasMudZones = (gameNumber: number): boolean => {
 };
 
 // Check if game has blind play
-export const hasBlindPlay = (gameNumber: number): boolean => {
+export const hasBlindPlay = (gameNumber: number, currentMatch?: number): boolean => {
   // Games ending with 2 in pattern: 42, 92, 142, 192, etc.
   if (gameNumber >= 42 && (gameNumber - 42) % 50 === 0) {
+    return true;
+  }
+  // Multiples of 50 match 2 have blind play for entire game
+  if (gameNumber % 50 === 0 && currentMatch === 2) {
     return true;
   }
   return false;
@@ -78,6 +82,10 @@ export const hasBlockedCells = (gameNumber: number): boolean => {
   // Games ending in 9 (10 blocked cells from 50+)
   if (lastDigit === 9 && gameNumber >= 50) return true;
   
+  // Multiples of 10 (excluding 50) from game 60+ have 5 blocked cells in match 1
+  // Note: Since match system isn't fully implemented, we apply this to all multiples of 10 from 60
+  if (gameNumber >= 60 && gameNumber % 10 === 0 && gameNumber % 50 !== 0) return true;
+  
   // Multiples of 5 (4 blocked cells)
   if (gameNumber % 5 === 0 && gameNumber % 10 !== 0) return true;
   
@@ -87,6 +95,10 @@ export const hasBlockedCells = (gameNumber: number): boolean => {
 // Get blocked cell count
 export const getBlockedCellCount = (gameNumber: number): number => {
   const lastDigit = gameNumber % 10;
+  
+  // Multiples of 10 (excluding 50) from game 60+ have 5 blocked cells in match 1
+  // Note: Since match system isn't fully implemented, we apply this to all multiples of 10 from 60
+  if (gameNumber >= 60 && gameNumber % 10 === 0 && gameNumber % 50 !== 0) return 5;
   
   if (lastDigit === 4 && gameNumber >= 400) return 16;
   if (lastDigit === 5 && gameNumber >= 100) return 5;
@@ -132,8 +144,8 @@ export const getMatchType = (gameNumber: number): 'best-of-3' | 'best-of-5' | 's
 
 // Calculate AI difficulty based on game number
 export const getAIDifficulty = (gameNumber: number): 'easy' | 'medium' | 'hard' => {
-  // Games 601+ use Hard AI, games 1-600 use Medium AI
-  if (gameNumber >= 601) return 'hard';
+  // Games 600+ use Hard AI, games 1-599 use Medium AI
+  if (gameNumber >= 600) return 'hard';
   return 'medium';
 };
 
@@ -190,10 +202,10 @@ export const getDifficultyLevel = (score: number): DifficultyLevel => {
 };
 
 // Get comprehensive game rules
-export const getGameRules = (gameNumber: number): GameRules => {
+export const getGameRules = (gameNumber: number, currentMatch?: number): GameRules => {
   const timeLimit = getTimeLimitForLevel(gameNumber);
   const mudZones = hasMudZones(gameNumber);
-  const blindPlay = hasBlindPlay(gameNumber);
+  const blindPlay = hasBlindPlay(gameNumber, currentMatch);
   const blockedCells = hasBlockedCells(gameNumber);
   const blockedCount = getBlockedCellCount(gameNumber);
   const startingPlayer = getAdventureStartingPlayer(gameNumber);

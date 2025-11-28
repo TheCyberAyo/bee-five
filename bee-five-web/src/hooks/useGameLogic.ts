@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { getWinningPieces, isBoardFull, createEmptyBoard, createBoardWithBlocks, removeTwoBlockedCells, gameEndsWith3, gameEndsWith7After250, gameEndsWith8After600, isMultipleOf7Between500And1000, isMultipleOf4From1000, getProgressiveBlockRules, addProgressiveBlocks, shiftAllBlocks, moveRandomBlockToStrategicPosition, removeOldestPiecesOfPlayer, ageAllPieces, initializePieceAges, generateMudZones, isInMudZone, processMudZoneEffects, gameEndsWith1InSpecifiedRanges, addStrategicBlock, gameEndsWith2SpecificPattern, isMultipleOf50Match2, isMultipleOf50Match3, isMultipleOf50Match4, isMultipleOf17, isMultipleOf10Match1From110, isMultipleOf10Match1From810, isMultipleOf10Match2From30, isMultipleOf10Match2From1200, enforcePieceCapacity, rearrangeBoard, swapOpponentPiecePairs, swapThreeOpponentPiecePairs } from '../utils/gameLogic';
+import { getWinningPieces, isBoardFull, createEmptyBoard, createBoardWithBlocks, removeTwoBlockedCells, gameEndsWith3, gameEndsWith7After250, gameEndsWith8After600, isMultipleOf7Between500And1000, isMultipleOf4From1000, getProgressiveBlockRules, addProgressiveBlocks, shiftAllBlocks, moveRandomBlockToStrategicPosition, removeOldestPiecesOfPlayer, ageAllPieces, initializePieceAges, generateMudZones, isInMudZone, processMudZoneEffects, gameEndsWith1InSpecifiedRanges, addStrategicBlock, gameEndsWith2SpecificPattern, isMultipleOf50Match2, isMultipleOf50Match3, isMultipleOf50Match4, isMultipleOf17, isMultipleOf10Match1From60, isMultipleOf10Match1From210, isMultipleOf10Match1From810, isMultipleOf10Match1From1210, isMultipleOf10Match2From30, isMultipleOf10Match2From330, isMultipleOf10Match2From730, enforcePieceCapacity, rearrangeBoard, swapOpponentPiecePairs } from '../utils/gameLogic';
 import { soundManager } from '../utils/sounds';
 
 export interface GameState {
@@ -232,15 +232,27 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     } else {
       // For all other games (temporary blind play only):
       
-      // Handle temporary blind play for multiples of 10 from game 110 in match 1/3
-      if (isMultipleOf10Match1From110(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 21 === 0) {
-        // After multiples of 21 moves, the match becomes blind play for one move
+      // Handle temporary blind play for multiples of 10 from game 60 in match 1/3
+      if (isMultipleOf10Match1From60(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 17 === 0) {
+        // After multiples of 17 moves, the match becomes blind play for one move
+        shouldBeBlindPlay = true;
+      }
+
+      // Handle temporary blind play for multiples of 10 from game 210 in match 1/3
+      if (isMultipleOf10Match1From210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 15 === 0) {
+        // After multiples of 15 moves, the match becomes blind play for one move
         shouldBeBlindPlay = true;
       }
 
       // Handle temporary blind play for multiples of 10 from game 810 in match 1/3
-      if (isMultipleOf10Match1From810(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 17 === 0) {
-        // After multiples of 17 moves, the match becomes blind play for one move
+      if (isMultipleOf10Match1From810(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
+        // After multiples of 13 moves, the match becomes blind play for one move
+        shouldBeBlindPlay = true;
+      }
+
+      // Handle temporary blind play for multiples of 10 from game 1210 in match 1/3
+      if (isMultipleOf10Match1From1210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
+        // After multiples of 9 moves, the match becomes blind play for one move
         shouldBeBlindPlay = true;
       }
 
@@ -254,34 +266,42 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       }
     }
 
-    // Handle board rearrangement for Game 50, Match 3/5 every 21 moves
-    if (isMultipleOf50Match3(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 21 === 0) {
-      // Rearrange board every 21 moves for Game 50, Match 3/5
+    // Handle board rearrangement for Game 50, Match 3/5 every 5 moves
+    if (isMultipleOf50Match3(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
+      // Rearrange board every 5 moves for Game 50, Match 3/5
       let result = rearrangeBoard(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
       updatedPieceAges = result.pieceAges;
     }
 
-    // Handle piece swapping for Game 50, Match 4/5 every 15 moves
-    if (isMultipleOf50Match4(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 15 === 0) {
-      // Swap 2 random pairs of opponent pieces every 15 moves for Game 50, Match 4/5
+    // Handle piece swapping for Game 50, Match 4/5 every 5 moves
+    if (isMultipleOf50Match4(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
+      // Swap 1 random pair of opponent pieces every 5 moves for Game 50, Match 4/5
       let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
       updatedPieceAges = result.pieceAges;
     }
 
-    // Handle piece swapping for multiples of 10 Match 2/3 from game 30 every 17 moves
-    if (isMultipleOf10Match2From30(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 17 === 0) {
-      // Swap 2 random pairs of AI and human pieces every 17 moves for multiples of 10 Match 2/3 from game 30
+    // Handle piece swapping for multiples of 10 Match 2/3 from game 30 every 9 moves
+    if (isMultipleOf10Match2From30(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
+      // Swap 1 random pair of AI and human pieces every 9 moves for multiples of 10 Match 2/3 from game 30
       let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
       updatedPieceAges = result.pieceAges;
     }
 
-    // Handle piece swapping for multiples of 10 Match 2/3 from game 1200 every 15 moves
-    if (isMultipleOf10Match2From1200(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 15 === 0) {
-      // Swap 3 random pairs of AI and human pieces every 15 moves for multiples of 10 Match 2/3 from game 1200
-      let result = swapThreeOpponentPiecePairs(updatedBoard, updatedPieceAges);
+    // Handle piece swapping for multiples of 10 Match 2/3 from game 330 every 7 moves
+    if (isMultipleOf10Match2From330(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 7 === 0) {
+      // Swap 1 random pair of AI and human pieces every 7 moves for multiples of 10 Match 2/3 from game 330
+      let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
+      updatedBoard = result.board;
+      updatedPieceAges = result.pieceAges;
+    }
+
+    // Handle piece swapping for multiples of 10 Match 2/3 from game 730 every 5 moves
+    if (isMultipleOf10Match2From730(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
+      // Swap 1 random pair of AI and human pieces every 5 moves for multiples of 10 Match 2/3 from game 730
+      let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
       updatedPieceAges = result.pieceAges;
     }
