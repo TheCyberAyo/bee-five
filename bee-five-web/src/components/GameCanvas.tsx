@@ -345,11 +345,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       style={{
-        border: `2px solid ${effectiveBorderColor}`,
-        borderRadius: '8px',
+        border: '3px solid #000',
+        borderRadius: '10px',
         cursor: gameState.isGameActive ? 'pointer' : 'default',
-        maxWidth: isMobile ? '90vw' : 'min(80vw, 80vh, 700px)',
-        maxHeight: isMobile ? '90vw' : 'min(80vw, 80vh, 700px)',
+        maxWidth: isMobile ? '90vw' : 'min(70vw, calc(100vh - 250px), 600px)',
+        maxHeight: isMobile ? '90vw' : 'min(70vw, calc(100vh - 250px), 600px)',
         width: 'auto',
         height: 'auto',
         objectFit: 'contain',

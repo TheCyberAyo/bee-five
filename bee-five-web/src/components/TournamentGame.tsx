@@ -296,26 +296,30 @@ export default function BattleGame({
 
   return (
     <div style={{ 
-      background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)',
+      background: '#808080',
       width: '100vw',
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'auto'
     }}>
-      {/* Mobile-optimized header */}
+      {/* Header - Match BeefiveApp: black with yellow border */}
       <div style={{
-        background: 'rgba(0, 0, 0, 0.9)',
-        backdropFilter: 'blur(10px)',
-        padding: isMobile ? '0.75rem 1rem' : '1rem 1.5rem',
+        background: '#000000',
+        paddingTop: isMobile ? '0.75rem' : '0',
+        paddingBottom: isMobile ? '0.75rem' : '0',
+        paddingLeft: isMobile ? '1rem' : '1.5rem',
+        paddingRight: isMobile ? '1rem' : '1.5rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '0.5rem',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        borderBottomWidth: '2px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: '#FFC30B',
         zIndex: 10
       }}>
         {/* Title and back button */}
@@ -370,16 +374,34 @@ export default function BattleGame({
         </div>
       </div>
 
+      {/* Current Player Indicator - Match BeefiveApp */}
+      <div style={{
+        padding: '15px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#000'
+        }}>
+          <span style={{ color: '#4CAF50', fontSize: '28px' }}>▶</span>{' '}
+          {gameState.currentPlayer === 1 ? player1Name : player2Name}
+        </div>
+      </div>
+
       {/* Main game area - fills remaining space */}
       <div style={{
         flex: 1,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '1rem' : '2rem',
+        padding: isMobile ? '1rem' : '1rem',
         position: 'relative',
         overflow: 'auto',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        minHeight: 0
       }}>
 
       {/* Main Content Container - Scoreboard + Game + Timer */}
@@ -852,6 +874,45 @@ export default function BattleGame({
           </div>
         );
       })()}
+
+      {/* Footer - Match BeefiveApp: black with yellow border, yellow buttons */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        paddingTop: isMobile ? '15px' : '0',
+        paddingBottom: isMobile ? '45px' : '0',
+        paddingHorizontal: '15px',
+        backgroundColor: '#000000',
+        borderTopWidth: '2px',
+        borderTopStyle: 'solid',
+        borderTopColor: '#FFC30B'
+      }}>
+        <button 
+          onClick={() => {
+            onBackToMenu();
+            soundManager.playClickSound();
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: '#FFC30B',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            border: '2px solid #000',
+            margin: '0 10px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            color: '#000'
+          }}
+        >
+          🏠 Home
+        </button>
+      </div>
     </div>
   );
 }

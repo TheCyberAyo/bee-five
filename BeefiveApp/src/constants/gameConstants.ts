@@ -5,9 +5,10 @@ export const CELL_SIZE = 60; // For desktop/tablet
 export const BORDER_WIDTH = 2;
 export const CANVAS_SIZE = GRID_SIZE * CELL_SIZE + (GRID_SIZE + 1) * BORDER_WIDTH;
 
-// Multiplayer canvas uses smaller cells for better mobile experience
-export const MULTIPLAYER_CELL_SIZE = 40;
-export const MULTIPLAYER_CANVAS_SIZE = GRID_SIZE * MULTIPLAYER_CELL_SIZE + (GRID_SIZE + 1) * BORDER_WIDTH;
+
+
+
+
 
 
 

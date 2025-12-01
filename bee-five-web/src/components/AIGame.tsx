@@ -581,9 +581,8 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
     return false;
   };
 
-  const backgroundStyle = backgroundColor === 'yellow' 
-    ? 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)'
-    : 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)';
+  // Match BeefiveApp Adventure: gray background
+  const backgroundStyle = '#808080';
 
   return (
     <div style={{ 
@@ -594,198 +593,102 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
       flexDirection: 'column',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'auto'
     }}>
-      {/* Mobile-optimized header */}
+      {/* Header - Match BeefiveApp: black with yellow border */}
       <div style={{
-        background: 'rgba(0, 0, 0, 0.6)',
-        backdropFilter: 'blur(10px)',
-        padding: isMobile ? '0.75rem 1rem' : '1rem 1.5rem',
+        background: '#000000',
+        paddingTop: isMobile ? '0.75rem' : '0',
+        paddingBottom: isMobile ? '0.75rem' : '0',
+        paddingHorizontal: isMobile ? '0.75rem' : '1rem',
         display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderBottomWidth: '2px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: '#FFC30B',
+        position: 'relative'
+      }}>
+        {/* Logo container - centered */}
+        <div style={{
+          width: '150px',
+          height: '40px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <img 
+            src="/BEE-FIVE.png" 
+            alt="Bee-Five Logo"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Game Info Container - Match BeefiveApp: white background with yellow border */}
+      <div style={{
+        padding: '8px',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderBottomWidth: '2px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: '#FFC30B',
+        display: 'flex',
+        flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        paddingHorizontal: '15px',
+        paddingVertical: '10px',
         flexWrap: 'wrap',
-        gap: '0.5rem',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-        zIndex: 10
+        gap: '0.5rem'
       }}>
-        {/* Left side: Menu button and title */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '1rem' 
+        {/* Player Indicator - Match BeefiveApp */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minWidth: '200px'
         }}>
-          <button 
-            onClick={() => {
-              onBackToMenu();
-              if (soundEnabled) soundManager.playClickSound();
-            }}
-            style={{
-              padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-              fontSize: isMobile ? '1.2em' : '1em',
-              backgroundColor: '#FFC30B',
-              color: 'black',
-              border: '2px solid black',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem'
-            }}
-          >
-            {isMobile ? '🏠' : '🏠 Menu'}
-          </button>
-          
-          <h1 style={{ 
-            color: '#FFC30B', 
-            margin: 0,
-            fontSize: isMobile ? 'clamp(1.2rem, 4vw, 1.5rem)' : 'clamp(1.5rem, 3vw, 2rem)',
-            textShadow: '2px 2px 0px black',
-            fontWeight: 'bold'
+          <div style={{
+            fontSize: '18px',
+            fontWeight: 'bold',
+            color: '#000',
+            textAlign: 'center'
           }}>
-            🤖 AI
-          </h1>
+            <span style={{ color: '#4CAF50', fontSize: '28px' }}>▶</span>{' '}
+            {gameState.currentPlayer === 1 ? 'Your Turn' : "AI's Turn"}
+          </div>
         </div>
 
-        {/* Controls - stack on mobile */}
+        {/* Timer display - only show if timer is enabled */}
+        {timeLimit > 0 && (
+          <div style={{
+            padding: '0.5rem 0.75rem',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            color: gameState.timeLeft <= 5 ? '#F44336' : '#4CAF50',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            minWidth: '80px',
+            justifyContent: 'center'
+          }}>
+            ⏱️ {gameState.timeLeft}s
+          </div>
+        )}
+
+        {/* Controls - removed play button, difficulty, volume, and mobile settings for non-multiplayer games */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
           gap: isMobile ? '0.5rem' : '1rem',
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
+          justifyContent: 'center'
         }}>
-          {/* Play button - only show when game is over */}
-          {(!gameState.isGameActive || gameState.winner > 0) && (
-            <button
-              onClick={() => {
-                resetGame();
-                if (soundEnabled) soundManager.playClickSound();
-              }}
-              style={{
-                padding: '0.5rem 0.75rem',
-                fontSize: '1em',
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                border: '2px solid black',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.25rem',
-                minWidth: '60px',
-                height: '40px'
-              }}
-            >
-              ▶️
-            </button>
-          )}
-
-          {/* Difficulty selector - hidden on mobile */}
-          {!isMobile && (
-            <select
-              value={aiDifficulty}
-              onChange={(e) => handleDifficultyChange(e.target.value)}
-              style={{
-                padding: '0.5rem 0.75rem',
-                fontSize: '0.9em',
-                fontWeight: 'bold',
-                backgroundColor: '#FFC30B',
-                color: 'black',
-                border: '2px solid black',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                minWidth: '120px',
-                height: '40px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <option value="easy" style={{ backgroundColor: 'white', color: 'black' }}>
-                🟢 Easy
-              </option>
-              <option value="medium" style={{ backgroundColor: 'white', color: 'black' }}>
-                🟡 Medium
-              </option>
-              <option value="hard" style={{ backgroundColor: 'white', color: 'black' }}>
-                🔴 Hard
-              </option>
-            </select>
-          )}
-
-          {/* Sound control - hidden on mobile */}
-          {!isMobile && (
-            <button
-              onClick={() => {
-                const newSoundEnabled = !soundEnabled;
-                setSoundEnabled(newSoundEnabled);
-                soundManager.setMuted(!newSoundEnabled);
-                if (newSoundEnabled) soundManager.playClickSound();
-              }}
-              style={{
-                padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-                fontSize: '1em',
-                backgroundColor: soundEnabled ? '#4CAF50' : '#f44336',
-                color: 'white',
-                border: '2px solid black',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
-            >
-              {soundEnabled ? '🔊' : '🔇'}
-            </button>
-          )}
-
-          {/* Mobile Settings Icon */}
-          {isMobile && (
-            <button
-              onClick={() => {
-                setShowMobileSettings(!showMobileSettings);
-                if (soundEnabled) soundManager.playClickSound();
-              }}
-              style={{
-                padding: '0.5rem',
-                fontSize: '1em',
-                backgroundColor: '#FFC30B',
-                color: 'black',
-                border: '2px solid black',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: '40px',
-                height: '40px'
-              }}
-            >
-              ⚙️
-            </button>
-          )}
-          
-          {/* Timer display - only show if timer is enabled */}
-          {timeLimit > 0 && (
-            <div style={{
-              padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-              fontSize: isMobile ? '1em' : '0.9em',
-              backgroundColor: '#FFC30B',
-              color: 'black',
-              border: '2px solid black',
-              borderRadius: '8px',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              minWidth: '80px',
-              justifyContent: 'center'
-            }}>
-              ⏱️ {gameState.timeLeft}s
-            </div>
-          )}
         </div>
       </div>
 
@@ -793,42 +696,15 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
       <div style={{
         flex: 1,
         display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '1rem' : '2rem',
+        padding: isMobile ? '1rem' : '1rem',
         position: 'relative',
-        gap: isMobile ? '1.25rem' : '2.5rem'
+        minHeight: 0,
+        overflow: 'auto'
       }}>
-        {/* Turn indicator positioned beside the game board */}
-        <section
-          aria-live="polite"
-          role="status"
-          style={{
-            order: isMobile ? 2 : 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            border: '3px solid #FFC30B',
-            borderRadius: '16px',
-            padding: isMobile ? '0.8rem 1rem' : '1.1rem 1.6rem',
-            minWidth: isMobile ? '230px' : '260px',
-            maxWidth: isMobile ? '80vw' : '280px',
-            boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontSize: isMobile ? '1.15rem' : '1.35rem',
-            fontWeight: 800,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            color: '#FFC30B'
-          }}
-        >
-          {turnAnnouncement}
-        </section>
-
         {/* Game board with responsive sizing */}
         <div style={{
-          order: 1,
           position: 'relative',
           display: 'flex',
           justifyContent: 'center',
@@ -844,6 +720,69 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
               }}
             />
         </div>
+      </div>
+
+      {/* Footer - Match BeefiveApp: black with yellow border, yellow buttons */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        paddingTop: isMobile ? '15px' : '0',
+        paddingBottom: isMobile ? '45px' : '0',
+        paddingHorizontal: '15px',
+        backgroundColor: '#000000',
+        borderTopWidth: '2px',
+        borderTopStyle: 'solid',
+        borderTopColor: '#FFC30B'
+      }}>
+        <button 
+          onClick={() => {
+            onBackToMenu();
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: '#FFC30B',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            border: '2px solid #000',
+            margin: '0 10px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            color: '#000'
+          }}
+        >
+          🏠 Home
+        </button>
+        
+        <button 
+          onClick={() => {
+            resetGame();
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: '#FFC30B',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            border: '2px solid #000',
+            margin: '0 10px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            color: '#000'
+          }}
+        >
+          🔄 Restart
+        </button>
       </div>
 
       {/* Mobile Settings Dropdown */}

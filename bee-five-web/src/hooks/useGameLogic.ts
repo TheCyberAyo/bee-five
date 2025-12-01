@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { getWinningPieces, isBoardFull, createEmptyBoard, createBoardWithBlocks, removeTwoBlockedCells, gameEndsWith3, gameEndsWith7After250, gameEndsWith8After600, isMultipleOf7Between500And1000, isMultipleOf4From1000, getProgressiveBlockRules, addProgressiveBlocks, shiftAllBlocks, moveRandomBlockToStrategicPosition, removeOldestPiecesOfPlayer, ageAllPieces, initializePieceAges, generateMudZones, isInMudZone, processMudZoneEffects, gameEndsWith1InSpecifiedRanges, addStrategicBlock, gameEndsWith2SpecificPattern, isMultipleOf50Match2, isMultipleOf50Match3, isMultipleOf50Match4, isMultipleOf17, isMultipleOf10Match1From60, isMultipleOf10Match1From210, isMultipleOf10Match1From810, isMultipleOf10Match1From1210, isMultipleOf10Match2From30, isMultipleOf10Match2From330, isMultipleOf10Match2From730, enforcePieceCapacity, rearrangeBoard, swapOpponentPiecePairs } from '../utils/gameLogic';
+import { getWinningPieces, isBoardFull, createEmptyBoard, createBoardWithBlocks, removeTwoBlockedCells, gameEndsWith3, gameEndsWith7After250, gameEndsWith8After600, isMultipleOf7Between500And1000, isMultipleOf4From1000, getProgressiveBlockRules, addProgressiveBlocks, shiftAllBlocks, moveRandomBlockToStrategicPosition, removeOldestPiecesOfPlayer, ageAllPieces, initializePieceAges, generateMudZones, isInMudZone, processMudZoneEffects, gameEndsWith1InSpecifiedRanges, addStrategicBlock, gameEndsWith2SpecificPattern, isMultipleOf50Match2, isMultipleOf50Match3, isMultipleOf50Match4, isMultipleOf17, isMultipleOf10Match1From60, isMultipleOf10Match1From210, isMultipleOf10Match1From810, isMultipleOf10Match1From1210, isMultipleOf10Match2From30, isMultipleOf10Match2From330, isMultipleOf10Match2From730, enforcePieceCapacity, rearrangeBoard, swapOpponentPiecePairs, swapAllPieces } from '../utils/gameLogic';
 import { soundManager } from '../utils/sounds';
 
 export interface GameState {
@@ -183,7 +183,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
           updatedBoard = addStrategicBlock(finalBoard);
         }
       } else if (gameNumber && gameEndsWith1InSpecifiedRanges(gameNumber)) {
-        // Games ending with 1 in ranges 11-191 and 1001-1591: Every 8 human moves, add 1 strategic block
+        // Games ending with 1 in ranges 500-700 and 1001-1591: Every 8 human moves, add 1 strategic block
         if (newHumanMoveCount % 8 === 0) {
           updatedBoard = addStrategicBlock(finalBoard);
         }
@@ -304,6 +304,21 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
       updatedPieceAges = result.pieceAges;
+    }
+
+    // Swap all pieces for multiples of 10 match 1 from game 60 every 11 moves
+    if (isMultipleOf10Match1From60(gameNumber, currentMatch || 1) && newTotalMoveCount > 0 && newTotalMoveCount % 11 === 0) {
+      const swapAllResult = swapAllPieces(updatedBoard, updatedPieceAges);
+      updatedBoard = swapAllResult.board;
+      updatedPieceAges = swapAllResult.pieceAges;
+    }
+    
+    // Swap all pieces for games ending with 1 (21, 41, 61, 81, 101, 121, etc.) every 13 moves
+    // Exclude games in strategic blocking ranges (500-700 and 1001-1591)
+    if (gameNumber && gameNumber % 10 === 1 && !gameEndsWith1InSpecifiedRanges(gameNumber) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
+      const swapAllResult = swapAllPieces(updatedBoard, updatedPieceAges);
+      updatedBoard = swapAllResult.board;
+      updatedPieceAges = swapAllResult.pieceAges;
     }
 
     setGameState(prevState => ({

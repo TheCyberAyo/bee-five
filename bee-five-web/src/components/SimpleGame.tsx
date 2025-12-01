@@ -62,9 +62,8 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
   }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer]);
 
 
-  const backgroundStyle = backgroundColor === 'yellow' 
-    ? 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)'
-    : 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)';
+  // Match BeefiveApp: gray background
+  const backgroundStyle = '#808080';
 
   return (
     <div style={{ 
@@ -75,104 +74,56 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
       flexDirection: 'column',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'auto'
     }}>
-      {/* Mobile-optimized header */}
+      {/* Header - Match BeefiveApp: black with yellow border */}
       <div style={{
-        background: 'rgba(0, 0, 0, 0.9)',
-        backdropFilter: 'blur(10px)',
-        padding: isMobile ? '0.75rem 1rem' : '1rem 1.5rem',
+        background: '#000000',
+        paddingTop: isMobile ? '0.75rem' : '0',
+        paddingBottom: isMobile ? '0.75rem' : '0',
+        paddingHorizontal: isMobile ? '0.75rem' : '1rem',
         display: 'flex',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '0.5rem',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-        zIndex: 10
+        borderBottomWidth: '2px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: '#FFC30B',
+        position: 'relative'
       }}>
-        {/* Title and back button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button 
-            onClick={() => {
-              onBackToMenu();
-              if (soundEnabled) soundManager.playClickSound();
-            }}
-            style={{
-              padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-              fontSize: isMobile ? '1.2em' : '1em',
-              backgroundColor: '#FFC30B',
-              color: 'black',
-              border: '2px solid black',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem'
-            }}
-          >
-            {isMobile ? '🏠' : '🏠 Menu'}
-          </button>
-          
-          <h1 style={{ 
-            color: '#FFC30B', 
-            margin: 0,
-            fontSize: isMobile ? 'clamp(1.2rem, 4vw, 1.5rem)' : 'clamp(1.5rem, 3vw, 2rem)',
-            textShadow: '2px 2px 0px black',
-            fontWeight: 'bold'
-          }}>
-            🐝 Bee-Five
-          </h1>
-        </div>
-
-        {/* Controls - stack on mobile */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: isMobile ? '0.5rem' : '1rem',
-          flexWrap: 'wrap'
+        {/* Logo container - centered */}
+        <div style={{
+          width: '150px',
+          height: '40px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
         }}>
-          {/* Sound control */}
-          <button
-            onClick={() => {
-              const newSoundEnabled = !soundEnabled;
-              setSoundEnabled(newSoundEnabled);
-              soundManager.setMuted(!newSoundEnabled);
-              if (newSoundEnabled) soundManager.playClickSound();
-            }}
+          <img 
+            src="/BEE-FIVE.png" 
+            alt="Bee-Five Logo"
             style={{
-              padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-              fontSize: '1em',
-              backgroundColor: soundEnabled ? '#4CAF50' : '#f44336',
-              color: 'white',
-              border: '2px solid black',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain'
             }}
-          >
-            {soundEnabled ? '🔊' : '🔇'}
-          </button>
-          
-          {/* New Game button */}
-          <button 
-            onClick={() => {
-              resetGame();
-              if (soundEnabled) soundManager.playClickSound();
-            }}
-            style={{
-              padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-              fontSize: isMobile ? '1em' : '0.9em',
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              border: '2px solid black',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            {isMobile ? '🔄' : '🔄 New'}
-          </button>
+          />
+        </div>
+      </div>
+
+      {/* Current Player Indicator - Match BeefiveApp */}
+      <div style={{
+        padding: '15px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#000'
+        }}>
+          <span style={{ color: '#4CAF50', fontSize: '28px' }}>▶</span>{' '}
+          {gameState.currentPlayer === 1 ? 'Black' : 'Yellow'}
         </div>
       </div>
 
@@ -182,8 +133,10 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '1rem' : '2rem',
-        position: 'relative'
+        padding: isMobile ? '1rem' : '1rem',
+        position: 'relative',
+        minHeight: 0,
+        overflow: 'auto'
       }}>
         {/* Game board with responsive sizing */}
         <div style={{
@@ -197,6 +150,69 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
               onCellClick={handleCellClick}
             />
         </div>
+      </div>
+
+      {/* Footer - Match BeefiveApp: black with yellow border, yellow buttons */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        paddingTop: isMobile ? '15px' : '0',
+        paddingBottom: isMobile ? '45px' : '0',
+        paddingHorizontal: '15px',
+        backgroundColor: '#000000',
+        borderTopWidth: '2px',
+        borderTopStyle: 'solid',
+        borderTopColor: '#FFC30B'
+      }}>
+        <button 
+          onClick={() => {
+            onBackToMenu();
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: '#FFC30B',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            border: '2px solid #000',
+            margin: '0 10px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            color: '#000'
+          }}
+        >
+          🏠 Home
+        </button>
+        
+        <button 
+          onClick={() => {
+            resetGame();
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: '#FFC30B',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            border: '2px solid #000',
+            margin: '0 10px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            color: '#000'
+          }}
+        >
+          🔄 Restart
+        </button>
       </div>
 
       {/* Winning Popup Modal */}

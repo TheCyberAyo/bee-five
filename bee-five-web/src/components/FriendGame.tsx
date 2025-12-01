@@ -593,26 +593,30 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
         `}
       </style>
       <div style={{ 
-        background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)',
+        background: '#808080',
       width: '100vw', 
       height: '100vh', 
       display: 'flex', 
       flexDirection: 'column',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'auto'
     }}>
       {/* Header */}
       <div style={{
-        background: 'rgba(0, 0, 0, 0.9)',
-        backdropFilter: 'blur(10px)',
-        padding: isMobile ? '0.75rem 1rem' : '1rem 1.5rem',
+        background: '#000000',
+        paddingTop: isMobile ? '0.75rem' : '0',
+        paddingBottom: isMobile ? '0.75rem' : '0',
+        paddingLeft: isMobile ? '1rem' : '1.5rem',
+        paddingRight: isMobile ? '1rem' : '1.5rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '0.5rem',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        borderBottomWidth: '2px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: '#FFC30B',
         zIndex: 10
       }}>
         {/* Left side: Menu button and title */}
@@ -683,35 +687,13 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
           </div>
         )}
 
-        {/* Controls */}
+        {/* Controls - removed volume button for non-multiplayer games */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
           gap: isMobile ? '0.5rem' : '1rem',
           flexWrap: 'wrap'
         }}>
-          {/* Sound control */}
-          <button
-            onClick={() => {
-              const newSoundEnabled = !soundEnabled;
-              setSoundEnabled(newSoundEnabled);
-              soundManager.setMuted(!newSoundEnabled);
-              if (newSoundEnabled) soundManager.playClickSound();
-            }}
-            style={{
-              padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-              fontSize: '1em',
-              backgroundColor: soundEnabled ? '#4CAF50' : '#f44336',
-              color: 'white',
-              border: '2px solid black',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            {soundEnabled ? '🔊' : '🔇'}
-          </button>
-          
           {/* Timer display */}
           <div style={{
             padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
@@ -736,18 +718,36 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
       {/* Game Progress */}
       {gameSeries && (
         <div style={{
-          background: 'rgba(255, 255, 255, 0.9)',
+          background: 'rgba(255, 255, 255, 0.95)',
           padding: '0.5rem 1rem',
           textAlign: 'center',
           fontSize: '0.9em',
           fontWeight: 'bold',
           color: '#333',
-          borderBottom: '1px solid rgba(0,0,0,0.1)'
+          borderBottomWidth: '2px',
+          borderBottomStyle: 'solid',
+          borderBottomColor: '#FFC30B'
         }}>
           Game {gameSeries.currentGame} of {gameSeries.totalGames} • 
           {gameSeries.player1GoesFirst ? `${gameSeries.player1Name} goes first` : `${gameSeries.player2Name} goes first`}
         </div>
       )}
+
+      {/* Current Player Indicator */}
+      <div style={{
+        padding: '15px',
+        alignItems: 'center',
+        justifyContent: 'center',
+        display: 'flex'
+      }}>
+        <div style={{
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#000'
+        }}>
+          <span style={{ color: '#4CAF50', fontSize: '28px' }}>▶</span> {gameState.currentPlayer === 1 ? (gameSeries?.player1Name || 'Black') : (gameSeries?.player2Name || 'Yellow')}
+        </div>
+      </div>
 
       {/* Main game area */}
       <div style={{
@@ -755,8 +755,10 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '1rem' : '2rem',
-        position: 'relative'
+        padding: isMobile ? '1rem' : '1rem',
+        position: 'relative',
+        minHeight: 0,
+        overflow: 'auto'
       }}>
         <div style={{
           position: 'relative',
@@ -879,6 +881,66 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
           </div>
         </div>
       )}
+
+      {/* Footer */}
+      <div style={{
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        paddingTop: isMobile ? '15px' : '0',
+        paddingBottom: isMobile ? '45px' : '0',
+        paddingHorizontal: '15px',
+        backgroundColor: '#000000',
+        borderTopWidth: '2px',
+        borderTopStyle: 'solid',
+        borderTopColor: '#FFC30B'
+      }}>
+        <button 
+          onClick={() => {
+            onBackToMenu();
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: '#FFC30B',
+            paddingVertical: '12px',
+            paddingHorizontal: '20px',
+            borderRadius: '8px',
+            borderWidth: '2px',
+            borderStyle: 'solid',
+            borderColor: '#000',
+            marginHorizontal: '10px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          <span style={{ color: '#000', fontWeight: 'bold', fontSize: '16px' }}>🏠 Home</span>
+        </button>
+        
+        <button 
+          onClick={() => {
+            resetGame();
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: '#FFC30B',
+            paddingVertical: '12px',
+            paddingHorizontal: '20px',
+            borderRadius: '8px',
+            borderWidth: '2px',
+            borderStyle: 'solid',
+            borderColor: '#000',
+            marginHorizontal: '10px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          <span style={{ color: '#000', fontWeight: 'bold', fontSize: '16px' }}>🔄 Restart</span>
+        </button>
+      </div>
     </div>
     </>
   );

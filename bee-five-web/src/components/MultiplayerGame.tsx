@@ -606,78 +606,160 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
   };
   return (
     <div style={{ 
-      backgroundColor: '#FFC30B', 
+      backgroundColor: '#808080', 
       width: '100vw', 
       height: '100vh', 
       display: 'flex', 
       flexDirection: 'column',
-      justifyContent: 'center', 
-      alignItems: 'center',
-      padding: '20px'
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      position: 'relative',
+      overflow: 'auto'
     }}>
-      {/* Header with game info */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        width: '100%', 
-        maxWidth: '500px', 
-        marginBottom: '20px' 
+      {/* Header */}
+      <div style={{
+        background: '#000000',
+        paddingTop: '0',
+        paddingBottom: '0',
+        paddingLeft: '1.5rem',
+        paddingRight: '1.5rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '0.5rem',
+        borderBottomWidth: '2px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: '#FFC30B',
+        zIndex: 10
       }}>
-        <div>
-          <h1 style={{ color: 'black', margin: 0 }}>
-            Bee-<span style={{ color: 'black' }}>Five</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button 
+            onClick={handleLeaveGame}
+            style={{
+              padding: '0.5rem 0.75rem',
+              fontSize: '1em',
+              backgroundColor: '#FFC30B',
+              color: 'black',
+              border: '2px solid black',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem'
+            }}
+          >
+            🏠 Menu
+          </button>
+          
+          <h1 style={{ 
+            color: '#FFC30B', 
+            margin: 0,
+            fontSize: 'clamp(1.5rem, 3vw, 2rem)',
+            textShadow: '2px 2px 0px black',
+            fontWeight: 'bold'
+          }}>
+            🐝 Bee-Five
           </h1>
-          <div style={{ fontSize: '0.8em', color: 'black' }}>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '0.9em', color: '#FFC30B', marginBottom: '5px', fontWeight: 'bold' }}>
+            You: {playerNumber === 1 ? 'Black' : 'Yellow'}
+          </div>
+          <div style={{ fontSize: '0.9em', color: '#FFC30B', fontWeight: 'bold' }}>
+            {opponentName}: {playerNumber === 1 ? 'Yellow' : 'Black'}
+          </div>
+          <div style={{ fontSize: '0.8em', color: '#FFC30B', marginTop: '5px' }}>
             Room: {roomInfo.roomId}
           </div>
         </div>
-        
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '0.9em', color: 'black', marginBottom: '5px' }}>
-            You: {playerNumber === 1 ? 'Black' : 'Yellow'}
-          </div>
-          <div style={{ fontSize: '0.9em', color: 'black' }}>
-            {opponentName}: {playerNumber === 1 ? 'Yellow' : 'Black'}
-          </div>
+      </div>
+
+      {/* Current Player Indicator */}
+      <div style={{
+        padding: '15px',
+        alignItems: 'center',
+        justifyContent: 'center',
+        display: 'flex'
+      }}>
+        <div style={{
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#000'
+        }}>
+          <span style={{ color: '#4CAF50', fontSize: '28px' }}>▶</span> {currentPlayer === playerNumber ? 'Your Turn' : `${opponentName}'s Turn`}
         </div>
       </div>
       
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_SIZE}
-        height={CANVAS_SIZE}
-        onClick={handleCanvasClick}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{
-          border: '2px solid black',
-          borderRadius: '8px',
-          cursor: (gameActive && currentPlayer === playerNumber) ? 'pointer' : 'default',
-          marginBottom: '20px'
-        }}
-      />
-      
-
-      
-      <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
+      {/* Main game area */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: '1rem',
+        position: 'relative',
+        minHeight: 0,
+        overflow: 'auto'
+      }}>
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_SIZE}
+          height={CANVAS_SIZE}
+          onClick={handleCanvasClick}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{
+            border: '3px solid #000',
+            borderRadius: '10px',
+            cursor: (gameActive && currentPlayer === playerNumber) ? 'pointer' : 'default',
+            maxWidth: 'min(80vw, 80vh, 700px)',
+            maxHeight: 'min(80vw, 80vh, 700px)',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
+            display: 'block',
+            margin: '0 auto'
+          }}
+        />
+      </div>
+      {/* Footer */}
+      <div style={{
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        paddingTop: '0',
+        paddingBottom: '0',
+        paddingHorizontal: '15px',
+        backgroundColor: '#000000',
+        borderTopWidth: '2px',
+        borderTopStyle: 'solid',
+        borderTopColor: '#FFC30B',
+        display: 'flex',
+        gap: '15px',
+        flexWrap: 'wrap'
+      }}>
         {/* Stop Game Button - shown for both players when game is active and no stop request */}
         {gameActive && !stopGameRequestedBy && (
           <button 
             onClick={handleRequestStopGame}
             disabled={connectionStatus !== 'connected' || winner > 0}
             style={{
-              padding: '10px 20px',
+              flex: 1,
+              padding: '12px 20px',
               fontSize: '1em',
-              backgroundColor: '#ff9800',
-              color: 'white',
+              backgroundColor: '#FFC30B',
+              color: 'black',
               border: '2px solid black',
               borderRadius: '8px',
               cursor: (connectionStatus !== 'connected' || winner > 0) ? 'not-allowed' : 'pointer',
-              opacity: (connectionStatus !== 'connected' || winner > 0) ? 0.5 : 1
+              opacity: (connectionStatus !== 'connected' || winner > 0) ? 0.5 : 1,
+              fontWeight: 'bold',
+              minWidth: '120px'
             }}
           >
-            ⏸️ Stop Game
+            ⏸️ Stop
           </button>
         )}
 
@@ -687,17 +769,20 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
             onClick={handleCancelStopRequest}
             disabled={connectionStatus !== 'connected'}
             style={{
-              padding: '10px 20px',
+              flex: 1,
+              padding: '12px 20px',
               fontSize: '1em',
-              backgroundColor: '#ff9800',
-              color: 'white',
+              backgroundColor: '#FFC30B',
+              color: 'black',
               border: '2px solid black',
               borderRadius: '8px',
               cursor: connectionStatus !== 'connected' ? 'not-allowed' : 'pointer',
-              opacity: connectionStatus !== 'connected' ? 0.5 : 1
+              opacity: connectionStatus !== 'connected' ? 0.5 : 1,
+              fontWeight: 'bold',
+              minWidth: '120px'
             }}
           >
-            ❌ Cancel Stop Request
+            ❌ Cancel
           </button>
         )}
 
@@ -707,33 +792,39 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
             onClick={resetGame}
             disabled={connectionStatus !== 'connected'}
             style={{
-              padding: '10px 20px',
+              flex: 1,
+              padding: '12px 20px',
               fontSize: '1em',
-              backgroundColor: '#4CAF50',
-              color: 'white',
+              backgroundColor: '#FFC30B',
+              color: 'black',
               border: '2px solid black',
               borderRadius: '8px',
               cursor: connectionStatus !== 'connected' ? 'not-allowed' : 'pointer',
-              opacity: connectionStatus !== 'connected' ? 0.5 : 1
+              opacity: connectionStatus !== 'connected' ? 0.5 : 1,
+              fontWeight: 'bold',
+              minWidth: '120px'
             }}
           >
-            🔄 Restart Game
+            🔄 Restart
           </button>
         )}
         
         <button 
           onClick={handleLeaveGame}
           style={{
-            padding: '10px 20px',
+            flex: 1,
+            padding: '12px 20px',
             fontSize: '1em',
-            backgroundColor: '#f44336',
-            color: 'white',
+            backgroundColor: '#FFC30B',
+            color: 'black',
             border: '2px solid black',
             borderRadius: '8px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            minWidth: '120px'
           }}
         >
-          🚪 Leave Game
+          🏠 Home
         </button>
       </div>
 

@@ -234,6 +234,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   const [gameInitialized, setGameInitialized] = useState(false); // Track if a game has been selected from map
   const winPopupTimerRef = React.useRef<number | null>(null);
   const matchResultsTimerRef = React.useRef<number | null>(null);
+  const countdownSetRef = React.useRef<boolean>(false); // Track if countdown has been set for current match
   const [pendingResultsPopup, setPendingResultsPopup] = useState(false);
   const popupScheduledRef = React.useRef<boolean>(false);
   
@@ -393,6 +394,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
      } else if (showStartCountdown && startCountdown === 0) {
        setShowStartCountdown(false);
        setGameStarted(true);
+       setGameInitialized(true); // Ensure game is initialized when countdown ends
      }
    }, [showStartCountdown, startCountdown]);
 
@@ -418,17 +420,41 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
        }, 1000);
        return () => clearTimeout(timer);
      } else if (isWaitingForNextGame && countdownTimer === 0) {
+       // Reset waiting state and countdown before incrementing match to prevent duplicate countdown
        setIsWaitingForNextGame(false);
+       setCountdownTimer(0);
+       countdownSetRef.current = false; // Reset countdown flag for next match
+       // Reset gameInitialized to ensure proper initialization of next match
+       setGameInitialized(false);
+       // Immediately increment match - no delay needed as countdown already finished
        setCurrentMatch(prev => prev + 1);
        setGameProcessed(false);
        popupScheduledRef.current = false;
-       resetGame();
-       setStartCountdown(3);
-       setShowStartCountdown(true);
-       setGameStarted(false);
-       setGameInitialized(true); // Mark game as initialized when countdown starts for next match
+       countdownSetRef.current = false; // Reset countdown flag for next match
+       // Game will restart automatically via key prop change
+       // For matches 2 and 3, the game will start immediately (no countdown) via useEffect below
      }
-   }, [isWaitingForNextGame, countdownTimer, resetGame, currentGame, currentMatch, playerWins, aiWins]);
+   }, [isWaitingForNextGame, countdownTimer, currentGame, currentMatch, playerWins, aiWins]);
+
+  // Auto-start game for matches 2 and 3 (no countdown) - matches BeefiveApp
+  useEffect(() => {
+    if (requiresMatchSystem(currentGame) && currentMatch > 1 && !gameInitialized && !showMap && !showStoryCarousel && !showBeeFact) {
+      // For matches 2 and 3, start game immediately without countdown
+      setGameStarted(true);
+      setGameInitialized(true);
+    }
+  }, [currentMatch, currentGame, gameInitialized, showMap, showStoryCarousel, showBeeFact]);
+
+  // Auto-close win popup when waiting for next game in match system (auto-proceed)
+  React.useEffect(() => {
+    if (showWinPopup && isWaitingForNextGame && requiresMatchSystem(currentGame) && !isMatchComplete) {
+      // Auto-close the popup when countdown starts to allow automatic progression
+      const timer = setTimeout(() => {
+        setShowWinPopup(false);
+      }, 1500); // Close after 1.5 seconds to show the win message briefly
+      return () => clearTimeout(timer);
+    }
+  }, [showWinPopup, isWaitingForNextGame, currentGame, isMatchComplete]);
 
   useEffect(() => {
     const stageIndex = Math.floor((currentGame - 1) / 200);
@@ -492,7 +518,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
              const totalGames = getTotalGames(currentGame);
              
              // Check if match is complete after this win
-             if (newPlayerWins >= requiredWins || (currentMatch > totalGames)) {
+             if (newPlayerWins >= requiredWins || currentMatch >= totalGames) {
                setIsMatchComplete(true);
                setGamesWon(prevGames => {
                  const newGamesWon = prevGames + 1;
@@ -530,8 +556,12 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                 matchResultsTimerRef.current = null;
               }, 1000);
              } else {
-               setIsWaitingForNextGame(true);
-               setCountdownTimer(3);
+               // Only set countdown once per match
+               if (!countdownSetRef.current) {
+                 countdownSetRef.current = true;
+                 setIsWaitingForNextGame(true);
+                 setCountdownTimer(3);
+               }
              }
              
              return newPlayerWins;
@@ -543,7 +573,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
              const totalGames = getTotalGames(currentGame);
              
              // Check if match is complete after this win
-             if (newAiWins >= requiredWins || (currentMatch > totalGames)) {
+             if (newAiWins >= requiredWins || currentMatch >= totalGames) {
                setIsMatchComplete(true);
                
                setGamesCompleted(prev => {
@@ -559,8 +589,12 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                 matchResultsTimerRef.current = null;
               }, 1000);
              } else {
-               setIsWaitingForNextGame(true);
-               setCountdownTimer(3);
+               // Only set countdown once per match
+               if (!countdownSetRef.current) {
+                 countdownSetRef.current = true;
+                 setIsWaitingForNextGame(true);
+                 setCountdownTimer(3);
+               }
              }
              
              return newAiWins;
@@ -666,7 +700,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
              const totalGames = getTotalGames(currentGame);
              
              // Check if match is complete after this win
-             if (newPlayerWins >= requiredWins || (currentMatch > totalGames)) {
+             if (newPlayerWins >= requiredWins || currentMatch >= totalGames) {
                setIsMatchComplete(true);
                setGamesWon(prevGames => {
                  const newGamesWon = prevGames + 1;
@@ -704,8 +738,12 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                 matchResultsTimerRef.current = null;
               }, 1000);
              } else {
-               setIsWaitingForNextGame(true);
-               setCountdownTimer(3);
+               // Only set countdown once per match
+               if (!countdownSetRef.current) {
+                 countdownSetRef.current = true;
+                 setIsWaitingForNextGame(true);
+                 setCountdownTimer(3);
+               }
              }
              
              return newPlayerWins;
@@ -717,7 +755,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
              const totalGames = getTotalGames(currentGame);
              
              // Check if match is complete after this win
-             if (newAiWins >= requiredWins || (currentMatch > totalGames)) {
+             if (newAiWins >= requiredWins || currentMatch >= totalGames) {
                setIsMatchComplete(true);
                
                setGamesCompleted(prev => {
@@ -733,8 +771,12 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                 matchResultsTimerRef.current = null;
               }, 1000);
              } else {
-               setIsWaitingForNextGame(true);
-               setCountdownTimer(3);
+               // Only set countdown once per match
+               if (!countdownSetRef.current) {
+                 countdownSetRef.current = true;
+                 setIsWaitingForNextGame(true);
+                 setCountdownTimer(3);
+               }
              }
              
              return newAiWins;
@@ -1473,33 +1515,22 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
        const requiredWins = getRequiredWins(currentGame);
        const totalGames = getTotalGames(currentGame);
        
-      if (playerWins >= requiredWins || aiWins >= requiredWins || currentMatch > totalGames) {
+      if (playerWins >= requiredWins || aiWins >= requiredWins || currentMatch >= totalGames) {
         setIsMatchComplete(true);
-        saveProgressOnMapReturn(); // Save progress when returning to map
         setShowMap(true);
-        setGameInitialized(false); // Reset game initialization when returning to map
+        setGameInitialized(false);
       } else {
-         setIsWaitingForNextGame(true);
-         setCountdownTimer(3);
+         // Only set countdown once per match
+         if (!countdownSetRef.current) {
+           countdownSetRef.current = true;
+           setIsWaitingForNextGame(true);
+           setCountdownTimer(3);
+         }
        }
      } else if (requiresMatchSystem(currentGame) && isMatchComplete) {
       const nextGame = currentGame + 1;
       if (requiresMatchSystem(nextGame)) {
         setCurrentGame(nextGame);
-        
-        // Check if we should show a bee fact for the next game
-        const beeFact = getBeeFactForGame(nextGame);
-        if (beeFact) {
-          setCurrentBeeFact(beeFact);
-          setShowBeeFact(true);
-        } else {
-          resetGame();
-          setStartCountdown(3);
-          setShowStartCountdown(true);
-          setGameStarted(false);
-          setGameInitialized(true); // Mark game as initialized when countdown starts
-        }
-        
         setCurrentMatch(1);
         setPlayerWins(0);
         setAiWins(0);
@@ -1508,15 +1539,14 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         setIsWaitingForNextGame(false);
         setGameProcessed(false);
         popupScheduledRef.current = false;
+        setGameInitialized(false);
       } else {
-        saveProgressOnMapReturn(); // Save progress when returning to map
         setShowMap(true);
-        setGameInitialized(false); // Reset game initialization when returning to map
+        setGameInitialized(false);
       }
      } else {
-       saveProgressOnMapReturn(); // Save progress when returning to map
        setShowMap(true);
-       setGameInitialized(false); // Reset game initialization when returning to map
+       setGameInitialized(false);
      }
    };
 
@@ -1526,32 +1556,63 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       matchResultsTimerRef.current = null;
     }
     setPendingResultsPopup(false);
-
-    const nextGame = currentGame + 1;
-    setCurrentGame(nextGame);
+    setShowResultsPopup(false);
     
-    // Check if we should show a bee fact for the next game
-    const beeFact = getBeeFactForGame(nextGame);
-    if (beeFact) {
-      setCurrentBeeFact(beeFact);
-      setShowBeeFact(true);
+    // Check if player won or lost
+    const requiredWins = getRequiredWins(currentGame);
+    const playerWon = playerWins >= requiredWins;
+    
+    if (playerWon) {
+      // Player won: continue to next game
+      const nextGame = currentGame + 1;
+      if (nextGame <= 2000) { // TOTAL_GAMES equivalent
+        setHighestUnlockedGame(prev => Math.max(prev, nextGame));
+        setCurrentGame(nextGame);
+        setCurrentMatch(1);
+        setPlayerWins(0);
+        setAiWins(0);
+        setIsMatchComplete(false);
+        setCountdownTimer(0);
+        setIsWaitingForNextGame(false);
+        setGameProcessed(false);
+        popupScheduledRef.current = false;
+        
+        // Check if we should show a bee fact for the next game
+        const beeFact = getBeeFactForGame(nextGame);
+        if (beeFact) {
+          setCurrentBeeFact(beeFact);
+          setShowBeeFact(true);
+          setGameInitialized(false);
+        } else {
+          // No bee fact, start countdown immediately
+          resetGame();
+          setStartCountdown(3);
+          setShowStartCountdown(true);
+          setGameStarted(false);
+          setGameInitialized(true); // Mark game as initialized when countdown starts
+        }
+      } else {
+        // Reached end of adventure
+        setShowMap(true);
+      }
     } else {
+      // Player lost: restart the same match series
+      setCurrentMatch(1);
+      setPlayerWins(0);
+      setAiWins(0);
+      setIsMatchComplete(false);
+      setCountdownTimer(0);
+      setIsWaitingForNextGame(false);
+      setGameProcessed(false);
+      popupScheduledRef.current = false;
+      
+      // Restart the game with countdown
       resetGame();
       setStartCountdown(3);
       setShowStartCountdown(true);
       setGameStarted(false);
       setGameInitialized(true); // Mark game as initialized when countdown starts
     }
-    
-    setCurrentMatch(1);
-    setPlayerWins(0);
-    setAiWins(0);
-    setIsMatchComplete(false);
-    setCountdownTimer(0);
-    setIsWaitingForNextGame(false);
-    setGameProcessed(false);
-    popupScheduledRef.current = false;
-    setShowResultsPopup(false);
     if (soundEnabled) soundManager.playClickSound();
   };
 
@@ -1605,12 +1666,22 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       setCurrentBeeFact(beeFact);
       setShowBeeFact(true);
     } else {
-      // No bee fact, go straight to start countdown
+      // No bee fact, go straight to start countdown (only for first match of match games)
       resetGame();
-      setStartCountdown(3);
-      setShowStartCountdown(true);
-      setGameStarted(false);
-      setGameInitialized(true); // Mark game as initialized when countdown starts
+      // For match games, only show countdown for match 1
+      if (requiresMatchSystem(gameNumber)) {
+        // Match games: only show countdown for match 1
+        setStartCountdown(3);
+        setShowStartCountdown(true);
+        setGameStarted(false);
+        setGameInitialized(true); // Mark game as initialized when countdown starts
+      } else {
+        // Non-match games: always show countdown
+        setStartCountdown(3);
+        setShowStartCountdown(true);
+        setGameStarted(false);
+        setGameInitialized(true);
+      }
     }
     
     setCurrentMatch(1);
@@ -1619,6 +1690,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     setIsMatchComplete(false);
     setCountdownTimer(0);
     setIsWaitingForNextGame(false);
+    countdownSetRef.current = false; // Reset countdown flag for new game/match
     setGameProcessed(false);
     popupScheduledRef.current = false;
   };
@@ -1990,212 +2062,148 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         `}
       </style>
       <div style={{ 
-        background: currentTheme.backgroundGradient,
+        background: '#808080',
         width: '100vw', 
         height: '100vh', 
         display: 'flex', 
         flexDirection: 'column',
         fontFamily: 'system-ui, -apple-system, sans-serif',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'auto'
       }}>
+      {/* Header - Match BeefiveApp: black with yellow border, centered logo */}
       <div style={{
-        background: 'rgba(0, 0, 0, 0.6)',
-        backdropFilter: 'blur(10px)',
-        padding: isMobile ? '0.75rem 1rem' : '1rem 1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '0.5rem',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-        zIndex: 10
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '1rem' 
-        }}>
-          <button 
-            onClick={() => {
-              saveProgressOnMapReturn(); // Save progress before going back to menu
-              onBackToMenu();
-              if (soundEnabled) soundManager.playClickSound();
-            }}
-            disabled={requiresMatchSystem(currentGame) && !isMatchComplete}
-            style={{
-              padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-              fontSize: isMobile ? '1.2em' : '1em',
-              backgroundColor: requiresMatchSystem(currentGame) && !isMatchComplete ? '#ccc' : currentTheme.buttonColor,
-              color: 'black',
-              border: '2px solid black',
-              borderRadius: '8px',
-              cursor: requiresMatchSystem(currentGame) && !isMatchComplete ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              opacity: requiresMatchSystem(currentGame) && !isMatchComplete ? 0.6 : 1
-            }}
-          >
-            {isMobile ? '🏠' : '🏠 Menu'}
-          </button>
-          
-          <h1 style={{ 
-            color: '#FFC30B', 
-            margin: 0,
-            fontSize: isMobile ? 'clamp(1.2rem, 4vw, 1.5rem)' : 'clamp(1.5rem, 3vw, 2rem)',
-            textShadow: '2px 2px 0px black',
-            fontWeight: 'bold'
-          }}>
-            {getStageEmoji(currentGame)}
-          </h1>
-        </div>
-
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: isMobile ? '0.5rem' : '1rem',
-          flexWrap: 'wrap'
-        }}>
-          <button
-            onClick={() => {
-              saveProgressOnMapReturn(); // Save progress when returning to map
-              setShowMap(true);
-              setGameInitialized(false); // Reset game initialization when returning to map
-              if (soundEnabled) soundManager.playClickSound();
-            }}
-            disabled={requiresMatchSystem(currentGame) && !isMatchComplete}
-            style={{
-              padding: '0.5rem 0.75rem',
-              fontSize: '1em',
-              backgroundColor: requiresMatchSystem(currentGame) && !isMatchComplete ? '#ccc' : '#2196F3',
-              color: 'white',
-              border: '2px solid black',
-              borderRadius: '8px',
-              cursor: requiresMatchSystem(currentGame) && !isMatchComplete ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.25rem',
-              minWidth: '60px',
-              height: '40px',
-              opacity: requiresMatchSystem(currentGame) && !isMatchComplete ? 0.6 : 1
-            }}
-          >
-            🗺️ Map
-          </button>
-
-          {!isMobile && (
-            <button
-              onClick={() => {
-                const newSoundEnabled = !soundEnabled;
-                setSoundEnabled(newSoundEnabled);
-                soundManager.setMuted(!newSoundEnabled);
-                if (newSoundEnabled) soundManager.playClickSound();
-              }}
-              style={{
-                padding: isMobile ? '0.5rem' : '0.5rem 0.75rem',
-                fontSize: '1em',
-                backgroundColor: soundEnabled ? '#4CAF50' : '#f44336',
-                color: 'white',
-                border: '2px solid black',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
-            >
-              {soundEnabled ? '🔊' : '🔇'}
-            </button>
-          )}
-
-          {isMobile && (
-            <button
-              onClick={() => {
-                setShowMobileSettings(!showMobileSettings);
-                if (soundEnabled) soundManager.playClickSound();
-              }}
-              style={{
-                padding: '0.5rem',
-                fontSize: '1em',
-                backgroundColor: currentTheme.buttonColor,
-                color: 'black',
-                border: '2px solid black',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: '40px',
-                height: '40px'
-              }}
-            >
-              ⚙️
-            </button>
-          )}
-        </div>
-      </div>
-
-
-      <div style={{
-        flex: 1,
+        background: '#000000',
+        paddingTop: isMobile ? '0.75rem' : '0',
+        paddingBottom: isMobile ? '0.75rem' : '0',
+        paddingHorizontal: isMobile ? '0.75rem' : '1rem',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '1rem' : '2rem',
+        borderBottomWidth: '2px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: '#FFC30B',
         position: 'relative'
+      }}>
+        {/* Logo container - centered */}
+        <div style={{
+          width: '150px',
+          height: '40px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <img 
+            src="/BEE-FIVE.png" 
+            alt="Bee-Five Logo"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Game Info Container - Match BeefiveApp: white background with yellow border (only for match games) */}
+      {requiresMatchSystem(currentGame) && (
+        <div style={{
+          padding: '8px',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderBottomWidth: '2px',
+          borderBottomStyle: 'solid',
+          borderBottomColor: '#FFC30B',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            fontSize: '16px',
+            fontWeight: 'bold',
+            color: '#333',
+            textAlign: 'center'
+          }}>
+            You {playerWins} : {aiWins} AI
+            {isMatchComplete && (
+              <span style={{ 
+                display: 'block',
+                color: playerWins > aiWins ? '#4CAF50' : '#F44336',
+                marginTop: '4px'
+              }}>
+                {playerWins > aiWins ? 'Match Won! 🎉' : 'Match Lost'}
+              </span>
+            )}
+            {isWaitingForNextGame && countdownTimer !== undefined && (
+              <span style={{ 
+                display: 'block',
+                color: '#333',
+                marginTop: '4px'
+              }}>
+                Next game in {countdownTimer}...
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Game Number, Current Player Indicator, and Timer - All on one line - Match BeefiveApp */}
+      <div style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: '15px',
+        paddingVertical: '10px',
+        display: 'flex'
+      }}>
+        {requiresMatchSystem(currentGame) ? (
+          <div style={{
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: '#333'
+          }}>
+            Game {currentMatch} of {getTotalGames(currentGame)}
+          </div>
+        ) : (
+          <div style={{ flex: 1 }} />
+        )}
+        <div style={{
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#000',
+          flex: 1,
+          textAlign: 'center'
+        }}>
+          <span style={{ color: '#4CAF50', fontSize: '28px' }}>▶</span>{' '}
+          {adventureTurnLabel}
+        </div>
+        {getTimeLimitForLevel(currentGame) > 0 && (
+          <div style={{
+            fontSize: '16px',
+            fontWeight: 'bold',
+            color: gameState.timeLeft <= 5 ? '#F44336' : '#4CAF50'
+          }}>
+            ⏱️ {gameState.timeLeft}s
+          </div>
+        )}
+      </div>
+
+      {/* Game Board Container - Match BeefiveApp */}
+      <div style={{
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: isMobile ? '20px' : '20px',
+        paddingTop: isMobile ? '10px' : '10px',
+        display: 'flex',
+        minHeight: 0,
+        overflow: 'auto'
       }}>
         <div style={{
           position: 'relative',
           display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'center',
-          alignItems: 'center',
-          gap: isMobile ? '15px' : '20px',
-          animation: gameState.currentPlayer === 2 ? 'aiMoveHighlight 1.5s ease-out' : 'none'
+          alignItems: 'center'
         }}>
-          {/* Timer positioned to the left on desktop, above on mobile */}
-          <div style={{
-            padding: isMobile ? '0.75rem 1rem' : '1rem 1.25rem',
-            backgroundColor: currentTheme.cardBackground,
-            color: 'black',
-            border: '3px solid black',
-            borderRadius: '10px',
-            fontWeight: 'bold',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: isMobile ? '0.35rem' : '0.45rem',
-            minWidth: isMobile ? '140px' : '180px',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            textAlign: 'center'
-          }}>
-            <span style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: isMobile ? '1.4em' : '1.8em'
-            }}>
-              ⏱️ {gameState.timeLeft}s
-            </span>
-            <span style={{
-              fontSize: isMobile ? '1.1em' : '1.4em',
-              fontWeight: 700,
-              color: '#FFC107'
-            }}>
-              {adventureTurnLabel}
-            </span>
-          </div>
-
-          <div style={{
-            position: 'relative',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
             <GameCanvas
               gameState={gameState}
               gridColor={getMatchGridColor(currentGame, currentMatch)}
@@ -2206,41 +2214,6 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                 }
               }}
             />
-            
-            {/* Match Score Display - only show for match system games */}
-            {requiresMatchSystem(currentGame) && (
-              <div style={{
-                position: 'absolute',
-                top: isMobile ? '100%' : '50%',
-                left: isMobile ? '50%' : '100%',
-                transform: isMobile ? 'translateX(-50%)' : 'translateY(-50%)',
-                marginTop: isMobile ? '15px' : '0',
-                marginLeft: isMobile ? '0' : '20px',
-                padding: '0.75rem 1rem',
-                backgroundColor: currentTheme.cardBackground,
-                color: 'black',
-                border: '2px solid black',
-                borderRadius: '8px',
-                fontWeight: 'bold',
-                fontSize: isMobile ? '1em' : '1.1em',
-                textAlign: 'center',
-                boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-                minWidth: isMobile ? '120px' : '140px',
-                zIndex: 10
-              }}>
-                <div style={{ marginBottom: '5px' }}>
-                  Game {currentMatch}/{getTotalGames(currentGame)}
-                </div>
-                <div style={{ 
-                  fontSize: '0.9em', 
-                  color: '#666',
-                  borderTop: '1px solid #ccc',
-                  paddingTop: '5px'
-                }}>
-                  You: {playerWins} - AI: {aiWins}
-                </div>
-              </div>
-            )}
             
             {/* Start Countdown Overlay */}
             {showStartCountdown && (
@@ -2282,7 +2255,6 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
             )}
           </div>
         </div>
-      </div>
 
       {isMobile && showMobileSettings && (
         <div style={{
@@ -2474,7 +2446,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
               {winMessage}
             </h1>
             
-            <p style={{
+            <div style={{
               fontSize: '1.2em',
               color: '#333',
               marginBottom: '30px'
@@ -2498,7 +2470,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                   )}
                 </div>
               )}
-            </p>
+            </div>
             
             <div style={{
               display: 'flex',
@@ -2506,30 +2478,29 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
               justifyContent: 'center',
               flexWrap: 'wrap'
             }}>
-              <button 
-                onClick={handleNextGame}
-                disabled={isWaitingForNextGame}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '1.1em',
-                  fontWeight: 'bold',
-                  backgroundColor: isWaitingForNextGame ? '#ccc' : '#4CAF50',
-                  color: 'white',
-                  border: '2px solid black',
-                  borderRadius: '10px',
-                  cursor: isWaitingForNextGame ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.3s ease',
-                  minWidth: '120px',
-                  opacity: isWaitingForNextGame ? 0.6 : 1
-                }}
-              >
-                {isWaitingForNextGame ? 
-                  `⏳ Waiting... (${countdownTimer}s)` :
-                  requiresMatchSystem(currentGame) && !isMatchComplete ? 
+              {/* Only show button if not waiting for next game (auto-proceed) or match is complete */}
+              {!isWaitingForNextGame && (
+                <button 
+                  onClick={handleNextGame}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '1.1em',
+                    fontWeight: 'bold',
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    border: '2px solid black',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    minWidth: '120px'
+                  }}
+                >
+                  {requiresMatchSystem(currentGame) && !isMatchComplete ? 
                     `🎮 Next Game (${currentMatch + 1}/${getTotalGames(currentGame)})` : 
                     '🗺️ Go to Map'
-                }
-              </button>
+                  }
+                </button>
+              )}
               
               {(!requiresMatchSystem(currentGame) || isMatchComplete) && !isWaitingForNextGame && (
                 <>
@@ -2548,28 +2519,42 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                         setPendingResultsPopup(false);
                         setShowResultsPopup(false);
                         popupScheduledRef.current = false;
-                        const nextGame = currentGame + 1;
-                        setCurrentGame(nextGame);
                         
-                        // Check if we should show a bee fact for the next game
-                        const beeFact = getBeeFactForGame(nextGame);
-                        if (beeFact) {
-                          setCurrentBeeFact(beeFact);
-                          setShowBeeFact(true);
-                        } else {
-                          resetGame();
-                          setStartCountdown(3);
-                          setShowStartCountdown(true);
-                          setGameStarted(false);
+                        // Mark current game as completed and unlock next game
+                        if (!gamesCompleted.includes(currentGame)) {
+                          setGamesCompleted(prev => [...prev, currentGame]);
                         }
-                        
-                        setCurrentMatch(1);
-                        setPlayerWins(0);
-                        setAiWins(0);
-                        setIsMatchComplete(false);
-                        setCountdownTimer(0);
-                        setIsWaitingForNextGame(false);
-                        setGameProcessed(false);
+                        const nextGame = currentGame + 1;
+                        if (nextGame <= 2000) { // TOTAL_GAMES equivalent
+                          // Unlock next game
+                          setHighestUnlockedGame(prev => Math.max(prev, nextGame));
+                          setCurrentGame(nextGame);
+                          setCurrentMatch(1);
+                          setPlayerWins(0);
+                          setAiWins(0);
+                          setIsMatchComplete(false);
+                          setCountdownTimer(0);
+                          setIsWaitingForNextGame(false);
+                          setGameProcessed(false);
+                          
+                          // Check if we should show a bee fact for the next game
+                          const beeFact = getBeeFactForGame(nextGame);
+                          if (beeFact) {
+                            setCurrentBeeFact(beeFact);
+                            setShowBeeFact(true);
+                            setGameInitialized(false);
+                          } else {
+                            // No bee fact, start countdown immediately
+                            resetGame();
+                            setStartCountdown(3);
+                            setShowStartCountdown(true);
+                            setGameStarted(false);
+                            setGameInitialized(true); // Mark game as initialized when countdown starts
+                          }
+                        } else {
+                          // If we've reached the end, go back to map
+                          setShowMap(true);
+                        }
                         if (soundEnabled) soundManager.playClickSound();
                       }}
                       style={{
@@ -2896,6 +2881,44 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         </div>
       )}
 
+      {/* Footer - Match BeefiveApp: black background, yellow buttons */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        paddingTop: isMobile ? '15px' : '0',
+        paddingBottom: isMobile ? '45px' : '0',
+        paddingHorizontal: '15px',
+        backgroundColor: '#000000'
+      }}>
+        <button 
+          onClick={() => {
+            saveProgressOnMapReturn();
+            onBackToMenu();
+            if (soundEnabled) soundManager.playClickSound();
+          }}
+          disabled={requiresMatchSystem(currentGame) && !isMatchComplete}
+          style={{
+            flex: 1,
+            backgroundColor: requiresMatchSystem(currentGame) && !isMatchComplete ? '#ccc' : '#FFC30B',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            border: '2px solid #000',
+            margin: '0 10px',
+            cursor: requiresMatchSystem(currentGame) && !isMatchComplete ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            color: '#000',
+            opacity: requiresMatchSystem(currentGame) && !isMatchComplete ? 0.6 : 1
+          }}
+        >
+          🏠 Home
+        </button>
+      </div>
       </div>
     </BeeLifeStageEffects>
   );

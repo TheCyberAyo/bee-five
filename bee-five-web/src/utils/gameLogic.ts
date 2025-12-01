@@ -201,15 +201,7 @@ export const isMultipleOf17 = (gameNumber: number): boolean => {
   return gameNumber % 17 === 0;
 };
 
-// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 60 in match 1/3 (for 5 blocked cells)
-export const isMultipleOf10Match1From60 = (gameNumber: number, currentMatch: number): boolean => {
-  return gameNumber >= 60 && 
-         gameNumber % 10 === 0 && 
-         gameNumber % 50 !== 0 && 
-         currentMatch === 1;
-};
-
-// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 60 in match 1/3 (for blind play after 17 moves)
+// Check if a game number is a multiple of 10 (excluding multiples of 50) from game 60 in match 1/3 (for 5 blocked cells and blind play after 17 moves)
 export const isMultipleOf10Match1From60 = (gameNumber: number, currentMatch: number): boolean => {
   return gameNumber >= 60 && 
          gameNumber % 10 === 0 && 
@@ -591,6 +583,33 @@ export const shiftAllBlocks = (board: (0 | 1 | 2 | 3)[][]): (0 | 1 | 2 | 3)[][] 
   return newBoard;
 };
 
+// Swap all pieces between player 1 and player 2 (for multiples of 10 match 1 from game 60)
+// All player 1 pieces (black) become player 2 pieces (yellow), and vice versa
+export const swapAllPieces = (
+  board: (0 | 1 | 2 | 3)[][],
+  pieceAges: number[][]
+): { board: (0 | 1 | 2 | 3)[][]; pieceAges: number[][] } => {
+  const newBoard = board.map(row => [...row]);
+  const newPieceAges = pieceAges.map(row => [...row]);
+  
+  // Swap all pieces: 1 becomes 2, 2 becomes 1
+  for (let row = 0; row < 10; row++) {
+    for (let col = 0; col < 10; col++) {
+      if (newBoard[row][col] === 1) {
+        newBoard[row][col] = 2;
+      } else if (newBoard[row][col] === 2) {
+        newBoard[row][col] = 1;
+      }
+      // Empty cells (0) and blocked cells (3) remain unchanged
+    }
+  }
+  
+  // Piece ages remain the same (they stay with their positions)
+  // No need to swap ages since pieces are swapped in place
+  
+  return { board: newBoard, pieceAges: newPieceAges };
+};
+
 // Remove old pieces (both player 1 and player 2) that have been on the board for the specified number of turns
 export const removeOldPieces = (board: (0 | 1 | 2 | 3)[][], pieceAges: number[][], turnsToLive: number): { board: (0 | 1 | 2 | 3)[][]; pieceAges: number[][] } => {
   const newBoard = board.map(row => [...row]);
@@ -969,7 +988,7 @@ export const generateBlockedCells = (gameNumber: number, currentMatch: number = 
   const endsWith4 = gameEndsWith4(gameNumber); // Use the updated function
   const endsWith5 = gameEndsWith5(gameNumber); // Use the updated function
   const endsWith7 = gameNumber % 10 === 7 && gameNumber >= 27; // Games ending with 7 show blocks starting from game 27
-  const endsWith8 = gameNumber % 10 === 8 && gameNumber >= 38; // Games ending with 8 show blocks starting from game 38
+  const endsWith8 = gameNumber % 10 === 8 && gameNumber >= 600; // Games ending with 8 show blocks starting from game 600
   const endsWith9 = gameNumber % 10 === 9 && gameNumber >= 50; // Games ending with 9 show blocks starting from game 50
   const multipleOf10Match1From60 = isMultipleOf10Match1From60(gameNumber, currentMatch); // Multiples of 10 from game 60 in match 1/3
   
@@ -984,7 +1003,7 @@ export const generateBlockedCells = (gameNumber: number, currentMatch: number = 
                    endsWith8 ? 8 : 
                    endsWith9 ? 10 : // Games ending with 9 have 10 blocks
                    multipleOf10Match1From60 ? 5 : // Multiples of 10 from game 60 in match 1/3 have 5 blocks
-                   (isMultipleOf5 ? 4 : 7); // 0 for ending with 3 (progressive), 16 for ending with 4, 5 for ending with 5, 6 for ending with 7, 8 for ending with 8, 4 for other multiples of 5, 7 for ending with 9
+                   (isMultipleOf5 ? 4 : 0); // 0 for ending with 3 (progressive), 16 for ending with 4, 5 for ending with 5, 6 for ending with 7, 8 for ending with 8, 4 for other multiples of 5, 0 otherwise
   
   // Use game number as seed for consistent positioning per level
   const positions: { row: number; col: number }[] = [];
