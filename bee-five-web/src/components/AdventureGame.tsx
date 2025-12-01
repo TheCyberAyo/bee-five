@@ -2076,7 +2076,8 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         background: '#000000',
         paddingTop: isMobile ? '0.75rem' : '0',
         paddingBottom: isMobile ? '0.75rem' : '0',
-        paddingHorizontal: isMobile ? '0.75rem' : '1rem',
+        paddingLeft: isMobile ? '0.75rem' : '1rem',
+        paddingRight: isMobile ? '0.75rem' : '1rem',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -2151,8 +2152,10 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: '15px',
-        paddingVertical: '10px',
+        paddingLeft: '15px',
+        paddingRight: '15px',
+        paddingTop: '10px',
+        paddingBottom: '10px',
         display: 'flex'
       }}>
         {requiresMatchSystem(currentGame) ? (
@@ -2889,7 +2892,8 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         alignItems: 'center',
         paddingTop: isMobile ? '15px' : '0',
         paddingBottom: isMobile ? '45px' : '0',
-        paddingHorizontal: '15px',
+        paddingLeft: '15px',
+        paddingRight: '15px',
         backgroundColor: '#000000'
       }}>
         <button 
