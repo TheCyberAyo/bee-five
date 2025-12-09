@@ -313,9 +313,10 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       updatedPieceAges = swapAllResult.pieceAges;
     }
     
-    // Swap all pieces for games ending with 1 (21, 41, 61, 81, 101, 121, etc.) every 13 moves
+    // Swap all pieces for games ending with 1 (31, 41, 61, 81, 101, 121, etc.) every 13 moves
     // Exclude games in strategic blocking ranges (500-700 and 1001-1591)
-    if (gameNumber && gameNumber % 10 === 1 && !gameEndsWith1InSpecifiedRanges(gameNumber) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
+    // Starts from game 31 (not game 1, 11, or 21)
+    if (gameNumber && gameNumber % 10 === 1 && gameNumber >= 31 && !gameEndsWith1InSpecifiedRanges(gameNumber) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
       const swapAllResult = swapAllPieces(updatedBoard, updatedPieceAges);
       updatedBoard = swapAllResult.board;
       updatedPieceAges = swapAllResult.pieceAges;

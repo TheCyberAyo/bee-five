@@ -227,17 +227,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     // Get the redirect URL - use environment variable if set, otherwise use window.location.origin
+    // OAuth callbacks must redirect to /auth/callback for proper handling
     const getRedirectUrl = () => {
       if (typeof window === 'undefined') return undefined;
       
       // Check for configured site URL (for production)
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
       if (siteUrl && siteUrl.startsWith('http')) {
-        return siteUrl;
+        return `${siteUrl}/auth/callback`;
       }
       
-      // Fall back to window.location.origin (for local development)
-      return window.location.origin;
+      // Fall back to window.location.origin with /auth/callback (for local development)
+      return `${window.location.origin}/auth/callback`;
     };
     
     await supabase.auth.signInWithOAuth({

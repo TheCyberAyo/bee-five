@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { getGameRules, GameRules, getTimeLimitForLevel, getAIDifficulty, getAdventureStartingPlayer } from '../utils/adventureGameRules';
 import ClassicAIGame from './ClassicAIGame';
+import { getStoryForGame, shouldShowStory, type StageStory } from '../data/stageStories';
+import { getBeeFactForGame } from '../data/beeFacts';
 
 // Match system helper functions
 const isMultipleOf10 = (gameNumber: number): boolean => gameNumber % 10 === 0;
@@ -103,6 +105,13 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
   const [pendingResultsPopup, setPendingResultsPopup] = useState(false);
   const [showResultsPopup, setShowResultsPopup] = useState(false);
   const [gameInitialized, setGameInitialized] = useState(false);
+  
+  // Story and fact state
+  const [showStoryCarousel, setShowStoryCarousel] = useState(false);
+  const [currentStory, setCurrentStory] = useState<StageStory | null>(null);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [showBeeFact, setShowBeeFact] = useState(false);
+  const [currentBeeFact, setCurrentBeeFact] = useState<string | null>(null);
   
   // Calculate visible range based on scroll position
   const getVisibleRange = () => {
@@ -225,7 +234,33 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
                 setIsWaitingForNextGame(false);
                 setCountdownTimer(0);
               }
-              // Directly start the game when clicked (like bee-five-web)
+              
+              // Check if we should show story first (at start of each stage)
+              if (shouldShowStory(gameNumber)) {
+                const story = getStoryForGame(gameNumber);
+                if (story) {
+                  setCurrentStory(story);
+                  setCurrentSlideIndex(0);
+                  setShowStoryCarousel(true);
+                  setGameInitialized(false);
+                  setGameProcessed(false);
+                  popupScheduledRef.current = false;
+                  return;
+                }
+              }
+              
+              // Check if we should show bee fact (every 10 games)
+              const beeFact = getBeeFactForGame(gameNumber);
+              if (beeFact) {
+                setCurrentBeeFact(beeFact);
+                setShowBeeFact(true);
+                setGameInitialized(false);
+                setGameProcessed(false);
+                popupScheduledRef.current = false;
+                return;
+              }
+              
+              // No story or fact, start game directly
               setIsPlayingGame(true);
               setGameInitialized(false); // Will be set to true when countdown starts
               setGameProcessed(false);
@@ -270,7 +305,33 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
                 setIsWaitingForNextGame(false);
                 setCountdownTimer(0);
               }
-              // Directly start the game when clicked
+              
+              // Check if we should show story first (at start of each stage)
+              if (shouldShowStory(gameNumber)) {
+                const story = getStoryForGame(gameNumber);
+                if (story) {
+                  setCurrentStory(story);
+                  setCurrentSlideIndex(0);
+                  setShowStoryCarousel(true);
+                  setGameInitialized(false);
+                  setGameProcessed(false);
+                  popupScheduledRef.current = false;
+                  return;
+                }
+              }
+              
+              // Check if we should show bee fact (every 10 games)
+              const beeFact = getBeeFactForGame(gameNumber);
+              if (beeFact) {
+                setCurrentBeeFact(beeFact);
+                setShowBeeFact(true);
+                setGameInitialized(false);
+                setGameProcessed(false);
+                popupScheduledRef.current = false;
+                return;
+              }
+              
+              // No story or fact, start game directly
               setIsPlayingGame(true);
               setGameInitialized(false); // Will be set to true when countdown starts
               setGameProcessed(false);
@@ -343,6 +404,27 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
         setShowMatchWinnerAnnouncement(false);
         lastAnnouncedMatchRef.current = 0;
       }
+      
+      // Check if we should show story first (at start of each stage)
+      if (shouldShowStory(currentGame)) {
+        const story = getStoryForGame(currentGame);
+        if (story) {
+          setCurrentStory(story);
+          setCurrentSlideIndex(0);
+          setShowStoryCarousel(true);
+          return; // Don't start game yet, wait for story to finish
+        }
+      }
+      
+      // Check if we should show bee fact (every 10 games)
+      const beeFact = getBeeFactForGame(currentGame);
+      if (beeFact) {
+        setCurrentBeeFact(beeFact);
+        setShowBeeFact(true);
+        return; // Don't start game yet, wait for fact to be dismissed
+      }
+      
+      // No story or fact, start game directly
       setIsPlayingGame(true);
     }
   };
@@ -557,7 +639,29 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
         setGameProcessed(false);
         popupScheduledRef.current = false;
         setGameInitialized(false);
-        // Game will restart automatically via key prop change
+        
+        // Check if we should show story first (at start of each stage)
+        if (shouldShowStory(nextGame)) {
+          const story = getStoryForGame(nextGame);
+          if (story) {
+            setCurrentStory(story);
+            setCurrentSlideIndex(0);
+            setShowStoryCarousel(true);
+            setIsPlayingGame(false); // Exit game view to show story
+            return;
+          }
+        }
+        
+        // Check if we should show bee fact (every 10 games)
+        const beeFact = getBeeFactForGame(nextGame);
+        if (beeFact) {
+          setCurrentBeeFact(beeFact);
+          setShowBeeFact(true);
+          setIsPlayingGame(false); // Exit game view to show fact
+          return;
+        }
+        
+        // No story or fact, game will restart automatically via key prop change
       } else {
         // Reached end of adventure
         setIsPlayingGame(false);
@@ -607,6 +711,127 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
       // Game will restart automatically via key prop change
     }
   }, [isWaitingForNextGame, countdownTimer]);
+
+  // Show story carousel modal
+  if (showStoryCarousel && currentStory) {
+    const isLastSlide = currentSlideIndex === currentStory.slides.length - 1;
+    
+    return (
+      <Modal
+        visible={showStoryCarousel}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          // Don't allow closing via back button - must go through slides
+        }}
+      >
+        <View style={styles.storyModalOverlay}>
+          <View style={styles.storyModalContent}>
+            <Text style={styles.storyTitle}>{currentStory.title}</Text>
+            
+            <View style={styles.storySlideContainer}>
+              <Text style={styles.storySlideText}>
+                {currentStory.slides[currentSlideIndex]}
+              </Text>
+            </View>
+            
+            {/* Slide indicators */}
+            <View style={styles.slideIndicators}>
+              {currentStory.slides.map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.slideIndicator,
+                    index === currentSlideIndex && styles.slideIndicatorActive,
+                  ]}
+                />
+              ))}
+            </View>
+            
+            {/* Navigation buttons */}
+            <View style={styles.storyNavButtons}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (currentSlideIndex > 0) {
+                    setCurrentSlideIndex(prev => prev - 1);
+                  }
+                }}
+                disabled={currentSlideIndex === 0}
+                style={[
+                  styles.storyNavButton,
+                  currentSlideIndex === 0 && styles.storyNavButtonDisabled,
+                ]}
+              >
+                <Text style={styles.storyNavButtonText}>← Previous</Text>
+              </TouchableOpacity>
+              
+              {!isLastSlide ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setCurrentSlideIndex(prev => prev + 1);
+                  }}
+                  style={[styles.storyNavButton, styles.storyNavButtonPrimary]}
+                >
+                  <Text style={styles.storyNavButtonText}>Next →</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowStoryCarousel(false);
+                    setCurrentStory(null);
+                    setCurrentSlideIndex(0);
+                    
+                    // After story, check for bee fact or start game
+                    const beeFact = getBeeFactForGame(currentGame);
+                    if (beeFact) {
+                      setCurrentBeeFact(beeFact);
+                      setShowBeeFact(true);
+                    } else {
+                      setIsPlayingGame(true);
+                    }
+                  }}
+                  style={[styles.storyNavButton, styles.storyNavButtonBegin]}
+                >
+                  <Text style={styles.storyNavButtonText}>✨ Begin Journey ✨</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // Show bee fact modal
+  if (showBeeFact && currentBeeFact) {
+    return (
+      <Modal
+        visible={showBeeFact}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          // Don't allow closing via back button - must click button
+        }}
+      >
+        <View style={styles.factModalOverlay}>
+          <View style={styles.factModalContent}>
+            <Text style={styles.factTitle}>🐝 Bee Fact Time! 🐝</Text>
+            <Text style={styles.factText}>{currentBeeFact}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowBeeFact(false);
+                setCurrentBeeFact(null);
+                setIsPlayingGame(true);
+              }}
+              style={styles.factButton}
+            >
+              <Text style={styles.factButtonText}>✨ Start Game ✨</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   // If playing a game, render the game component
   if (isPlayingGame) {
@@ -665,7 +890,29 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
             setIsWaitingForNextGame(false);
             setGameProcessed(false);
             setGameInitialized(false);
-            // Game will restart automatically via key prop change, which will trigger countdown
+            
+            // Check if we should show story first (at start of each stage)
+            if (shouldShowStory(nextGame)) {
+              const story = getStoryForGame(nextGame);
+              if (story) {
+                setCurrentStory(story);
+                setCurrentSlideIndex(0);
+                setShowStoryCarousel(true);
+                setIsPlayingGame(false); // Exit game view to show story
+                return;
+              }
+            }
+            
+            // Check if we should show bee fact (every 10 games)
+            const beeFact = getBeeFactForGame(nextGame);
+            if (beeFact) {
+              setCurrentBeeFact(beeFact);
+              setShowBeeFact(true);
+              setIsPlayingGame(false); // Exit game view to show fact
+              return;
+            }
+            
+            // No story or fact, game will restart automatically via key prop change
           } else {
             // If we've reached the end, go back to map
             setIsPlayingGame(false);
@@ -1384,6 +1631,148 @@ const styles = StyleSheet.create({
     color: '#FFF',
     marginTop: 4,
     opacity: 0.9,
+  },
+  // Story carousel modal styles
+  storyModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  storyModalContent: {
+    backgroundColor: '#FFC30B',
+    borderRadius: 20,
+    padding: 25,
+    width: '90%',
+    maxWidth: 600,
+    borderWidth: 4,
+    borderColor: '#000',
+    alignItems: 'center',
+  },
+  storyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 20,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 2,
+  },
+  storySlideContainer: {
+    minHeight: 150,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 15,
+  },
+  storySlideText: {
+    fontSize: 18,
+    lineHeight: 28,
+    color: '#000',
+    textAlign: 'center',
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  slideIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  slideIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#999',
+  },
+  slideIndicatorActive: {
+    width: 30,
+    backgroundColor: '#4CAF50',
+  },
+  storyNavButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  storyNavButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#4CAF50',
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  storyNavButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.5,
+  },
+  storyNavButtonPrimary: {
+    backgroundColor: '#4CAF50',
+  },
+  storyNavButtonBegin: {
+    backgroundColor: '#4CAF50',
+  },
+  storyNavButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  // Bee fact modal styles
+  factModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  factModalContent: {
+    backgroundColor: '#FFC30B',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 500,
+    borderWidth: 4,
+    borderColor: '#000',
+    alignItems: 'center',
+  },
+  factTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 20,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 2,
+  },
+  factText: {
+    fontSize: 20,
+    lineHeight: 30,
+    color: '#000',
+    marginBottom: 25,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  factButton: {
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: '#000',
+    backgroundColor: '#4CAF50',
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  factButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFF',
   },
 });
 

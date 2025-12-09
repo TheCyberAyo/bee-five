@@ -1,7 +1,7 @@
 /**
  * Privacy Policy Component
  * Displays the privacy policy for Bee-Five app
- * Required for AdMob and app store approval
+ * Required for app store approval
  */
 
 import React from 'react';
@@ -92,77 +92,10 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
               details, location data, or contact lists.
             </Text>
 
-            {/* AdMob and Google Ads */}
-            <Text style={styles.sectionTitle}>
-              AdMob and Google Ads Usage
-            </Text>
-            <Text style={styles.sectionText}>
-              Our app uses Google AdMob to display advertisements. AdMob may
-              collect and use data to provide personalized ads and measure ad
-              performance.
-            </Text>
-            <Text style={styles.subsectionTitle}>
-              Data Collected by AdMob:
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • Device identifiers (such as Android Advertising ID or iOS
-              Identifier for Advertisers)
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • IP address
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • App usage data and interactions with ads
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • Device information (model, OS version, language)
-            </Text>
-            <Text style={styles.sectionText}>
-              This data is used to:
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • Show you relevant advertisements
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • Measure ad performance and effectiveness
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • Prevent fraud and abuse
-            </Text>
-            <Text style={styles.sectionText}>
-              AdMob's use of information is governed by Google's Privacy Policy.
-              You can learn more about how Google uses data at{' '}
-              <Text
-                style={styles.link}
-                onPress={() =>
-                  openURL('https://policies.google.com/privacy')
-                }
-              >
-                policies.google.com/privacy
-              </Text>
-              .
-            </Text>
-            <Text style={styles.sectionText}>
-              You can opt out of personalized advertising by visiting{' '}
-              <Text
-                style={styles.link}
-                onPress={() =>
-                  openURL('https://adssettings.google.com')
-                }
-              >
-                adssettings.google.com
-              </Text>
-              .
-            </Text>
-
             {/* Third-Party Services */}
             <Text style={styles.sectionTitle}>Third-Party Services</Text>
             <Text style={styles.sectionText}>
               Our app may use the following third-party services:
-            </Text>
-            <Text style={styles.bulletPoint}>
-              • <Text style={styles.bold}>Google AdMob:</Text> For displaying
-              advertisements. See Google's Privacy Policy for details.
             </Text>
             <Text style={styles.bulletPoint}>
               • <Text style={styles.bold}>Supabase:</Text> For backend services

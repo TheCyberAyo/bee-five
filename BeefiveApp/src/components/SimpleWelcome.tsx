@@ -933,6 +933,7 @@ const styles = StyleSheet.create({
     borderColor: '#000',
     marginBottom: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   easyButton: {
     backgroundColor: '#4CAF50',
@@ -947,6 +948,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   modalActionButton: {
     paddingVertical: 12,

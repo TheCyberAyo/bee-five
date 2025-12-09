@@ -72,6 +72,13 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+// Load keystore properties from file if it exists
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -85,6 +92,11 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    
+    // Fix for PNG asset compilation issues
+    aaptOptions {
+        cruncherEnabled false
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -92,17 +104,37 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(rootProject.file("app/" + keystoreProperties['MYAPP_RELEASE_STORE_FILE']))
+                storePassword keystoreProperties['MYAPP_RELEASE_STORE_PASSWORD']
+                keyAlias keystoreProperties['MYAPP_RELEASE_KEY_ALIAS']
+                keyPassword keystoreProperties['MYAPP_RELEASE_KEY_PASSWORD']
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            shrinkResources false
+        }
+    }
+    
+    // Enable AAB (Android App Bundle) generation
+    bundle {
+        language {
+            enableSplit = true
+        }
+        density {
+            enableSplit = true
+        }
+        abi {
+            enableSplit = true
         }
     }
 }
@@ -117,31 +149,4 @@ dependencies {
         implementation jscFlavor
     }
 
-    // Google Mobile Ads SDK (required for mediation)
-    implementation 'com.google.android.gms:play-services-ads:23.5.0'
-
-    // Mediation Adapters - Add/remove based on your AdMob console configuration
-    // Meta Audience Network (Facebook)
-    implementation 'com.google.ads.mediation:facebook:6.16.0.0'
-    
-    // Unity Ads
-    implementation 'com.google.ads.mediation:unity:4.12.3.0'
-    
-    // AppLovin MAX
-    implementation 'com.google.ads.mediation:applovin:13.0.0.0'
-    
-    // AdColony - Temporarily disabled (version not available)
-    // implementation 'com.google.ads.mediation:adcolony:4.9.0.0'
-    
-    // Vungle
-    implementation 'com.google.ads.mediation:vungle:7.3.0.0'
-    
-    // IronSource - Temporarily disabled (version not available)
-    // implementation 'com.google.ads.mediation:ironsource:8.3.1.0.0'
-    
-    // Chartboost - Temporarily disabled (version not available)
-    // implementation 'com.google.ads.mediation:chartboost:9.7.0.0'
-    
-    // InMobi - Temporarily disabled (version not available)
-    // implementation 'com.google.ads.mediation:inmobi:10.7.0.0'
 }

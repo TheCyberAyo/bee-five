@@ -134,3 +134,15 @@ Once you've added the URL to AdMob, you're all set! The privacy policy is now:
 
 Your app can now proceed with AdMob approval! 🎉
 
+
+
+
+
+
+
+
+
+
+
+
+

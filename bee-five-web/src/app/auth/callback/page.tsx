@@ -36,6 +36,12 @@ export default function AuthCallbackPage() {
         // Get tokens from hash (Supabase typically uses hash fragments)
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type'); // 'signup', 'recovery', or undefined (OAuth)
+
+        // Determine the auth type for better messaging
+        const isOAuth = !type || (type !== 'signup' && type !== 'recovery');
+        const isEmailConfirmation = type === 'signup';
+        const isPasswordReset = type === 'recovery';
 
         // If we have tokens in the hash, set the session
         if (accessToken && refreshToken) {
@@ -46,7 +52,9 @@ export default function AuthCallbackPage() {
 
           if (sessionError) {
             setStatus('error');
-            setMessage('Failed to confirm your email. Please try again.');
+            setMessage(isOAuth 
+              ? 'Failed to sign in. Please try again.' 
+              : 'Failed to confirm your email. Please try again.');
             return;
           }
 
@@ -61,14 +69,17 @@ export default function AuthCallbackPage() {
 
           // Success!
           setStatus('success');
-          setMessage('Your email has been successfully confirmed!');
+          setMessage(isOAuth 
+            ? 'Successfully signed in!' 
+            : 'Your email has been successfully confirmed!');
           
-          // Redirect to home after 3 seconds
+          // Redirect to home after 2 seconds (faster for OAuth)
           setTimeout(() => {
             router.push('/');
-          }, 3000);
+          }, isOAuth ? 1500 : 3000);
         } else {
-          // Check if session already exists (might have been set automatically)
+          // Check if session already exists (might have been set automatically by Supabase)
+          // This is common for OAuth flows where Supabase processes the callback automatically
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
           if (sessionError) {
@@ -78,22 +89,27 @@ export default function AuthCallbackPage() {
           }
 
           if (session && session.user) {
-            // Check if email is confirmed
-            if (session.user.email_confirmed_at || session.user.confirmed_at) {
+            // For OAuth, email is automatically confirmed
+            // For email signup, check if email is confirmed
+            if (isOAuth || session.user.email_confirmed_at || session.user.confirmed_at) {
               setStatus('success');
-              setMessage('Your email has been successfully confirmed!');
+              setMessage(isOAuth 
+                ? 'Successfully signed in!' 
+                : 'Your email has been successfully confirmed!');
               
-              // Redirect to home after 3 seconds
+              // Redirect to home after 2 seconds (faster for OAuth)
               setTimeout(() => {
                 router.push('/');
-              }, 3000);
+              }, isOAuth ? 1500 : 3000);
             } else {
               setStatus('error');
               setMessage('Email confirmation is still pending. Please check your email.');
             }
           } else {
             setStatus('error');
-            setMessage('Invalid confirmation link. Please request a new confirmation email.');
+            setMessage(isOAuth 
+              ? 'Failed to sign in. Please try again.' 
+              : 'Invalid confirmation link. Please request a new confirmation email.');
           }
         }
       } catch (err) {
@@ -114,8 +130,8 @@ export default function AuthCallbackPage() {
             <div className="mb-4">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent"></div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Confirming your email...</h1>
-            <p className="text-gray-600">Please wait while we verify your email address.</p>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Signing you in...</h1>
+            <p className="text-gray-600">Please wait while we complete your sign in.</p>
           </>
         )}
 
