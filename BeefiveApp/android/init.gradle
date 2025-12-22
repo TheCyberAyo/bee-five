@@ -1,0 +1,21 @@
+// Gradle init script to clean corrupted transform cache before builds
+// This runs automatically before every Gradle build
+
+gradle.settingsEvaluated { settings ->
+    // Clean corrupted transform cache on Windows
+    def transformsPath = new File(System.getProperty("user.home"), ".gradle/caches/9.0.0/transforms")
+    if (transformsPath.exists()) {
+        def problemDir = new File(transformsPath, "1e84847373c8b60ddb3f088099977c2a")
+        if (problemDir.exists()) {
+            try {
+                problemDir.deleteDir()
+                println "Cleaned corrupted transform cache: ${problemDir.name}"
+            } catch (Exception e) {
+                println "Warning: Could not clean transform cache: ${e.message}"
+            }
+        }
+    }
+}
+
+
+

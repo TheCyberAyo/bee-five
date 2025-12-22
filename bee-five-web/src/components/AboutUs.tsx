@@ -118,7 +118,7 @@ export default function AboutUs({ onBackToMenu, isMobile }: AboutUsProps) {
           marginBottom: '2rem'
         }}>
           <p style={{ marginBottom: '1.5rem' }}>
-            Bee-Five is your favorite version of Connect-Five — a fun, fast, and colorful strategy game created by MindGrind. It's designed to bring people together through friendly competition, whether you're playing locally, against the AI, or online with friends.
+            Bee-Five is your favorite version of Connect-5 — a fun, fast, and colorful strategy game created by MindGrind. It's designed to bring people together through friendly competition, whether you're playing locally, against the AI, or online with friends.
           </p>
           
           <p style={{ marginBottom: '1.5rem' }}>

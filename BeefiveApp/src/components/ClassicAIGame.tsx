@@ -51,19 +51,17 @@ const BOARD_SIZE = 10;
 const BORDER_WIDTH = 2;
 const BOARD_PADDING = 20;
 
-// Calculate cell size to match web version
+// Calculate cell size to fill full width of screen
+// Height will increase proportionally since board is square
 const calculateCellSize = () => {
   const isMobile = SCREEN_WIDTH <= 768;
-  const availableSize = Math.min(SCREEN_WIDTH, SCREEN_HEIGHT) - (BOARD_PADDING * 2);
+  // Use full screen width, accounting for minimal padding
+  const availableSize = SCREEN_WIDTH - (BOARD_PADDING * 2);
   const totalBorders = (BOARD_SIZE + 1) * BORDER_WIDTH;
-  const availableForCells = availableSize - totalBorders - 20;
+  const availableForCells = availableSize - totalBorders;
   const calculatedSize = Math.floor(availableForCells / BOARD_SIZE);
   
-  if (isMobile) {
-    return Math.min(calculatedSize, 40);
-  } else {
-    return Math.min(calculatedSize, 60);
-  }
+  return calculatedSize;
 };
 
 const CELL_SIZE = calculateCellSize();
@@ -1612,23 +1610,6 @@ export default function ClassicAIGame({
                           <Text style={styles.modalButtonText}>🔄 Play Again</Text>
                         </TouchableOpacity>
                       )}
-                      
-                      {/* Go to Map button for adventure mode */}
-                      <TouchableOpacity 
-                        style={[styles.modalButton, styles.greenButton]}
-                        onPress={() => {
-                          setShowWinPopup(false);
-                          if (winPopupTimerRef.current) {
-                            clearTimeout(winPopupTimerRef.current);
-                            winPopupTimerRef.current = null;
-                          }
-                          if (onNextGame) {
-                            onNextGame();
-                          }
-                        }}
-                      >
-                        <Text style={styles.modalButtonText}>🗺️ Go to Map</Text>
-                      </TouchableOpacity>
                     </>
                   )}
                   
@@ -1853,8 +1834,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    padding: BOARD_PADDING,
+    paddingHorizontal: BOARD_PADDING,
     paddingTop: BOARD_PADDING * 0.5,
+    width: '100%',
   },
   board: {
     backgroundColor: '#87CEEB',

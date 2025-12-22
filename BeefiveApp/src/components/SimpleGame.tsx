@@ -15,24 +15,18 @@ const BOARD_SIZE = 10; // Match bee-five-web (10x10 grid)
 const BORDER_WIDTH = 2; // Match web version
 const BOARD_PADDING = 20;
 
-// Calculate cell size to match web version
-// Web: 60px for desktop, 40px for mobile
-// Calculate to fit screen while maintaining proportions
+// Calculate cell size to fill full width of screen
+// Height will increase proportionally since board is square
 const calculateCellSize = () => {
   const isMobile = SCREEN_WIDTH <= 768;
-  const availableSize = Math.min(SCREEN_WIDTH, SCREEN_HEIGHT) - (BOARD_PADDING * 2);
+  // Use full screen width, accounting for minimal padding
+  const availableSize = SCREEN_WIDTH - (BOARD_PADDING * 2);
   // Account for borders: BOARD_SIZE cells + (BOARD_SIZE + 1) borders
   const totalBorders = (BOARD_SIZE + 1) * BORDER_WIDTH;
-  const availableForCells = availableSize - totalBorders - 20; // Extra padding
+  const availableForCells = availableSize - totalBorders;
   const calculatedSize = Math.floor(availableForCells / BOARD_SIZE);
   
-  if (isMobile) {
-    // Mobile: use 40px like web version, but scale down if needed
-    return Math.min(calculatedSize, 40);
-  } else {
-    // Desktop: use 60px like web version, but scale down if needed
-    return Math.min(calculatedSize, 60);
-  }
+  return calculatedSize;
 };
 
 const CELL_SIZE = calculateCellSize();
@@ -298,8 +292,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    padding: BOARD_PADDING,
+    paddingHorizontal: BOARD_PADDING,
     paddingTop: BOARD_PADDING * 0.5, // Shift board higher up
+    width: '100%',
   },
   board: {
     backgroundColor: '#87CEEB',

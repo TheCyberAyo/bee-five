@@ -1345,7 +1345,7 @@ export default function SimpleWelcome() {
                 textShadow: '0 3px 8px rgba(0,0,0,0.4)'
               }}
             >
-              Connect-Five
+              Connect-5
             </span>
             <span
               style={{

@@ -8,6 +8,7 @@
 import React from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider } from './src/contexts/AuthContext';
 import SimpleWelcome from './src/components/SimpleWelcome';
 
 function App() {
@@ -15,8 +16,10 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <SimpleWelcome />
+      <AuthProvider>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <SimpleWelcome />
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

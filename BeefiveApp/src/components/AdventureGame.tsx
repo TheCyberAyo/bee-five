@@ -10,11 +10,14 @@ import {
   Image,
   Animated,
   Modal,
+  AppState,
 } from 'react-native';
 import { getGameRules, GameRules, getTimeLimitForLevel, getAIDifficulty, getAdventureStartingPlayer } from '../utils/adventureGameRules';
 import ClassicAIGame from './ClassicAIGame';
 import { getStoryForGame, shouldShowStory, type StageStory } from '../data/stageStories';
 import { getBeeFactForGame } from '../data/beeFacts';
+import { useAuth } from '../contexts/AuthContext';
+import { loadAdventureProgress, saveAdventureProgress, autoSaveProgress, syncLocalProgressToServer } from '../services/progressService';
 
 // Match system helper functions
 const isMultipleOf10 = (gameNumber: number): boolean => gameNumber % 10 === 0;
@@ -76,13 +79,21 @@ const ADVENTURE_STAGES = [
 
 interface AdventureGameProps {
   onBackToMenu: () => void;
+  initialGame?: number;
+  autoStart?: boolean;
+  onGameChange?: (gameNumber: number) => void;
 }
 
-export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
-  const [currentGame, setCurrentGame] = useState(1);
+export default function AdventureGame({ onBackToMenu, initialGame, autoStart, onGameChange }: AdventureGameProps) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  
+  const [currentGame, setCurrentGame] = useState(initialGame || 1);
   const [gamesCompleted, setGamesCompleted] = useState<number[]>([]);
-  const [highestUnlockedGame, setHighestUnlockedGame] = useState(TOTAL_GAMES); // Unlock all for now
+  const [highestUnlockedGame, setHighestUnlockedGame] = useState(1); // Start locked, unlock based on progress
   const [scrollY, setScrollY] = useState(0);
+  const [progressLoadedUserId, setProgressLoadedUserId] = useState<string | null>(null);
+  const [gamesWon, setGamesWon] = useState(0);
   const [selectedGameRules, setSelectedGameRules] = useState<GameRules | null>(null);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [isPlayingGame, setIsPlayingGame] = useState(false);
@@ -100,8 +111,8 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
   const lastAnnouncedMatchRef = useRef<string>('');
   const [gameProcessed, setGameProcessed] = useState(false);
   const popupScheduledRef = useRef<boolean>(false);
-  const winPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const matchResultsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const winPopupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const matchResultsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingResultsPopup, setPendingResultsPopup] = useState(false);
   const [showResultsPopup, setShowResultsPopup] = useState(false);
   const [gameInitialized, setGameInitialized] = useState(false);
@@ -112,6 +123,168 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [showBeeFact, setShowBeeFact] = useState(false);
   const [currentBeeFact, setCurrentBeeFact] = useState<string | null>(null);
+  
+  // Load progress on mount and when user changes
+  useEffect(() => {
+    const loadProgress = async () => {
+      // If user is logged in and we haven't loaded their progress yet
+      if (user && progressLoadedUserId !== user.id) {
+        try {
+          const progress = await loadAdventureProgress(user.id);
+          if (progress) {
+            // Use initialGame if provided, otherwise use loaded progress
+            const gameToSet = initialGame || progress.current_game || 1;
+            setCurrentGame(gameToSet);
+            // Ensure highestUnlockedGame is at least 1 (game 1 is always unlocked)
+            const loadedHighest = Math.max(1, progress.highest_unlocked_game || 1);
+            // If autoStart is true and initialGame is provided, trust that it's unlocked
+            // (SimpleWelcome only allows clicking play on unlocked games)
+            if (autoStart && initialGame && initialGame > loadedHighest) {
+              setHighestUnlockedGame(initialGame);
+            } else {
+              setHighestUnlockedGame(loadedHighest);
+            }
+            setGamesCompleted(progress.games_completed || []);
+            setGamesWon(progress.games_won || 0);
+          } else if (initialGame) {
+            // If no progress but initialGame provided, use it
+            setCurrentGame(initialGame);
+            // If autoStart is true, trust that initialGame is unlocked
+            setHighestUnlockedGame(autoStart ? Math.max(1, initialGame) : 1);
+          }
+          setProgressLoadedUserId(user.id);
+        } catch (error) {
+          console.error('Error loading progress:', error);
+          if (initialGame) {
+            setCurrentGame(initialGame);
+          }
+          setProgressLoadedUserId(user.id); // Mark as attempted even on error
+        }
+      } else if (!user) {
+        // Reset progress when user logs out
+        setProgressLoadedUserId(null);
+        setCurrentGame(initialGame || 1);
+        setHighestUnlockedGame(1);
+        setGamesCompleted([]);
+        setGamesWon(0);
+      }
+    };
+    loadProgress();
+  }, [user, progressLoadedUserId, initialGame]);
+
+  // Auto-start game if autoStart prop is true
+  useEffect(() => {
+    if (!autoStart) return;
+    
+    // Wait for progress to be loaded if user is logged in
+    if (user && user.id && progressLoadedUserId !== user.id) {
+      // Progress is still loading, wait for it
+      return;
+    }
+    
+    // If we're already playing or showing modals, don't start again
+    if (isPlayingGame || showStoryCarousel || showBeeFact) {
+      return;
+    }
+    
+    // Small delay to ensure component is fully mounted
+    const timer = setTimeout(() => {
+      // Double-check conditions after delay
+      if (isPlayingGame || showStoryCarousel || showBeeFact) {
+        return;
+      }
+      
+      // Ensure highestUnlockedGame is at least 1 (game 1 is always unlocked)
+      const effectiveHighestUnlocked = Math.max(1, highestUnlockedGame);
+      // Ensure currentGame is at least 1
+      const effectiveCurrentGame = Math.max(1, currentGame);
+      
+      // Game 1 is always unlocked, or check if currentGame is unlocked
+      const canStart = effectiveCurrentGame === 1 || effectiveCurrentGame <= effectiveHighestUnlocked;
+      
+      if (!canStart) {
+        return;
+      }
+      
+      // Reset match state if starting a new game series
+      if (requiresMatchSystem(effectiveCurrentGame)) {
+        setCurrentMatch(1);
+        setPlayerWins(0);
+        setAiWins(0);
+        setIsMatchComplete(false);
+        setIsWaitingForNextGame(false);
+        setCountdownTimer(0);
+        setShowMatchWinnerAnnouncement(false);
+        lastAnnouncedMatchRef.current = '';
+      }
+      
+      // Check if we should show story first (at start of each stage)
+      if (shouldShowStory(effectiveCurrentGame)) {
+        const story = getStoryForGame(effectiveCurrentGame);
+        if (story) {
+          setCurrentStory(story);
+          setCurrentSlideIndex(0);
+          setShowStoryCarousel(true);
+          return;
+        }
+      }
+      
+      // Check if we should show bee fact (every 10 games)
+      const beeFact = getBeeFactForGame(effectiveCurrentGame);
+      if (beeFact) {
+        setCurrentBeeFact(beeFact);
+        setShowBeeFact(true);
+        return;
+      }
+      
+      // No story or fact, start game directly
+      setIsPlayingGame(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [autoStart, isPlayingGame, currentGame, highestUnlockedGame, showStoryCarousel, showBeeFact, user, progressLoadedUserId]);
+
+  // Auto-save progress when it changes (debounced)
+  useEffect(() => {
+    if (user && progressLoadedUserId === user.id) {
+      autoSaveProgress(user.id, {
+        current_game: currentGame,
+        highest_unlocked_game: highestUnlockedGame,
+        games_completed: gamesCompleted,
+        games_won: gamesWon,
+      });
+    }
+  }, [currentGame, highestUnlockedGame, gamesCompleted, gamesWon, user, progressLoadedUserId]);
+
+  // Save progress when component unmounts or user navigates away
+  useEffect(() => {
+    return () => {
+      if (user) {
+        saveAdventureProgress(user.id, {
+          current_game: currentGame,
+          highest_unlocked_game: highestUnlockedGame,
+          games_completed: gamesCompleted,
+          games_won: gamesWon,
+        });
+      }
+    };
+  }, []); // Only run on unmount
+
+  // Sync progress when app comes back to foreground (in case user was offline)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && user) {
+        // App came to foreground, sync local progress to server
+        syncLocalProgressToServer(user.id).catch((error) => {
+          console.error('Error syncing progress:', error);
+        });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user]);
   
   // Calculate visible range based on scroll position
   const getVisibleRange = () => {
@@ -402,7 +575,7 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
         setIsWaitingForNextGame(false);
         setCountdownTimer(0);
         setShowMatchWinnerAnnouncement(false);
-        lastAnnouncedMatchRef.current = 0;
+        lastAnnouncedMatchRef.current = '';
       }
       
       // Check if we should show story first (at start of each stage)
@@ -429,9 +602,24 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
     }
   };
 
-  // Handle game completion - return to map
+  // Handle game completion - return to map or menu
   const handleGameComplete = (won: boolean = false) => {
     setIsPlayingGame(false);
+    
+    // If autoStart was used, go back to menu instead of showing map
+    if (autoStart) {
+      // Save progress before going back
+      if (user) {
+        saveAdventureProgress(user.id, {
+          current_game: currentGame,
+          highest_unlocked_game: highestUnlockedGame,
+          games_completed: gamesCompleted,
+          games_won: gamesWon,
+        });
+      }
+      onBackToMenu();
+      return;
+    }
     
     // For match games, update match scores
     if (requiresMatchSystem(currentGame)) {
@@ -470,6 +658,8 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
       if (won) {
         // Unlock next game when current game is won
         setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
+        // Track games won
+        setGamesWon(prev => prev + 1);
       }
       setGamesCompleted(prev => {
         if (!prev.includes(currentGame)) {
@@ -492,6 +682,8 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
           setIsMatchComplete(true);
           // Unlock next game when match is won
           setHighestUnlockedGame(prev => Math.max(prev, currentGame + 1));
+          // Track games won
+          setGamesWon(prev => prev + 1);
           setGamesCompleted(prev => {
             if (!prev.includes(currentGame)) {
               return [...prev, currentGame];
@@ -590,20 +782,57 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
       }
     } else if (requiresMatchSystem(currentGame) && isMatchComplete) {
       const nextGame = currentGame + 1;
-      if (requiresMatchSystem(nextGame)) {
-        setCurrentGame(nextGame);
-        setCurrentMatch(1);
-        setPlayerWins(0);
-        setAiWins(0);
-        setIsMatchComplete(false);
-        setCountdownTimer(0);
-        setIsWaitingForNextGame(false);
-        setGameProcessed(false);
-        popupScheduledRef.current = false;
-        setGameInitialized(false);
+      if (nextGame <= TOTAL_GAMES) {
+        if (requiresMatchSystem(nextGame)) {
+          setCurrentGame(nextGame);
+          // Notify parent component of game change
+          if (onGameChange) {
+            onGameChange(nextGame);
+          }
+          setCurrentMatch(1);
+          setPlayerWins(0);
+          setAiWins(0);
+          setIsMatchComplete(false);
+          setCountdownTimer(0);
+          setIsWaitingForNextGame(false);
+          setGameProcessed(false);
+          popupScheduledRef.current = false;
+          setGameInitialized(false);
+        } else {
+          // If we've reached the end and autoStart is true, go back to menu
+          if (autoStart) {
+            // Save progress before going back
+            if (user) {
+              saveAdventureProgress(user.id, {
+                current_game: currentGame,
+                highest_unlocked_game: highestUnlockedGame,
+                games_completed: gamesCompleted,
+                games_won: gamesWon,
+              });
+            }
+            onBackToMenu();
+          } else {
+            setIsPlayingGame(false);
+            setGameInitialized(false);
+          }
+        }
       } else {
-        setIsPlayingGame(false);
-        setGameInitialized(false);
+        // If we've reached the end and autoStart is true, go back to menu
+        if (autoStart) {
+          // Save progress before going back
+          if (user) {
+            saveAdventureProgress(user.id, {
+              current_game: currentGame,
+              highest_unlocked_game: highestUnlockedGame,
+              games_completed: gamesCompleted,
+              games_won: gamesWon,
+            });
+          }
+          onBackToMenu();
+        } else {
+          setIsPlayingGame(false);
+          setGameInitialized(false);
+        }
       }
     } else {
       setIsPlayingGame(false);
@@ -630,6 +859,10 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
       if (nextGame <= TOTAL_GAMES) {
         setHighestUnlockedGame(prev => Math.max(prev, nextGame));
         setCurrentGame(nextGame);
+        // Notify parent component of game change
+        if (onGameChange) {
+          onGameChange(nextGame);
+        }
         setCurrentMatch(1);
         setPlayerWins(0);
         setAiWins(0);
@@ -664,7 +897,20 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
         // No story or fact, game will restart automatically via key prop change
       } else {
         // Reached end of adventure
-        setIsPlayingGame(false);
+        if (autoStart) {
+          // Save progress before going back
+          if (user) {
+            saveAdventureProgress(user.id, {
+              current_game: currentGame,
+              highest_unlocked_game: highestUnlockedGame,
+              games_completed: gamesCompleted,
+              games_won: gamesWon,
+            });
+          }
+          onBackToMenu();
+        } else {
+          setIsPlayingGame(false);
+        }
       }
     } else {
       // Player lost: restart the same match series
@@ -836,14 +1082,22 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
   // If playing a game, render the game component
   if (isPlayingGame) {
     // Pass currentMatch to getGameRules so it can determine blind play for multiples of 50 match 2
-    const gameRules = getGameRules(currentGame, isMatchGame ? currentMatch : undefined);
     const isMatchGame = requiresMatchSystem(currentGame);
+    const gameRules = getGameRules(currentGame, isMatchGame ? currentMatch : undefined);
     
     return (
       <ClassicAIGame
         key={`${currentGame}-${currentMatch}`} // Force remount when game number or match changes
         onBackToMenu={onBackToMenu} // Go to main menu
-        onBackToMap={() => handleGameComplete(false)} // Go back to adventure map
+        onBackToMap={() => {
+          // If autoStart was used, go back to menu instead of map
+          if (autoStart) {
+            handleGameComplete(false);
+            onBackToMenu();
+          } else {
+            handleGameComplete(false);
+          }
+        }} // Go back to adventure map or menu
         initialDifficulty={gameRules.aiDifficulty}
         initialTimer={gameRules.timeLimit}
         backgroundColor={gameRules.startingPlayer === 1 ? 'yellow' : 'black'}
@@ -882,6 +1136,10 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
             // Unlock next game
             setHighestUnlockedGame(prev => Math.max(prev, nextGame));
             setCurrentGame(nextGame);
+            // Notify parent component of game change
+            if (onGameChange) {
+              onGameChange(nextGame);
+            }
             setCurrentMatch(1);
             setPlayerWins(0);
             setAiWins(0);
@@ -914,11 +1172,50 @@ export default function AdventureGame({ onBackToMenu }: AdventureGameProps) {
             
             // No story or fact, game will restart automatically via key prop change
           } else {
-            // If we've reached the end, go back to map
-            setIsPlayingGame(false);
+            // If we've reached the end and autoStart is true, go back to menu
+            if (autoStart) {
+              // Save progress before going back
+              if (user) {
+                saveAdventureProgress(user.id, {
+                  current_game: currentGame,
+                  highest_unlocked_game: highestUnlockedGame,
+                  games_completed: gamesCompleted,
+                  games_won: gamesWon,
+                });
+              }
+              onBackToMenu();
+            } else {
+              // If we've reached the end, go back to map
+              setIsPlayingGame(false);
+            }
           }
         }}
       />
+    );
+  }
+
+  // If autoStart is true, don't show the map - go directly to game
+  // The map is now on the main page, so AdventureGame should only show the game
+  if (autoStart) {
+    // If we're not playing yet but autoStart is true, the game should start via useEffect
+    // Just return null or a loading state while waiting for game to start
+    // Story and bee fact modals will overlay on top, so we don't need to check for them here
+    if (!isPlayingGame && !showStoryCarousel && !showBeeFact) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#90EE90' }}>
+            <Text style={{ fontSize: 24, color: '#000' }}>🐝</Text>
+            <Text style={{ fontSize: 16, color: '#000', marginTop: 10 }}>Loading game...</Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
+    // If autoStart is true, never render the map - only render game/story/fact components
+    // Return an empty view (or minimal container) so modals can overlay
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, backgroundColor: '#90EE90' }} />
+      </SafeAreaView>
     );
   }
 
