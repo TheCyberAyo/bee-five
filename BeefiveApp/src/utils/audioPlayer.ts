@@ -37,19 +37,18 @@ export const playLoginMelody = (): void => {
           return;
         }
 
-        // Play the sound
+        // Set the sound to loop indefinitely (-1 means infinite loop)
         if (loginMelody) {
+          loginMelody.setNumberOfLoops(-1);
+          
+          // Play the sound
           loginMelody.play((success) => {
             if (success) {
-              console.log('Login melody played successfully');
+              console.log('Login melody started playing (looping)');
             } else {
               console.log('Login melody playback failed');
             }
-            // Release the sound after playback
-            if (loginMelody) {
-              loginMelody.release();
-              loginMelody = null;
-            }
+            // Don't release the sound - let it loop continuously
           });
         }
       }

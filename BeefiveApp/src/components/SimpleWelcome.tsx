@@ -72,6 +72,7 @@ export default function SimpleWelcome() {
   const [gameMode, setGameMode] = useState<GameMode>('menu');
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');
   const [aiDifficulty, setAiDifficulty] = useState('medium');
   const [aiTimer, setAiTimer] = useState<number>(15);
@@ -169,8 +170,15 @@ export default function SimpleWelcome() {
       const gameIndex = currentGame - 1;
       const gameY = totalHeight - (gameIndex * spacing);
       
+      // Calculate minimum scroll position based on highest unlocked game
+      const highestGameIndex = highestUnlockedGame - 1;
+      const highestGameY = totalHeight - (highestGameIndex * spacing);
+      const minScrollY = Math.max(0, highestGameY);
+      
       // Scroll to position the current game in the center of the viewport
-      const scrollToY = Math.max(0, gameY - SCREEN_HEIGHT / 2);
+      // But ensure we don't scroll above the highest unlocked game
+      const desiredScrollY = Math.max(0, gameY - SCREEN_HEIGHT / 2);
+      const scrollToY = Math.max(desiredScrollY, minScrollY);
       
       // Use timeout to ensure the ScrollView is fully rendered
       const timeoutId = setTimeout(() => {
@@ -184,7 +192,7 @@ export default function SimpleWelcome() {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [currentGame, progressLoaded, gameMode, isMobile]);
+  }, [currentGame, progressLoaded, gameMode, isMobile, highestUnlockedGame]);
 
   // Check authentication state and redirect to sign in if not logged in
   useEffect(() => {
@@ -860,12 +868,23 @@ export default function SimpleWelcome() {
       <View style={styles.mapBackgroundContainer}>
         {/* Header with logo - matching AdventureGame */}
         <View style={styles.mapHeader}>
+          <View style={{ flex: 1 }} />
           <View style={styles.mapHeaderLogoContainer}>
             <Image 
               source={require('../assets/BEE-FIVE.png')}
               style={styles.mapHeaderLogo}
               resizeMode="contain"
             />
+          </View>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            {user && (
+              <TouchableOpacity
+                onPress={() => setShowProfileModal(true)}
+                style={styles.profileIconButtonMobile}
+              >
+                <Text style={styles.profileIcon}>👤</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         
@@ -878,9 +897,68 @@ export default function SimpleWelcome() {
             showsVerticalScrollIndicator={true}
             scrollEnabled={true}
             onScroll={(event) => {
-              setMapScrollY(event.nativeEvent.contentOffset.y);
+              const scrollY = event.nativeEvent.contentOffset.y;
+              const spacing = isMobile ? 60 : 80;
+              const mapViewportHeight = SCREEN_HEIGHT * 0.6; // Map container height
+              
+              // Calculate the Y position of the highest unlocked game (from top of content)
+              // Games are positioned from bottom to top, so higher game numbers have lower Y values
+              const highestGameIndex = highestUnlockedGame - 1;
+              const highestGameY = totalHeight - (highestGameIndex * spacing);
+              
+              // Calculate minimum allowed scroll position
+              // Prevent scrolling UP (to lower scrollY) to see games above highestUnlockedGame
+              // The highest unlocked game should be at the top of viewport at minimum scroll
+              const minScrollY = Math.max(0, highestGameY);
+              
+              // Clamp scroll position to prevent scrolling above unlocked games
+              const clampedScrollY = Math.max(scrollY, minScrollY);
+              
+              // If user tried to scroll above (to lower scrollY), reset to min position
+              if (scrollY < minScrollY && mapScrollViewRef.current) {
+                mapScrollViewRef.current.scrollTo({
+                  y: minScrollY,
+                  animated: false,
+                });
+              }
+              
+              setMapScrollY(clampedScrollY);
             }}
             scrollEventThrottle={16}
+            onScrollEndDrag={(event) => {
+              const scrollY = event.nativeEvent.contentOffset.y;
+              const spacing = isMobile ? 60 : 80;
+              
+              // Calculate the Y position of the highest unlocked game
+              const highestGameIndex = highestUnlockedGame - 1;
+              const highestGameY = totalHeight - (highestGameIndex * spacing);
+              const minScrollY = Math.max(0, highestGameY);
+              
+              // Clamp if user scrolled above unlocked games
+              if (scrollY < minScrollY && mapScrollViewRef.current) {
+                mapScrollViewRef.current.scrollTo({
+                  y: minScrollY,
+                  animated: true,
+                });
+              }
+            }}
+            onMomentumScrollEnd={(event) => {
+              const scrollY = event.nativeEvent.contentOffset.y;
+              const spacing = isMobile ? 60 : 80;
+              
+              // Calculate the Y position of the highest unlocked game
+              const highestGameIndex = highestUnlockedGame - 1;
+              const highestGameY = totalHeight - (highestGameIndex * spacing);
+              const minScrollY = Math.max(0, highestGameY);
+              
+              // Clamp if momentum scroll went above unlocked games
+              if (scrollY < minScrollY && mapScrollViewRef.current) {
+                mapScrollViewRef.current.scrollTo({
+                  y: minScrollY,
+                  animated: true,
+                });
+              }
+            }}
           >
           {/* Background gradient */}
           <View style={styles.mapBackground} />
@@ -1107,6 +1185,14 @@ export default function SimpleWelcome() {
               Your favourite version of{' '}
               <Text style={styles.connectFiveText}>CONNECT-5</Text>!
             </Text>
+            {user && (
+              <TouchableOpacity
+                onPress={() => setShowProfileModal(true)}
+                style={styles.profileIconButtonDesktop}
+              >
+                <Text style={styles.profileIcon}>👤</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.buttonContainer}>
@@ -1122,33 +1208,21 @@ export default function SimpleWelcome() {
               style={[styles.menuButton, styles.greenButton]}
               onPress={() => setGameMode('local-multiplayer')}
             >
-              <Text style={styles.buttonEmoji}>👥</Text>
-              <Text style={styles.buttonText}>Play local friend</Text>
+              <Text style={styles.buttonIcon}>👥</Text>
+              <Text style={styles.buttonText}>Play with a friend</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.menuButton, styles.blueButton]}
               onPress={() => setShowDifficultyModal(true)}
             >
-              <Text style={styles.buttonEmoji}>🤖</Text>
+              <Text style={styles.buttonIcon}>🤖</Text>
               <Text style={styles.buttonText}>Classic</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
             <View style={{ flexDirection: 'row', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
-              {user && (
-                <TouchableOpacity
-                  onPress={async () => {
-                    await signOut();
-                    // After sign out, redirect to sign in
-                    setGameMode('sign-in');
-                  }}
-                  style={styles.privacyLink}
-                >
-                  <Text style={styles.privacyLinkText}>Sign Out</Text>
-                </TouchableOpacity>
-              )}
               <TouchableOpacity
                 onPress={() => setGameMode('privacy-policy')}
                 style={styles.privacyLink}
@@ -1168,8 +1242,7 @@ export default function SimpleWelcome() {
           <View style={styles.mapTitleContainer}>
             <Text style={styles.mapTitle}>BEE-FIVE</Text>
             <Text style={styles.mapSubtitle}>
-              The Best{' '}
-              <Text style={styles.connectFiveText}>Connect-5</Text> Game
+              Connect 5 • Outthink • Win
             </Text>
           </View>
 
@@ -1177,10 +1250,10 @@ export default function SimpleWelcome() {
           <View style={styles.thoughtBubbleContainer}>
             <View style={styles.thoughtBubble}>
               <Text style={styles.thoughtBubbleText}>
-                Connect 5 dots in a straight line{' '}
+                Connect 5 dots{' '}
                 <Text style={styles.thoughtBubbleHighlight}>vertically</Text>,{' '}
-                <Text style={styles.thoughtBubbleHighlight}>horizontally</Text> or{' '}
-                <Text style={styles.thoughtBubbleHighlight}>diagonally</Text> to win
+                <Text style={styles.thoughtBubbleHighlight}>horizontally</Text>, or{' '}
+                <Text style={styles.thoughtBubbleHighlight}>diagonally</Text>
               </Text>
             </View>
             <View style={styles.thoughtBubbleTail} />
@@ -1193,15 +1266,15 @@ export default function SimpleWelcome() {
                 style={[styles.mapLeftMenuButton, styles.greenButton]}
                 onPress={() => setGameMode('local-multiplayer')}
               >
-                <Text style={styles.buttonEmoji}>👥</Text>
-                <Text style={styles.buttonText}>Play local friend</Text>
+                <Text style={styles.buttonIcon}>👥</Text>
+                <Text style={styles.buttonText}>Play with a{'\n'}friend</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.mapLeftMenuButton, styles.blueButton]}
                 onPress={() => setShowDifficultyModal(true)}
               >
-                <Text style={styles.buttonEmoji}>🤖</Text>
+                <Text style={styles.buttonIcon}>🤖</Text>
                 <Text style={styles.buttonText}>Classic</Text>
               </TouchableOpacity>
             </View>
@@ -1222,7 +1295,7 @@ export default function SimpleWelcome() {
             >
               <Text style={styles.mapPlayButtonEmoji}>▶️</Text>
               <Text style={styles.mapPlayButtonText}>
-                Play Game {currentGame}
+                Adventure Level {currentGame}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1230,17 +1303,6 @@ export default function SimpleWelcome() {
           {/* Footer links */}
           <View style={styles.mapFooter}>
             <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-              {user && (
-                <TouchableOpacity
-                  onPress={async () => {
-                    await signOut();
-                    setGameMode('sign-in');
-                  }}
-                  style={styles.mapPrivacyLink}
-                >
-                  <Text style={styles.mapPrivacyLinkText}>Sign Out</Text>
-                </TouchableOpacity>
-              )}
               <TouchableOpacity
                 onPress={() => setGameMode('privacy-policy')}
                 style={styles.mapPrivacyLink}
@@ -1275,7 +1337,10 @@ export default function SimpleWelcome() {
                     setShowTimerModal(true);
                   }}
                 >
-                  <Text style={styles.modalDifficultyText}>🟢 Easy</Text>
+                  <View style={styles.modalDifficultyButtonContent}>
+                    <Text style={styles.modalDifficultyText}>🟢</Text>
+                    <Text style={styles.modalDifficultyText}> Easy</Text>
+                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1358,6 +1423,44 @@ export default function SimpleWelcome() {
               </View>
             </View>
           </Modal>
+
+          {/* Profile Modal */}
+          <Modal
+            visible={showProfileModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowProfileModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>👤 Profile</Text>
+                
+                {user && (
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.profileEmail}>{user.email}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.modalActionButton, styles.redButton]}
+                  onPress={async () => {
+                    await signOut();
+                    setShowProfileModal(false);
+                    setGameMode('sign-in');
+                  }}
+                >
+                  <Text style={styles.modalActionText}>Sign Out</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalActionButton, styles.grayButton]}
+                  onPress={() => setShowProfileModal(false)}
+                >
+                  <Text style={styles.modalActionText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </>
       )}
     </SafeAreaView>
@@ -1367,7 +1470,9 @@ export default function SimpleWelcome() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: '#FFC30B',
+    borderWidth: 3,
+    borderColor: '#FFC30B',
   },
   beeContainer: {
     position: 'absolute',
@@ -1443,7 +1548,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 0,
-    backgroundColor: 'black',
+    backgroundColor: '#FFC30B',
     flexDirection: 'column',
     justifyContent: 'center', // Center the map vertically
     alignItems: 'center',
@@ -1458,6 +1563,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     backgroundColor: '#000000',
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
     flexShrink: 0, // Don't shrink header
     zIndex: 1,
   },
@@ -1466,7 +1573,6 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
   },
   mapHeaderLogo: {
     width: '100%',
@@ -1477,8 +1583,6 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH - 20,
     margin: 10,
     borderRadius: 15,
-    borderWidth: 3,
-    borderColor: '#FFC30B',
     overflow: 'hidden',
     backgroundColor: '#F0FFF0',
     minHeight: 0, // Allow flex shrinking
@@ -1570,22 +1674,20 @@ const styles = StyleSheet.create({
   },
   mapTitle: {
     fontSize: 28,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Black' : 'sans-serif-black',
-    color: '#FFC30B',
+    fontWeight: 'normal',
+    color: '#000',
     textAlign: 'center',
     marginBottom: 5,
-    textShadowColor: '#000',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
+    textShadowColor: '#fff',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
     letterSpacing: 1,
   },
   mapSubtitle: {
     fontSize: 16,
     color: '#fff',
     textAlign: 'center',
-    fontWeight: 'bold',
-    fontFamily: Platform.OS === 'ios' ? 'Marker Felt' : 'cursive',
+    fontWeight: 'normal',
     textShadowColor: '#000',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
@@ -1600,12 +1702,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   thoughtBubble: {
-    backgroundColor: '#333333',
+    backgroundColor: '#D3D3D3',
     borderRadius: 20,
     padding: 15,
     paddingHorizontal: 20,
     borderWidth: 3,
-    borderColor: '#FFC30B',
+    borderColor: '#000',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -1614,13 +1716,13 @@ const styles = StyleSheet.create({
   },
   thoughtBubbleText: {
     fontSize: 14,
-    color: '#fff',
+    color: '#000',
     textAlign: 'center',
     fontWeight: '600',
     lineHeight: 20,
   },
   thoughtBubbleHighlight: {
-    color: '#FFC30B',
+    color: '#fff',
     fontWeight: '700',
   },
   thoughtBubbleTail: {
@@ -1652,12 +1754,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 20,
     borderWidth: 3,
-    borderColor: '#FFC30B',
-    minHeight: 50,
+    borderColor: '#000',
+    minHeight: 45,
     width: 160,
     gap: 8,
     shadowColor: '#000',
@@ -1682,7 +1784,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 25,
     borderWidth: 4,
-    borderColor: '#FFC30B',
+    borderColor: '#000',
     backgroundColor: '#4CAF50',
     minHeight: 64,
     minWidth: 200,
@@ -1727,7 +1829,6 @@ const styles = StyleSheet.create({
     color: '#FFC30B',
     fontSize: 14,
     fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Marker Felt' : 'cursive',
     textShadowColor: '#000',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
@@ -1816,6 +1917,8 @@ const styles = StyleSheet.create({
   titleContainer: {
     alignItems: 'center',
     marginBottom: 30,
+    position: 'relative',
+    width: '100%',
   },
   mainTitle: {
     fontSize: 32,
@@ -1865,14 +1968,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 3,
-    borderColor: '#FFC30B',
-    minHeight: 60,
+    borderColor: '#000',
+    minHeight: 50,
     width: '100%',
-    maxWidth: 300,
+    maxWidth: 200,
     gap: 8,
   },
   greenButton: {
@@ -1890,9 +1993,12 @@ const styles = StyleSheet.create({
   buttonEmoji: {
     fontSize: 24,
   },
+  buttonIcon: {
+    fontSize: 36,
+  },
   buttonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   backButton: {
@@ -1923,7 +2029,6 @@ const styles = StyleSheet.create({
     color: '#FFC30B',
     fontSize: 14,
     fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Marker Felt' : 'cursive',
     letterSpacing: 0.5,
   },
   title: {
@@ -2029,6 +2134,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  modalDifficultyButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'nowrap',
+  },
   easyButton: {
     backgroundColor: '#4CAF50',
   },
@@ -2043,6 +2154,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
+    includeFontPadding: false,
   },
   modalActionButton: {
     paddingVertical: 12,
@@ -2056,11 +2171,54 @@ const styles = StyleSheet.create({
   grayButton: {
     backgroundColor: '#666',
   },
+  redButton: {
+    backgroundColor: '#F44336',
+  },
   modalActionText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  profileIconButtonDesktop: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 195, 11, 0.2)',
+    borderWidth: 2,
+    borderColor: '#FFC30B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileIconButtonMobile: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    backgroundColor: 'rgba(255, 195, 11, 0.2)',
+    borderWidth: 2,
+    borderColor: '#FFC30B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileIcon: {
+    fontSize: 28,
+  },
+  profileInfo: {
+    width: '100%',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  profileEmail: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '600',
   },
 });
 
