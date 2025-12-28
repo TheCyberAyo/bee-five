@@ -176,8 +176,10 @@ export default function SimpleWelcome() {
       const minScrollY = Math.max(0, highestGameY);
       
       // Scroll to position the current game in the center of the viewport
-      // But ensure we don't scroll above the highest unlocked game
-      const desiredScrollY = Math.max(0, gameY - SCREEN_HEIGHT / 2);
+      // Account for header height when calculating center position
+      const headerHeight = 25 + 15 + 40; // paddingTop + paddingBottom + logo height
+      const availableHeight = SCREEN_HEIGHT - headerHeight;
+      const desiredScrollY = Math.max(0, gameY - availableHeight / 2);
       const scrollToY = Math.max(desiredScrollY, minScrollY);
       
       // Use timeout to ensure the ScrollView is fully rendered
@@ -837,6 +839,58 @@ export default function SimpleWelcome() {
     };
   };
 
+  // Generate smooth curve points using quadratic bezier interpolation
+  // This creates smooth, flowing curves without sharp angles or protrusions
+  const generateSmoothPathPoints = (p0: { x: number; y: number }, p1: { x: number; y: number }, p2?: { x: number; y: number }, numPoints: number = 15) => {
+    const points: { x: number; y: number }[] = [];
+    
+    if (!p2) {
+      // Create a smooth, gentle curve between two points
+      const dx = p1.x - p0.x;
+      const dy = p1.y - p0.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < 1) {
+        return [p0, p1];
+      }
+      
+      // Calculate perpendicular direction for smooth curve
+      const perpX = -dy / distance;
+      const perpY = dx / distance;
+      
+      // Use a gentle curve strength that adapts to distance
+      const curveStrength = Math.min(distance * 0.1, 25);
+      const midX = (p0.x + p1.x) / 2;
+      const midY = (p0.y + p1.y) / 2;
+      
+      // Create control point for smooth bezier curve
+      const controlX = midX + perpX * curveStrength;
+      const controlY = midY + perpY * curveStrength;
+      
+      // Generate smooth bezier curve points
+      for (let i = 0; i <= numPoints; i++) {
+        const t = i / numPoints;
+        // Use easing function for smoother transitions
+        const easedT = t * t * (3 - 2 * t); // Smoothstep function
+        // Quadratic bezier: (1-t)²P₀ + 2(1-t)tP₁ + t²P₂
+        const x = (1 - easedT) * (1 - easedT) * p0.x + 2 * (1 - easedT) * easedT * controlX + easedT * easedT * p1.x;
+        const y = (1 - easedT) * (1 - easedT) * p0.y + 2 * (1 - easedT) * easedT * controlY + easedT * easedT * p1.y;
+        points.push({ x, y });
+      }
+    } else {
+      // Quadratic bezier curve with three points
+      for (let i = 0; i <= numPoints; i++) {
+        const t = i / numPoints;
+        const easedT = t * t * (3 - 2 * t);
+        const x = (1 - easedT) * (1 - easedT) * p0.x + 2 * (1 - easedT) * easedT * p1.x + easedT * easedT * p2.x;
+        const y = (1 - easedT) * (1 - easedT) * p0.y + 2 * (1 - easedT) * easedT * p1.y + easedT * easedT * p2.y;
+        points.push({ x, y });
+      }
+    }
+    
+    return points;
+  };
+
   // Calculate visible game range for map rendering
   const getVisibleGameRange = () => {
     if (!isMobile) return { startGame: 1, endGame: 100 };
@@ -857,9 +911,9 @@ export default function SimpleWelcome() {
     return { startGame: Math.max(1, startGame - 20), endGame: Math.min(TOTAL_GAMES, endGame + 20) };
   };
 
-  // Render simplified map background for mobile
+  // Render map background for main page (both mobile and desktop)
   const renderMapBackground = () => {
-    if (!isMobile || gameMode !== 'menu') return null;
+    if (gameMode !== 'menu') return null;
     
     const totalHeight = TOTAL_GAMES * (isMobile ? 60 : 80) * 0.2;
     const visibleRange = getVisibleGameRange();
@@ -899,7 +953,7 @@ export default function SimpleWelcome() {
             onScroll={(event) => {
               const scrollY = event.nativeEvent.contentOffset.y;
               const spacing = isMobile ? 60 : 80;
-              const mapViewportHeight = SCREEN_HEIGHT * 0.6; // Map container height
+              const mapViewportHeight = SCREEN_HEIGHT; // Map container is full screen now
               
               // Calculate the Y position of the highest unlocked game (from top of content)
               // Games are positioned from bottom to top, so higher game numbers have lower Y values
@@ -1033,29 +1087,131 @@ export default function SimpleWelcome() {
             );
           })}
 
-          {/* Pathway segments */}
-          {Array.from({ length: 20 }, (_, i) => {
-            const gameNum = 1 + (i * 5);
-            if (gameNum >= TOTAL_GAMES) return null;
-            
-            const pos1 = getGamePosition(gameNum);
-            const pos2 = getGamePosition(Math.min(gameNum + 5, TOTAL_GAMES));
-            
-            return (
-              <View
-                key={`path-${i}`}
-                style={[
-                  styles.mapPathwaySegment,
-                  {
-                    left: `${(pos1.left + pos2.left) / 2}%`,
-                    top: Math.min(pos1.top, pos2.top),
-                    height: Math.abs(pos2.top - pos1.top),
-                    backgroundColor: i % 2 === 0 ? '#FFC30B' : '#4CAF50',
-                  },
-                ]}
-              />
-            );
-          }).filter(Boolean)}
+          {/* Road path connecting games - Render as smooth curved road */}
+          <View style={styles.mapRoadContainer} pointerEvents="none">
+            {(() => {
+              const roadWidth = 35;
+              const segments: JSX.Element[] = [];
+              const maxGames = Math.min(visibleRange.endGame + 10, TOTAL_GAMES);
+              let prevPoint: { x: number; y: number } | null = null;
+              
+              for (let i = visibleRange.startGame - 10; i < maxGames; i++) {
+                const gameNum = Math.max(1, i);
+                if (gameNum >= TOTAL_GAMES) continue;
+                
+                const pos1 = getGamePosition(gameNum);
+                const pos2 = getGamePosition(Math.min(gameNum + 1, TOTAL_GAMES));
+                
+                // Convert to pixel coordinates
+                const p1 = {
+                  x: (pos1.left / 100) * SCREEN_WIDTH,
+                  y: pos1.top,
+                };
+                const p2 = {
+                  x: (pos2.left / 100) * SCREEN_WIDTH,
+                  y: pos2.top,
+                };
+                
+                // Use previous point for smoother transitions if available
+                const p0 = prevPoint || p1;
+                
+                // Generate smooth curve points
+                const curvePoints = generateSmoothPathPoints(p1, p2, undefined, 18);
+                
+                // Render small segments along the curve
+                for (let j = 0; j < curvePoints.length - 1; j++) {
+                  const point1 = curvePoints[j];
+                  const point2 = curvePoints[j + 1];
+                  
+                  const dx = point2.x - point1.x;
+                  const dy = point2.y - point1.y;
+                  const length = Math.sqrt(dx * dx + dy * dy);
+                  
+                  // Skip very short segments to avoid rendering issues
+                  if (length < 0.5) continue;
+                  
+                  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                  
+                  const centerX = (point1.x + point2.x) / 2;
+                  const centerY = (point1.y + point2.y) / 2;
+                  
+                  segments.push(
+                    <View 
+                      key={`map-road-segment-${i}-${j}-${gameNum}`} 
+                      pointerEvents="none"
+                      style={[
+                        styles.mapRoadSegmentWrapper,
+                        {
+                          left: centerX,
+                          top: centerY,
+                          width: length,
+                          height: roadWidth,
+                          transform: [
+                            { translateX: -length / 2 },
+                            { translateY: -roadWidth / 2 },
+                            { rotate: `${angle}deg` },
+                          ],
+                        },
+                      ]}
+                    >
+                      {/* Road shadow layer */}
+                      <View
+                        style={[
+                          styles.mapRoadShadow,
+                          {
+                            width: length + 4,
+                            height: roadWidth + 4,
+                            left: -2,
+                            top: -2,
+                          },
+                        ]}
+                      />
+                      
+                      {/* Road surface - pink color */}
+                      <View
+                        style={[
+                          styles.mapRoadSurface,
+                          {
+                            width: length,
+                            height: roadWidth,
+                          },
+                        ]}
+                      />
+                      
+                      {/* Left road edge */}
+                      <View
+                        style={[
+                          styles.mapRoadEdgeHorizontal,
+                          {
+                            width: length,
+                            height: 2,
+                            top: 0,
+                          },
+                        ]}
+                      />
+                      
+                      {/* Right road edge */}
+                      <View
+                        style={[
+                          styles.mapRoadEdgeHorizontal,
+                          {
+                            width: length,
+                            height: 2,
+                            bottom: 0,
+                          },
+                        ]}
+                      />
+                    </View>
+                  );
+                }
+                
+                // Store last point for next iteration
+                prevPoint = p2;
+              }
+              
+              return segments;
+            })()}
+          </View>
 
           {/* Clickable game locations - render visible games */}
           {Array.from({ length: visibleRange.endGame - visibleRange.startGame + 1 }, (_, i) => {
@@ -1173,70 +1329,8 @@ export default function SimpleWelcome() {
           </Animated.View>
         </View>
       )}
-      {!isMobile && (
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
-          style={styles.scrollView}
-        >
-          <View style={styles.mainContainer}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.mainTitle}>🐝 Bee-Five 🐝</Text>
-            <Text style={styles.mainSubtitle}>
-              Your favourite version of{' '}
-              <Text style={styles.connectFiveText}>CONNECT-5</Text>!
-            </Text>
-            {user && (
-              <TouchableOpacity
-                onPress={() => setShowProfileModal(true)}
-                style={styles.profileIconButtonDesktop}
-              >
-                <Text style={styles.profileIcon}>👤</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[styles.menuButton, styles.purpleButton]}
-              onPress={() => setGameMode('adventure-game')}
-            >
-              <Text style={styles.buttonEmoji}>🎯</Text>
-              <Text style={styles.buttonText}>Adventure</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.menuButton, styles.greenButton]}
-              onPress={() => setGameMode('local-multiplayer')}
-            >
-              <Text style={styles.buttonIcon}>👥</Text>
-              <Text style={styles.buttonText}>Play with a friend</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.menuButton, styles.blueButton]}
-              onPress={() => setShowDifficultyModal(true)}
-            >
-              <Text style={styles.buttonIcon}>🤖</Text>
-              <Text style={styles.buttonText}>Classic</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.footer}>
-            <View style={{ flexDirection: 'row', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
-              <TouchableOpacity
-                onPress={() => setGameMode('privacy-policy')}
-                style={styles.privacyLink}
-              >
-                <Text style={styles.privacyLinkText}>Privacy Policy</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-        </ScrollView>
-      )}
-      
-      {/* Mobile menu overlay - buttons directly on map */}
-      {isMobile && gameMode === 'menu' && (
+      {/* Menu overlay - buttons directly on map (both mobile and desktop) */}
+      {gameMode === 'menu' && (
         <View style={styles.mobileMenuOverlay} pointerEvents="box-none">
           {/* Title */}
           <View style={styles.mapTitleContainer}>
@@ -1279,6 +1373,18 @@ export default function SimpleWelcome() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Profile button for desktop */}
+          {!isMobile && user && (
+            <View style={styles.mapProfileButtonContainer}>
+              <TouchableOpacity
+                onPress={() => setShowProfileModal(true)}
+                style={styles.profileIconButtonMobile}
+              >
+                <Text style={styles.profileIcon}>👤</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Play button at bottom center - shows current level */}
           <View style={styles.mapPlayButtonContainer}>
@@ -1540,17 +1646,15 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#FFC30B',
   },
-  // Map background styles
+  // Map background styles - Main screen for mobile
   mapBackgroundContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
+    width: '100%',
+    height: '100%',
     zIndex: 0,
     backgroundColor: '#FFC30B',
     flexDirection: 'column',
-    justifyContent: 'center', // Center the map vertically
+    justifyContent: 'center',
     alignItems: 'center',
   },
   mapHeader: {
@@ -1558,14 +1662,12 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: 25,
-    paddingBottom: 15,
+    width: '100%',
     paddingHorizontal: 15,
     backgroundColor: '#000000',
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    flexShrink: 0, // Don't shrink header
     zIndex: 1,
   },
   mapHeaderLogoContainer: {
@@ -1579,13 +1681,14 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   mapContainer: {
-    height: SCREEN_HEIGHT * 0.6,
-    width: SCREEN_WIDTH - 20,
-    margin: 10,
+    height: SCREEN_HEIGHT * (3/5), // 3/5 of screen height
+    width: SCREEN_WIDTH,
+    marginTop: 0,
+    marginBottom: 0,
+    marginHorizontal: 0,
     borderRadius: 15,
     overflow: 'hidden',
     backgroundColor: '#F0FFF0',
-    minHeight: 0, // Allow flex shrinking
   },
   mapScrollView: {
     flex: 1,
@@ -1654,6 +1757,41 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     opacity: 0.4,
     zIndex: 0,
+  },
+  mapRoadContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    zIndex: 1,
+  },
+  mapRoadSegmentWrapper: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  mapRoadShadow: {
+    position: 'absolute',
+    backgroundColor: '#C71585', // Darker pink for shadow
+    opacity: 0.3,
+    borderRadius: 4,
+  },
+  mapRoadSurface: {
+    position: 'absolute',
+    backgroundColor: '#FF69B4', // Pink color
+    opacity: 1.0,
+    borderRadius: 3,
+  },
+  mapRoadEdgeHorizontal: {
+    position: 'absolute',
+    backgroundColor: '#FF1493', // Deep pink for edges
+    opacity: 1.0,
+  },
+  mapRoadCenterLineHorizontal: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF', // White center line
+    opacity: 0.6,
+    borderRadius: 1,
   },
   mobileMenuOverlay: {
     position: 'absolute',
@@ -1749,6 +1887,12 @@ const styles = StyleSheet.create({
   mapLeftButtonInner: {
     alignItems: 'flex-start',
     gap: 12,
+  },
+  mapProfileButtonContainer: {
+    position: 'absolute',
+    top: 100,
+    right: 20,
+    zIndex: 11,
   },
   mapLeftMenuButton: {
     flexDirection: 'row',

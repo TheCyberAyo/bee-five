@@ -52,11 +52,11 @@ const BORDER_WIDTH = 2;
 const BOARD_PADDING = 20;
 
 // Calculate cell size to fill full width of screen
-// Height will increase proportionally since board is square
 const calculateCellSize = () => {
   const isMobile = SCREEN_WIDTH <= 768;
   // Use full screen width, accounting for minimal padding
   const availableSize = SCREEN_WIDTH - (BOARD_PADDING * 2);
+  // Account for borders: BOARD_SIZE cells + (BOARD_SIZE + 1) borders
   const totalBorders = (BOARD_SIZE + 1) * BORDER_WIDTH;
   const availableForCells = availableSize - totalBorders;
   const calculatedSize = Math.floor(availableForCells / BOARD_SIZE);
@@ -148,6 +148,7 @@ export default function ClassicAIGame({
   const [winner, setWinner] = useState<0 | 1 | 2>(0);
   const [timeLimit] = useState(initialTimer);
   const [timeLeft, setTimeLeft] = useState(timeLimit);
+
   const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>(initialDifficulty);
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [winMessage, setWinMessage] = useState('');
@@ -1859,9 +1860,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   piece: {
-    width: CELL_SIZE * 2 / 3,
-    height: CELL_SIZE * 2 / 3,
-    borderRadius: (CELL_SIZE * 2 / 3) / 2,
+    width: CELL_SIZE / 1.5,
+    height: CELL_SIZE / 1.5,
+    borderRadius: (CELL_SIZE / 1.5) / 2,
   },
   blackPiece: {
     backgroundColor: '#000000',

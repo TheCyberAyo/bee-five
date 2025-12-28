@@ -448,106 +448,97 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
           {environment}
         </div>
         
-        {/* Google Maps style location icon */}
+        {/* Road mile marker style */}
         <div
           onClick={() => handleGameClick(gameNumber)}
           style={{
             position: 'relative',
             cursor: isLocked ? 'not-allowed' : 'pointer',
             transition: 'all 0.3s ease',
-            transform: isCurrent ? 'scale(1.3)' : 'scale(1)',
+            transform: isCurrent ? 'scale(1.2)' : 'scale(1)',
             zIndex: isCurrent ? '10' : '2',
-            opacity: isLocked ? 0.4 : 1,
+            opacity: isLocked ? 0.5 : 1,
             filter: isLocked ? 'grayscale(80%)' : 'none'
           }}
           onMouseEnter={(e) => {
             if (!isMobile && !isLocked) {
-              e.currentTarget.style.transform = 'scale(1.3)';
+              e.currentTarget.style.transform = 'scale(1.2)';
               e.currentTarget.style.zIndex = '10';
             }
           }}
           onMouseLeave={(e) => {
             if (!isMobile) {
-              e.currentTarget.style.transform = isCurrent ? 'scale(1.3)' : 'scale(1)';
+              e.currentTarget.style.transform = isCurrent ? 'scale(1.2)' : 'scale(1)';
               e.currentTarget.style.zIndex = '2';
             }
           }}
           title={isLocked ? `🔒 Locked - Complete Game ${gameNumber - 1} to unlock` : `Game ${gameNumber} - ${stage?.name || 'Unknown Stage'}\n${stage?.beeLifeStage || ''}`}
         >
-          {/* Pin head (circular part) */}
+          {/* Road marker pole/post */}
           <div style={{
-            width: isMobile ? '24px' : '20px',
-            height: isMobile ? '24px' : '20px',
-            borderRadius: '50%',
-            backgroundColor: isLocked ? '#666666' : isCompleted ? '#4CAF50' : isCurrent ? '#FFC30B' : stage?.primaryColor || '#FFC30B',
-            border: isCompleted || isCurrent ? '3px solid #fff' : '2px solid #fff',
-            boxShadow: isCurrent ? '0 0 12px rgba(255, 195, 11, 0.8)' : '0 2px 6px rgba(0,0,0,0.3)',
-            position: 'relative',
-            zIndex: 2,
-            animation: isCurrent ? 'currentPulse 2s ease-in-out infinite' : 'none',
-            transform: 'translateZ(0)' // Force hardware acceleration
-          }}>
-            {isLocked && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                fontSize: isMobile ? '12px' : '10px',
-                color: '#fff'
-              }}>
-                🔒
-              </div>
-            )}
-            {isCurrent && !isLocked && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                fontSize: isMobile ? '12px' : '10px',
-                color: '#fff'
-              }}>
-                ★
-              </div>
-            )}
-          </div>
-          
-          {/* Pin point (bottom part) */}
-          <div style={{
-            width: 0,
-            height: 0,
-            borderLeft: isMobile ? '12px solid transparent' : '10px solid transparent',
-            borderRight: isMobile ? '12px solid transparent' : '10px solid transparent',
-            borderTopWidth: isMobile ? '18px' : '15px',
-            borderTopStyle: 'solid',
-            borderTopColor: isCompleted ? '#4CAF50' : isCurrent ? '#FFC30B' : stage?.primaryColor || '#FFC30B',
+            width: isMobile ? '4px' : '3px',
+            height: isMobile ? '35px' : '28px',
+            backgroundColor: isLocked ? '#666666' : isCompleted ? '#4CAF50' : isCurrent ? '#FFC30B' : '#8B4513',
             position: 'absolute',
-            top: isMobile ? '18px' : '15px',
             left: '50%',
+            top: isMobile ? '5px' : '4px',
             transform: 'translateX(-50%)',
-            zIndex: 1
+            zIndex: 1,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+            borderRadius: '2px'
           }} />
+          
+          {/* Road marker sign - horizontal rectangle */}
+          <div style={{
+            width: isMobile ? '36px' : '30px',
+            height: isMobile ? '22px' : '18px',
+            backgroundColor: isLocked ? '#666666' : isCompleted ? '#4CAF50' : isCurrent ? '#FFC30B' : '#FFA500',
+            border: isCompleted || isCurrent ? '3px solid #fff' : '2px solid #fff',
+            borderRadius: isMobile ? '6px' : '4px',
+            boxShadow: isCurrent ? '0 0 12px rgba(255, 195, 11, 0.8)' : '0 2px 6px rgba(0,0,0,0.4)',
+            position: 'absolute',
+            left: '50%',
+            top: '0px',
+            transform: 'translateX(-50%)',
+            zIndex: 3,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            animation: isCurrent ? 'currentPulse 2s ease-in-out infinite' : 'none'
+          }}>
+            <div style={{
+              fontSize: isMobile ? '11px' : '10px',
+              fontWeight: 'bold',
+              color: '#fff',
+              textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+              lineHeight: '1'
+            }}>
+              {isLocked ? '🔒' : isCurrent ? '★' : gameNumber}
+            </div>
+          </div>
         </div>
         
-        {/* Location icon label */}
-        <div style={{
-          position: 'absolute',
-          left: isMobile ? '30px' : '25px',
-          top: isMobile ? '2px' : '1px',
-          fontSize: isMobile ? '14px' : '12px',
-          fontWeight: 'bold',
-          color: '#2E8B57',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          padding: isMobile ? '3px 6px' : '2px 5px',
-          borderRadius: isMobile ? '4px' : '3px',
-          border: '1px solid rgba(0,0,0,0.2)',
-          minWidth: isMobile ? '25px' : '20px',
-          textAlign: 'center',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          {gameNumber}
-        </div>
+        {/* Game number label below marker (optional, for clarity) */}
+        {(isCurrent || isCompleted) && (
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            top: isMobile ? '42px' : '34px',
+            transform: 'translateX(-50%)',
+            fontSize: isMobile ? '11px' : '9px',
+            fontWeight: 'bold',
+            color: isLocked ? '#666666' : isCompleted ? '#4CAF50' : '#FFC30B',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            padding: isMobile ? '2px 5px' : '1px 4px',
+            borderRadius: isMobile ? '3px' : '2px',
+            border: '1px solid rgba(0,0,0,0.2)',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+            zIndex: 2
+          }}>
+            {gameNumber}
+          </div>
+        )}
       </div>
     );
   };
@@ -829,22 +820,69 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                 pathPoints.push(`${x * 8},${y}`);
               }
               
-              // Create smooth flowing path using all points
-              const pathData = `M ${pathPoints[0]} L ${pathPoints.join(' L ')}`;
+              // Create smooth flowing path - connect all points with lines for road appearance
+              // The road styling (multiple layers, width, etc.) will make it look road-like
+              const pathData = `M ${pathPoints[0]} L ${pathPoints.slice(1).join(' L ')}`;
+              
+              const roadWidth = isMobile ? 50 : 40;
               
               return (
-                <path
-                  key="organic-flowing-s-curve"
-                  d={pathData}
-                  stroke={getCurrentScrollTheme().primaryColor}
-                  strokeWidth={isMobile ? "6" : "4"}
-                  fill="none"
-                  opacity="0.7"
-                  style={{
-                    filter: `drop-shadow(0 0 4px ${getCurrentScrollTheme().primaryColor}40)`,
-                    animation: 'titleGlow 3s ease-in-out infinite'
-                  }}
-                />
+                <>
+                  {/* Road base/shadow layer */}
+                  <path
+                    key="road-shadow"
+                    d={pathData}
+                    stroke="#1a1a1a"
+                    strokeWidth={roadWidth + 8}
+                    fill="none"
+                    opacity="0.3"
+                    style={{
+                      filter: 'blur(4px)'
+                    }}
+                  />
+                  {/* Road surface - darker asphalt-like color */}
+                  <path
+                    key="road-surface"
+                    d={pathData}
+                    stroke="#4a4a4a"
+                    strokeWidth={roadWidth}
+                    fill="none"
+                    opacity="0.9"
+                    style={{
+                      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                    }}
+                  />
+                  {/* Road edges - lighter borders */}
+                  <path
+                    key="road-edge-left"
+                    d={pathData}
+                    stroke="#6a6a6a"
+                    strokeWidth={isMobile ? "4" : "3"}
+                    fill="none"
+                    opacity="0.8"
+                  />
+                  <path
+                    key="road-edge-right"
+                    d={pathData}
+                    stroke="#6a6a6a"
+                    strokeWidth={isMobile ? "4" : "3"}
+                    fill="none"
+                    opacity="0.8"
+                  />
+                  {/* Center dividing line - dashed yellow */}
+                  <path
+                    key="road-center-line"
+                    d={pathData}
+                    stroke="#FFD700"
+                    strokeWidth={isMobile ? "3" : "2"}
+                    strokeDasharray={isMobile ? "15,10" : "12,8"}
+                    fill="none"
+                    opacity="0.8"
+                    style={{
+                      filter: 'drop-shadow(0 0 2px rgba(255, 215, 0, 0.5))'
+                    }}
+                  />
+                </>
               );
             })()}
             
@@ -1261,22 +1299,69 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                 pathPoints.push(`${x * 8},${y}`);
               }
               
-              // Create smooth flowing path using all points
-              const pathData = `M ${pathPoints[0]} L ${pathPoints.join(' L ')}`;
+              // Create smooth flowing path - connect all points with lines for road appearance
+              // The road styling (multiple layers, width, etc.) will make it look road-like
+              const pathData = `M ${pathPoints[0]} L ${pathPoints.slice(1).join(' L ')}`;
+              
+              const roadWidth = isMobile ? 50 : 40;
               
               return (
-                <path
-                  key="organic-flowing-s-curve"
-                  d={pathData}
-                  stroke={getCurrentScrollTheme().primaryColor}
-                  strokeWidth={isMobile ? "6" : "4"}
-                  fill="none"
-                  opacity="0.7"
-                  style={{
-                    filter: `drop-shadow(0 0 4px ${getCurrentScrollTheme().primaryColor}40)`,
-                    animation: 'titleGlow 3s ease-in-out infinite'
-                  }}
-                />
+                <>
+                  {/* Road base/shadow layer */}
+                  <path
+                    key="road-shadow"
+                    d={pathData}
+                    stroke="#1a1a1a"
+                    strokeWidth={roadWidth + 8}
+                    fill="none"
+                    opacity="0.3"
+                    style={{
+                      filter: 'blur(4px)'
+                    }}
+                  />
+                  {/* Road surface - darker asphalt-like color */}
+                  <path
+                    key="road-surface"
+                    d={pathData}
+                    stroke="#4a4a4a"
+                    strokeWidth={roadWidth}
+                    fill="none"
+                    opacity="0.9"
+                    style={{
+                      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                    }}
+                  />
+                  {/* Road edges - lighter borders */}
+                  <path
+                    key="road-edge-left"
+                    d={pathData}
+                    stroke="#6a6a6a"
+                    strokeWidth={isMobile ? "4" : "3"}
+                    fill="none"
+                    opacity="0.8"
+                  />
+                  <path
+                    key="road-edge-right"
+                    d={pathData}
+                    stroke="#6a6a6a"
+                    strokeWidth={isMobile ? "4" : "3"}
+                    fill="none"
+                    opacity="0.8"
+                  />
+                  {/* Center dividing line - dashed yellow */}
+                  <path
+                    key="road-center-line"
+                    d={pathData}
+                    stroke="#FFD700"
+                    strokeWidth={isMobile ? "3" : "2"}
+                    strokeDasharray={isMobile ? "15,10" : "12,8"}
+                    fill="none"
+                    opacity="0.8"
+                    style={{
+                      filter: 'drop-shadow(0 0 2px rgba(255, 215, 0, 0.5))'
+                    }}
+                  />
+                </>
               );
             })()}
             
