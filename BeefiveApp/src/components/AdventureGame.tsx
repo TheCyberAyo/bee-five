@@ -12,6 +12,7 @@ import {
   Modal,
   AppState,
 } from 'react-native';
+import { showExitConfirmation, setupBackButtonHandler } from '../utils/exitConfirmation';
 import { getGameRules, GameRules, getTimeLimitForLevel, getAIDifficulty, getAdventureStartingPlayer } from '../utils/adventureGameRules';
 import ClassicAIGame from './ClassicAIGame';
 import { getStoryForGame, shouldShowStory, type StageStory } from '../data/stageStories';
@@ -123,6 +124,17 @@ export default function AdventureGame({ onBackToMenu, initialGame, autoStart, on
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [showBeeFact, setShowBeeFact] = useState(false);
   const [currentBeeFact, setCurrentBeeFact] = useState<string | null>(null);
+  
+  // Handle exit confirmation
+  const handleExit = () => {
+    showExitConfirmation(onBackToMenu);
+  };
+
+  // Setup Android back button handler
+  useEffect(() => {
+    const cleanup = setupBackButtonHandler(onBackToMenu);
+    return cleanup;
+  }, [onBackToMenu]);
   
   // Load progress on mount and when user changes
   useEffect(() => {
@@ -1088,12 +1100,12 @@ export default function AdventureGame({ onBackToMenu, initialGame, autoStart, on
     return (
       <ClassicAIGame
         key={`${currentGame}-${currentMatch}`} // Force remount when game number or match changes
-        onBackToMenu={onBackToMenu} // Go to main menu
+        onBackToMenu={handleExit} // Go to main menu with confirmation
         onBackToMap={() => {
           // If autoStart was used, go back to menu instead of map
           if (autoStart) {
             handleGameComplete(false);
-            onBackToMenu();
+            handleExit();
           } else {
             handleGameComplete(false);
           }
@@ -1388,7 +1400,7 @@ export default function AdventureGame({ onBackToMenu, initialGame, autoStart, on
 
         <TouchableOpacity
           style={styles.backButton}
-          onPress={onBackToMenu}
+          onPress={handleExit}
         >
           <Text style={styles.backButtonText}>🏠 Back to Menu</Text>
         </TouchableOpacity>

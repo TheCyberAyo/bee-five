@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Image,
 } from 'react-native';
+import { showExitConfirmation, setupBackButtonHandler } from '../utils/exitConfirmation';
 import {
   BLOCKED_CELL,
   CellValue,
@@ -211,6 +212,25 @@ export default function ClassicAIGame({
   const persistentBlindPlayRef = useRef(persistentBlindPlay);
   const temporaryBlindPlayRef = useRef(temporaryBlindPlay);
   const blindPlayTriggerMoveRef = useRef(blindPlayTriggerMove);
+  
+  // Handle exit confirmation
+  const handleExit = () => {
+    showExitConfirmation(onBackToMenu);
+  };
+
+  const handleMapExit = () => {
+    if (onBackToMap) {
+      onBackToMap();
+    } else {
+      showExitConfirmation(onBackToMenu);
+    }
+  };
+
+  // Setup Android back button handler
+  useEffect(() => {
+    const cleanup = setupBackButtonHandler(onBackToMenu);
+    return cleanup;
+  }, [onBackToMenu]);
   
   // Sync refs with state
   useEffect(() => {
@@ -1622,7 +1642,7 @@ export default function ClassicAIGame({
                         clearTimeout(winPopupTimerRef.current);
                         winPopupTimerRef.current = null;
                       }
-                      onBackToMenu();
+                      handleExit();
                     }}
                   >
                     <Text style={styles.modalButtonText}>Back to Menu</Text>
@@ -1711,7 +1731,7 @@ export default function ClassicAIGame({
                     if (onCloseResultsPopup) {
                       onCloseResultsPopup();
                     }
-                    onBackToMenu();
+                    handleExit();
                   }}
                 >
                   <Text style={styles.modalButtonText}>🏠 Back to Menu</Text>
@@ -1728,13 +1748,13 @@ export default function ClassicAIGame({
           <>
             <TouchableOpacity
               style={styles.footerButton}
-              onPress={onBackToMenu}
+              onPress={handleExit}
             >
               <Text style={styles.footerButtonText}>🏠 Home</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.footerButton}
-              onPress={onBackToMap || onBackToMenu}
+              onPress={handleMapExit}
             >
               <Text style={styles.footerButtonText}>🗺️ Map</Text>
             </TouchableOpacity>
@@ -1743,7 +1763,7 @@ export default function ClassicAIGame({
           <>
             <TouchableOpacity
               style={styles.footerButton}
-              onPress={onBackToMenu}
+              onPress={handleExit}
             >
               <Text style={styles.footerButtonText}>🏠 Home</Text>
             </TouchableOpacity>

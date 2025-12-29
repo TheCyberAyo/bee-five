@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Image,
 } from 'react-native';
+import { showExitConfirmation, setupBackButtonHandler } from '../utils/exitConfirmation';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BOARD_SIZE = 10; // Match bee-five-web (10x10 grid)
@@ -46,6 +47,17 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
   const [winner, setWinner] = useState<0 | 1 | 2>(0);
   const [showWinModal, setShowWinModal] = useState(false);
   const [winMessage, setWinMessage] = useState('');
+
+  // Handle exit confirmation
+  const handleExit = () => {
+    showExitConfirmation(onBackToMenu);
+  };
+
+  // Setup Android back button handler
+  useEffect(() => {
+    const cleanup = setupBackButtonHandler(onBackToMenu);
+    return cleanup;
+  }, [onBackToMenu]);
 
   // Check for winner
   const checkWinner = (row: number, col: number, player: 1 | 2): boolean => {
@@ -220,7 +232,7 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
                 style={[styles.modalButton, styles.blueButton]}
                 onPress={() => {
                   setShowWinModal(false);
-                  onBackToMenu();
+                  handleExit();
                 }}
               >
                 <Text style={styles.modalButtonText}>Back to Menu</Text>
@@ -234,7 +246,7 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.footerButton}
-          onPress={onBackToMenu}
+          onPress={handleExit}
         >
           <Text style={styles.footerButtonText}>🏠 Home</Text>
         </TouchableOpacity>

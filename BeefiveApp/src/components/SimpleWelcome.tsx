@@ -15,6 +15,7 @@ import {
   AppState,
   Image,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SimpleGame from './SimpleGame';
@@ -29,7 +30,8 @@ import SplashScreen from './SplashScreen';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { loadAdventureProgress } from '../services/progressService';
-import { playLoginMelody } from '../utils/audioPlayer';
+import { playAppMelody, stopAppMelody, pauseAppMelody, resumeAppMelody, loadSoundSettings, getSoundEnabled, setSoundEnabled } from '../utils/audioPlayer';
+import { showExitConfirmation } from '../utils/exitConfirmation';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isMobile = SCREEN_WIDTH <= 768;
@@ -73,6 +75,8 @@ export default function SimpleWelcome() {
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [soundEnabled, setSoundEnabledState] = useState(true);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');
   const [aiDifficulty, setAiDifficulty] = useState('medium');
   const [aiTimer, setAiTimer] = useState<number>(15);
@@ -109,6 +113,16 @@ export default function SimpleWelcome() {
   // Track previous user state to detect sign-in
   const prevUserRef = useRef<string | null>(null);
   
+  // Load sound settings and play melody immediately when app starts
+  useEffect(() => {
+    const initializeSound = async () => {
+      await loadSoundSettings();
+      setSoundEnabledState(getSoundEnabled());
+      playAppMelody();
+    };
+    initializeSound();
+  }, []); // Empty dependency array means this runs once on mount
+  
   // Track app state changes (background/foreground)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -117,6 +131,11 @@ export default function SimpleWelcome() {
         nextAppState === 'active'
       ) {
         // App has come to the foreground
+        // Resume melody if sound is enabled
+        if (getSoundEnabled()) {
+          resumeAppMelody();
+        }
+        
         if (user && (gameMode === 'menu' || gameMode === 'splash')) {
           // User is logged in, show splash screen sequence when returning to app
           // Reset splash flag to allow it to show again
@@ -124,7 +143,8 @@ export default function SimpleWelcome() {
           setGameMode('splash');
         }
       } else if (nextAppState.match(/inactive|background/)) {
-        // App has gone to the background
+        // App has gone to the background - pause melody
+        pauseAppMelody();
         lastBackgroundTimeRef.current = Date.now();
       }
       
@@ -210,8 +230,8 @@ export default function SimpleWelcome() {
       const justLoggedIn = gameMode === 'sign-in' && wasLoggedOut;
       
       if (justLoggedIn && !hasShownSplash) {
-        // User just logged in from sign-in page, play login melody and show splash screen
-        playLoginMelody();
+        // User just logged in from sign-in page, show splash screen
+        // (Melody already playing from app start, no need to play again)
         setHasShownSplash(true);
         setGameMode('splash');
       } else if (gameMode === 'menu' && !hasShownSplash && !justLoggedIn) {
@@ -325,6 +345,48 @@ export default function SimpleWelcome() {
       subscription.remove();
     };
   }, [gameMode]);
+
+  // Handle Android back button - exit app confirmation when on menu
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return; // Only handle on Android
+    }
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If any modal is open, close it first
+      if (showDifficultyModal) {
+        setShowDifficultyModal(false);
+        return true; // Prevent default back behavior
+      }
+      if (showTimerModal) {
+        setShowTimerModal(false);
+        return true; // Prevent default back behavior
+      }
+      if (showProfileModal) {
+        setShowProfileModal(false);
+        return true; // Prevent default back behavior
+      }
+      
+      // If on menu screen, show exit confirmation
+      if (gameMode === 'menu') {
+        showExitConfirmation(() => {
+          BackHandler.exitApp();
+        });
+        return true; // Prevent default back behavior
+      }
+      
+      // If on other screens (sign-in, privacy policy, etc.), go back to menu
+      if (gameMode !== 'splash' && gameMode !== 'menu') {
+        setGameMode('menu');
+        return true; // Prevent default back behavior
+      }
+      
+      // On splash screen, allow default behavior (exit app)
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [gameMode, showDifficultyModal, showTimerModal, showProfileModal]);
 
   // Bee animation functions
   useEffect(() => {
@@ -1371,6 +1433,14 @@ export default function SimpleWelcome() {
                 <Text style={styles.buttonIcon}>🤖</Text>
                 <Text style={styles.buttonText}>Classic</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.mapLeftMenuButton, styles.orangeButton]}
+                onPress={() => setShowSettingsModal(true)}
+              >
+                <Text style={styles.buttonIcon}>⚙️</Text>
+                <Text style={styles.buttonText}>Settings</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -1561,6 +1631,58 @@ export default function SimpleWelcome() {
                 <TouchableOpacity
                   style={[styles.modalActionButton, styles.grayButton]}
                   onPress={() => setShowProfileModal(false)}
+                >
+                  <Text style={styles.modalActionText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Settings Modal */}
+          <Modal
+            visible={showSettingsModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowSettingsModal(false)}
+            onShow={() => {
+              // Sync sound state when modal opens
+              setSoundEnabledState(getSoundEnabled());
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>⚙️ Settings ⚙️</Text>
+                
+                {/* Sound Toggle */}
+                <View style={styles.settingsRow}>
+                  <Text style={styles.settingsLabel}>Sound:</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.soundToggleButton,
+                      soundEnabled ? styles.soundToggleOn : styles.soundToggleOff
+                    ]}
+                    onPress={async () => {
+                      const newState = !soundEnabled;
+                      setSoundEnabledState(newState);
+                      await setSoundEnabled(newState);
+                      if (newState) {
+                        // Start playing if sound is enabled
+                        playAppMelody();
+                      } else {
+                        // Explicitly stop the melody when disabled
+                        stopAppMelody();
+                      }
+                    }}
+                  >
+                    <Text style={styles.soundToggleText}>
+                      {soundEnabled ? '🔊 On' : '🔇 Off'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.modalActionButton, styles.grayButton]}
+                  onPress={() => setShowSettingsModal(false)}
                 >
                   <Text style={styles.modalActionText}>Close</Text>
                 </TouchableOpacity>
@@ -2363,6 +2485,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     fontWeight: '600',
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 10,
+  },
+  settingsLabel: {
+    fontSize: 18,
+    color: '#000',
+    fontWeight: '600',
+  },
+  soundToggleButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#000',
+    minWidth: 100,
+  },
+  soundToggleOn: {
+    backgroundColor: '#4CAF50',
+  },
+  soundToggleOff: {
+    backgroundColor: '#F44336',
+  },
+  soundToggleText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 });
 
