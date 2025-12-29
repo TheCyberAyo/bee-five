@@ -36,7 +36,7 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
   const [seriesComplete, setSeriesComplete] = useState(false);
   
   const [timeLimit] = useState(15);
-  const { gameState, handleCellClick, resetGame } = useGameLogic({
+  const { gameState, handleCellClick, resetGame, updateGameState } = useGameLogic({
     timeLimit
   });
 
@@ -137,6 +137,18 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
     
     if (soundEnabled) soundManager.playClickSound();
   }, [gameSeries, seriesComplete, handleGameEnd, resetGame, soundEnabled]);
+
+  // Clear winning pieces highlight after 3 seconds
+  useEffect(() => {
+    if (gameState.winner > 0 && gameState.winningPieces && gameState.winningPieces.length > 0) {
+      const timer = setTimeout(() => {
+        // Clear winning pieces highlight after 3 seconds
+        updateGameState({ winningPieces: [] });
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.winner, gameState.winningPieces, updateGameState]);
 
   // Show popup when individual game ends
   useEffect(() => {

@@ -46,6 +46,7 @@ import {
   isMultipleOf10Match2From730,
 } from '../utils/adventureGameLogic';
 import { getGameRules } from '../utils/adventureGameRules';
+import { getWinningPieces } from '../utils/gameLogic';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BOARD_SIZE = 10;
@@ -147,6 +148,7 @@ export default function ClassicAIGame({
     isAdventureMode && gameRules ? gameRules.startingPlayer : 2
   );
   const [winner, setWinner] = useState<0 | 1 | 2>(0);
+  const [winningPieces, setWinningPieces] = useState<{ row: number; col: number }[]>([]);
   const [timeLimit] = useState(initialTimer);
   const [timeLeft, setTimeLeft] = useState(timeLimit);
 
@@ -979,6 +981,10 @@ export default function ClassicAIGame({
           return newBoard;
         }
         
+        // Get winning pieces for highlighting
+        const pieces = getWinningPieces(newBoard, selectedCell.row, selectedCell.col, 2);
+        setWinningPieces(pieces);
+        
         // AI wins - process the win
         
         setGameProcessed(true);
@@ -987,6 +993,11 @@ export default function ClassicAIGame({
         setWinner(2);
         setWinMessage('You Lost 🐝');
         gameActiveRef.current = false;
+        
+        // Clear winning pieces highlight after 3 seconds
+        setTimeout(() => {
+          setWinningPieces([]);
+        }, 3000);
         
         // Show win popup after 1 second delay (matching bee-five-web)
         // But hide it during match series games (only show when series is complete)
@@ -1262,12 +1273,21 @@ export default function ClassicAIGame({
     
     // Check for winner
     if (checkWinner(row, col, 1)) {
+      // Get winning pieces for highlighting
+      const pieces = getWinningPieces(newBoard, row, col, 1);
+      setWinningPieces(pieces);
+      
       setGameProcessed(true);
       popupScheduledRef.current = true;
       
       setWinner(1);
       setWinMessage('You Won! 🐝');
       gameActiveRef.current = false;
+      
+      // Clear winning pieces highlight after 3 seconds
+      setTimeout(() => {
+        setWinningPieces([]);
+      }, 3000);
       
       // Show win popup after 1 second delay (matching bee-five-web)
       // For classic mode (non-match games), always show the popup
@@ -1347,6 +1367,7 @@ export default function ClassicAIGame({
     setMudZones(isAdventureMode && hasMudZones ? generateMudZones(gameNumber || 1) : []);
     setCurrentPlayer(isAdventureMode && gameRules ? gameRules.startingPlayer : 2);
     setWinner(0);
+    setWinningPieces([]);
     setTimeLeft(timeLimit);
     setShowWinPopup(false);
     // For classic mode (no countdown), start immediately. For adventure mode, respect showCountdown
@@ -1512,6 +1533,7 @@ export default function ClassicAIGame({
                 const isMudZone = isAdventureMode && isInMudZone(rowIndex, colIndex, mudZones);
                 const isEmpty = cell === 0;
                 const isDisabled = !gameStarted || !isEmpty || isBlocked || winner !== 0 || currentPlayer !== 1;
+                const isWinningPiece = winningPieces.some(piece => piece.row === rowIndex && piece.col === colIndex);
                 
                 return (
                   <TouchableOpacity
@@ -1526,8 +1548,12 @@ export default function ClassicAIGame({
                   >
                     {!isBlindPlay && isBlocked && <Text style={styles.blockedIcon}>🐝</Text>}
                     {!isBlindPlay && isMudZone && !isBlocked && isEmpty && <Text style={styles.mudIcon}>🟤</Text>}
-                    {!isBlindPlay && cell === 1 && <View style={[styles.piece, styles.blackPiece]} />}
-                    {!isBlindPlay && cell === 2 && <View style={[styles.piece, styles.yellowPiece]} />}
+                    {!isBlindPlay && cell === 1 && (
+                      <View style={[styles.piece, isWinningPiece ? styles.silverPiece : styles.blackPiece]} />
+                    )}
+                    {!isBlindPlay && cell === 2 && (
+                      <View style={[styles.piece, isWinningPiece ? styles.silverPiece : styles.yellowPiece]} />
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -1889,6 +1915,9 @@ const styles = StyleSheet.create({
   },
   yellowPiece: {
     backgroundColor: '#FFC30B',
+  },
+  silverPiece: {
+    backgroundColor: '#C0C0C0',
   },
   footer: {
     flexDirection: 'row',
