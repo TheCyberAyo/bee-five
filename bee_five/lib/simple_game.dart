@@ -95,13 +95,8 @@ class _SimpleGameState extends State<SimpleGame> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final boardPadding = 20.0;
-    final borderWidth = 2.0;
-    final availableSize = screenSize.width - (boardPadding * 2);
+    const double borderWidth = 2.0;
     final totalBorders = (boardSize + 1) * borderWidth;
-    final availableForCells = availableSize - totalBorders;
-    final cellSize = (availableForCells / boardSize).floorToDouble();
 
     return Stack(
       children: [
@@ -145,58 +140,63 @@ class _SimpleGameState extends State<SimpleGame> {
               ),
             ),
 
-            // Game Board
+            // Game Board - perfect square filling full width left to right
             Expanded(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(boardPadding),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF87CEEB), // Sky blue
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.black, width: 3),
-                    ),
-                    padding: EdgeInsets.all(borderWidth),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(boardSize, (row) {
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: List.generate(boardSize, (col) {
-                            return GestureDetector(
-                              onTap: () => _handleCellClick(row, col),
-                              child: Container(
-                                width: cellSize,
-                                height: cellSize,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF87CEEB),
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: borderWidth,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final boardSide = constraints.maxWidth;
+                  final cellSize = (boardSide - totalBorders) / boardSize;
+                  return Center(
+                    child: Container(
+                      width: boardSide,
+                      height: boardSide,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF87CEEB), // Sky blue
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.black, width: 3),
+                      ),
+                      padding: EdgeInsets.all(borderWidth),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(boardSize, (row) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(boardSize, (col) {
+                              return GestureDetector(
+                                onTap: () => _handleCellClick(row, col),
+                                child: Container(
+                                  width: cellSize,
+                                  height: cellSize,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF87CEEB),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: borderWidth,
+                                    ),
                                   ),
-                                ),
-                                child: board[row][col] != 0
-                                    ? Center(
-                                        child: Container(
-                                          width: cellSize / 1.5,
-                                          height: cellSize / 1.5,
-                                          decoration: BoxDecoration(
-                                            color: board[row][col] == 1
-                                                ? Colors.black
-                                                : primaryYellow,
-                                            shape: BoxShape.circle,
+                                  child: board[row][col] != 0
+                                      ? Center(
+                                          child: Container(
+                                            width: cellSize / 1.5,
+                                            height: cellSize / 1.5,
+                                            decoration: BoxDecoration(
+                                              color: board[row][col] == 1
+                                                  ? Colors.black
+                                                  : primaryYellow,
+                                              shape: BoxShape.circle,
+                                            ),
                                           ),
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                            );
-                          }),
-                        );
-                      }),
+                                        )
+                                      : null,
+                                ),
+                              );
+                            }),
+                          );
+                        }),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
 
@@ -272,7 +272,7 @@ class _SimpleGameState extends State<SimpleGame> {
         // Win Modal
         if (showWinModal)
           Container(
-            color: Colors.black.withOpacity(0.8),
+            color: Colors.black.withValues(alpha: 0.8),
             child: Center(
               child: Container(
               margin: const EdgeInsets.all(20),

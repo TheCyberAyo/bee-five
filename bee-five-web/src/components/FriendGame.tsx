@@ -28,10 +28,10 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
   const [gameSeries, setGameSeries] = useState<GameSeries | null>(null);
   const [showSetupModal, setShowSetupModal] = useState(true);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled] = useState(true);
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [winMessage, setWinMessage] = useState('');
-  const [countdown, setCountdown] = useState(3);
+  const [, setCountdown] = useState(3);
   const [isMobile, setIsMobile] = useState(false);
   const [seriesComplete, setSeriesComplete] = useState(false);
   
@@ -275,7 +275,7 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
     );
   }
 
-  // Enhanced Game Over Modal
+  // Game Over Modal - only announces winner, no extra message
   if (showGameOverModal && gameSeries) {
     const seriesWinner = getSeriesWinner();
     const isTie = !seriesWinner;
@@ -294,21 +294,6 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {/* Celebration Effects for Winner */}
-        {seriesWinner && (
-          <div style={{
-            position: 'absolute',
-            top: '20%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            fontSize: '4em',
-            animation: 'confetti 3s ease-out infinite',
-            zIndex: 1
-          }}>
-            🎊🎉🏆🎉🎊
-          </div>
-        )}
-        
         <div style={{
           background: isTie 
             ? 'rgba(248, 249, 250, 0.95)'
@@ -316,179 +301,25 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
           borderRadius: '25px',
           padding: '3rem',
           width: '90%',
-          maxWidth: '600px',
+          maxWidth: '500px',
           boxShadow: isTie 
             ? '0 25px 50px rgba(108, 117, 125, 0.3)'
-            : '0 25px 50px rgba(255, 215, 0, 0.4), 0 0 30px rgba(255, 195, 11, 0.6)',
+            : '0 25px 50px rgba(255, 215, 0, 0.4)',
           backdropFilter: 'blur(15px)',
           textAlign: 'center',
           position: 'relative',
           zIndex: 2,
-          animation: seriesWinner ? 'victoryBounce 1s ease-out' : 'popIn 0.6s ease-out',
           border: `5px solid ${isTie ? '#6c757d' : '#FFC30B'}`
         }}>
-          <div style={{
-            fontSize: isTie ? '4em' : '5em',
-            marginBottom: '20px',
-            animation: isTie ? 'bounce 1s ease-out infinite' : 'victorySpin 2s ease-out infinite'
-          }}>
-            {isTie ? '🤝' : '🏆'}
-          </div>
-          
           <h1 style={{
-            fontSize: isTie ? '2.5em' : '3em',
+            fontSize: '2.5em',
             color: isTie ? '#495057' : '#B8860B',
             textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
-            marginBottom: '15px',
+            marginBottom: '30px',
             fontWeight: 'bold'
           }}>
-            {isTie ? 'Series Complete!' : 'CONGRATULATIONS!'}
+            {seriesWinner ? `${seriesWinner.name} Wins!` : "It's a Tie!"}
           </h1>
-          
-          <div style={{
-            fontSize: '1.4em',
-            color: isTie ? '#6c757d' : '#8B4513',
-            marginBottom: '20px',
-            fontWeight: 'bold'
-          }}>
-            Best of {gameSeries.totalGames} Series
-          </div>
-          
-          {seriesWinner ? (
-            <div>
-              <h2 style={{
-                fontSize: '2.2em',
-                color: '#228B22',
-                marginBottom: '15px',
-                fontWeight: 'bold',
-                textShadow: '1px 1px 2px rgba(0,0,0,0.2)'
-              }}>
-                {seriesWinner.name} Wins! 🎉
-              </h2>
-              
-              {/* Enhanced Score Display */}
-              <div style={{
-                fontSize: '1.3em',
-                color: '#333',
-                marginBottom: '25px',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '3rem',
-                alignItems: 'center'
-              }}>
-                <div style={{
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  padding: '15px 25px',
-                  borderRadius: '15px',
-                  fontWeight: 'bold',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-                }}>
-                  <div style={{ fontSize: '0.9em', marginBottom: '5px' }}>{gameSeries.player1Name}</div>
-                  <div style={{ fontSize: '2em' }}>{gameSeries.player1Score}</div>
-                </div>
-                <div style={{ 
-                  fontSize: '1.5em', 
-                  fontWeight: 'bold',
-                  color: '#666'
-                }}>vs</div>
-                <div style={{
-                  backgroundColor: '#f44336',
-                  color: 'white',
-                  padding: '15px 25px',
-                  borderRadius: '15px',
-                  fontWeight: 'bold',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-                }}>
-                  <div style={{ fontSize: '0.9em', marginBottom: '5px' }}>{gameSeries.player2Name}</div>
-                  <div style={{ fontSize: '2em' }}>{gameSeries.player2Score}</div>
-                </div>
-              </div>
-              
-              {/* Congratulatory Message */}
-              <div style={{
-                fontSize: '1.2em',
-                color: '#8B4513',
-                marginBottom: '30px',
-                fontStyle: 'italic',
-                lineHeight: '1.4'
-              }}>
-                <div style={{ marginBottom: '10px' }}>
-                  🐝 Outstanding performance, {seriesWinner.name}! 🐝
-                </div>
-                <div>
-                  You've proven yourself as a true Bee Master in this {gameSeries.totalGames}-game series!
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <h2 style={{
-                fontSize: '2.2em',
-                color: '#dc3545',
-                marginBottom: '15px',
-                fontWeight: 'bold',
-                textShadow: '1px 1px 2px rgba(0,0,0,0.2)'
-              }}>
-                It's a Tie! 🤝
-              </h2>
-              
-              {/* Enhanced Score Display for Tie */}
-              <div style={{
-                fontSize: '1.3em',
-                color: '#333',
-                marginBottom: '25px',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '3rem',
-                alignItems: 'center'
-              }}>
-                <div style={{
-                  backgroundColor: '#17a2b8',
-                  color: 'white',
-                  padding: '15px 25px',
-                  borderRadius: '15px',
-                  fontWeight: 'bold',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-                }}>
-                  <div style={{ fontSize: '0.9em', marginBottom: '5px' }}>{gameSeries.player1Name}</div>
-                  <div style={{ fontSize: '2em' }}>{gameSeries.player1Score}</div>
-                </div>
-                <div style={{ 
-                  fontSize: '1.5em', 
-                  fontWeight: 'bold',
-                  color: '#666'
-                }}>vs</div>
-                <div style={{
-                  backgroundColor: '#17a2b8',
-                  color: 'white',
-                  padding: '15px 25px',
-                  borderRadius: '15px',
-                  fontWeight: 'bold',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-                }}>
-                  <div style={{ fontSize: '0.9em', marginBottom: '5px' }}>{gameSeries.player2Name}</div>
-                  <div style={{ fontSize: '2em' }}>{gameSeries.player2Score}</div>
-                </div>
-              </div>
-              
-              {/* Tie Message */}
-              <div style={{
-                fontSize: '1.2em',
-                color: '#6c757d',
-                marginBottom: '30px',
-                fontStyle: 'italic',
-                lineHeight: '1.4'
-              }}>
-                <div style={{ marginBottom: '10px' }}>
-                  🐝 What an epic battle! 🐝
-                </div>
-                <div>
-                  Both players showed incredible skill - time for a rematch to settle the score!
-                </div>
-              </div>
-            </div>
-          )}
 
           <div style={{
             display: 'flex',
@@ -761,31 +592,35 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
         </div>
       </div>
 
-      {/* Main game area */}
+      {/* Main game area - board fills full width of center */}
       <div style={{
         flex: 1,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '1rem' : '1rem',
+        padding: isMobile ? '0.5rem' : '1rem',
         position: 'relative',
         minHeight: 0,
-        overflow: 'auto'
+        overflow: 'auto',
+        width: '100%'
       }}>
         <div style={{
           position: 'relative',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center'
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: '100%'
         }}>
           <GameCanvas
             gameState={gameState}
             onCellClick={handleCellClickWrapper}
+            fillWidth
           />
         </div>
       </div>
 
-      {/* Game Win Popup */}
+      {/* Game Win Popup - only announces winner */}
       {showWinPopup && gameSeries && (
         <div style={{
           position: 'fixed',
@@ -810,13 +645,6 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
             position: 'relative',
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
           }}>
-            <div style={{
-              fontSize: '4em',
-              marginBottom: '20px'
-            }}>
-              🐝
-            </div>
-            
             <h1 style={{
               fontSize: '2.5em',
               color: 'black',
@@ -825,29 +653,6 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
             }}>
               {winMessage}
             </h1>
-            
-            <p style={{
-              fontSize: '1.2em',
-              color: '#333',
-              marginBottom: '20px'
-            }}>
-              {gameSeries.currentGame < gameSeries.totalGames 
-                ? `Next: ${gameSeries.player1GoesFirst ? gameSeries.player2Name : gameSeries.player1Name} goes first!`
-                : 'Series complete!'
-              }
-            </p>
-            
-            <p style={{
-              fontSize: '1em',
-              color: '#666',
-              marginBottom: '20px',
-              fontStyle: 'italic'
-            }}>
-              {gameSeries.currentGame < gameSeries.totalGames 
-                ? `Proceeding to next game in ${countdown} second${countdown !== 1 ? 's' : ''}...`
-                : 'Tournament complete! Click to view results.'
-              }
-            </p>
             
             {/* Show finish button only for the last game */}
             {gameSeries.currentGame >= gameSeries.totalGames && (

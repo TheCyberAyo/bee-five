@@ -10,13 +10,16 @@ export interface GameCanvasProps {
   onCellClick: (row: number, col: number) => void;
   gridColor?: string;
   gameNumber?: number;
+  /** When true, board sizes to fill 100% of container width (used e.g. in Play with Friend) */
+  fillWidth?: boolean;
 }
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ 
   gameState, 
   onCellClick,
   gridColor = '#87CEEB',
-  gameNumber
+  gameNumber,
+  fillWidth = false
 }) => {
   // Use theme system
   const { currentTheme } = useTheme({ gameNumber });
@@ -27,12 +30,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const effectivePlayer2Color = gameNumber ? currentTheme.player2Color : '#FFC30B';
   const effectiveBorderColor = gameNumber ? currentTheme.borderColor : '#FFC30B';
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
   const [touchedCell, setTouchedCell] = useState<{ row: number; col: number } | null>(null);
   const [windowSize, setWindowSize] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 1024, 
     height: typeof window !== 'undefined' ? window.innerHeight : 768 
   });
+  const [containerWidth, setContainerWidth] = useState(0);
   
   // Handle window resize
   useEffect(() => {
@@ -49,6 +54,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // When fillWidth, measure container and size board to fill it
+  useEffect(() => {
+    if (!fillWidth || typeof window === 'undefined') return;
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width } = entries[0]?.contentRect ?? { width: 0 };
+      setContainerWidth(width);
+    });
+    ro.observe(el);
+    setContainerWidth(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, [fillWidth]);
+
   // Clear hover effect when it becomes AI's turn
   useEffect(() => {
     if (gameState.currentPlayer === 2) {
@@ -60,11 +79,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const isMobile = windowSize.width <= 768;
   const isTablet = windowSize.width <= 1024 && windowSize.width > 768;
   
-  // Calculate optimal cell size based on screen size
+  // Calculate optimal cell size based on screen size or container (when fillWidth)
   let currentCellSize: number;
   let currentCanvasSize: number;
   
-  if (isMobile) {
+  if (fillWidth && containerWidth > 0) {
+    const totalBorder = (GRID_SIZE + 1) * BORDER_WIDTH;
+    currentCellSize = Math.max(20, Math.floor((containerWidth - totalBorder) / GRID_SIZE));
+    currentCanvasSize = GRID_SIZE * currentCellSize + totalBorder;
+  } else if (isMobile) {
     currentCellSize = MULTIPLAYER_CELL_SIZE;
     currentCanvasSize = MULTIPLAYER_CANVAS_SIZE;
   } else if (isTablet) {
@@ -333,7 +356,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     drawGame(ctx);
   }, [drawGame, gameState, hoveredCell, touchedCell]);
 
-  return (
+  const canvasEl = (
     <canvas
       ref={canvasRef}
       width={currentCanvasSize}
@@ -348,10 +371,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         border: '3px solid #000',
         borderRadius: '10px',
         cursor: gameState.isGameActive ? 'pointer' : 'default',
-        maxWidth: isMobile ? '90vw' : 'min(70vw, calc(100vh - 250px), 600px)',
-        maxHeight: isMobile ? '90vw' : 'min(70vw, calc(100vh - 250px), 600px)',
-        width: 'auto',
-        height: 'auto',
+        maxWidth: fillWidth ? '100%' : isMobile ? '90vw' : 'min(70vw, calc(100vh - 250px), 600px)',
+        maxHeight: fillWidth ? '100%' : isMobile ? '90vw' : 'min(70vw, calc(100vh - 250px), 600px)',
+        width: fillWidth ? currentCanvasSize : 'auto',
+        height: fillWidth ? currentCanvasSize : 'auto',
         objectFit: 'contain',
         touchAction: 'none', // Prevent default touch behaviors
         display: 'block',
@@ -359,6 +382,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       }}
     />
   );
+
+  if (fillWidth) {
+    return (
+      <div ref={containerRef} style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 0 }}>
+        {canvasEl}
+      </div>
+    );
+  }
+  return canvasEl;
 };
 
 export default GameCanvas;
