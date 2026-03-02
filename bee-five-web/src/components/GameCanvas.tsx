@@ -5,6 +5,9 @@ import { type GameState } from '../hooks/useGameLogic';
 import { GRID_SIZE, CELL_SIZE, BORDER_WIDTH, CANVAS_SIZE, MULTIPLAYER_CELL_SIZE, MULTIPLAYER_CANVAS_SIZE } from '../constants/gameConstants';
 import { useTheme } from '../hooks/useTheme';
 
+/** Classic board look: light blue grid, white grid lines, black outer border (matches Play a Friend) */
+const CLASSIC_BOARD_GRID_COLOR = '#87CEEB';
+
 export interface GameCanvasProps {
   gameState: GameState;
   onCellClick: (row: number, col: number) => void;
@@ -12,6 +15,8 @@ export interface GameCanvasProps {
   gameNumber?: number;
   /** When true, board sizes to fill 100% of container width (used e.g. in Play with Friend) */
   fillWidth?: boolean;
+  /** When true, board uses classic styling: sky blue grid, white cell lines, black border (like reference) */
+  classicBoardStyle?: boolean;
 }
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ 
@@ -19,16 +24,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   onCellClick,
   gridColor = '#87CEEB',
   gameNumber,
-  fillWidth = false
+  fillWidth = false,
+  classicBoardStyle = false
 }) => {
   // Use theme system
   const { currentTheme } = useTheme({ gameNumber });
   
-  // Use theme colors if gameNumber is provided, otherwise fall back to gridColor prop
-  const effectiveGridColor = gameNumber ? currentTheme.gridColor : gridColor;
+  // Use theme colors if gameNumber is provided, otherwise fall back to gridColor prop.
+  // When classicBoardStyle is true, use the classic sky blue grid and black outer border.
+  const effectiveGridColor = classicBoardStyle ? CLASSIC_BOARD_GRID_COLOR : (gameNumber ? currentTheme.gridColor : gridColor);
   const effectivePlayer1Color = gameNumber ? currentTheme.player1Color : '#000000';
   const effectivePlayer2Color = gameNumber ? currentTheme.player2Color : '#FFC30B';
-  const effectiveBorderColor = gameNumber ? currentTheme.borderColor : '#FFC30B';
+  const effectiveBorderColor = classicBoardStyle ? '#000000' : (gameNumber ? currentTheme.borderColor : '#FFC30B');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);

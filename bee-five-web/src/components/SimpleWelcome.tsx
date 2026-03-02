@@ -1245,7 +1245,7 @@ export default function SimpleWelcome() {
 
   // Main menu component
   return (
-    <div style={{ 
+    <div style={{
       background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)',
       minHeight: '100vh',
       width: '100%',
@@ -1261,13 +1261,9 @@ export default function SimpleWelcome() {
       boxSizing: 'border-box',
       gap: isMobile ? '1rem' : '1.5rem'
     }}>
-      {/* Mobile Header - Mobile only */}
       <MobileHeader onMenuItemClick={setGameMode} isMobile={isMobile} />
-      
-      {/* Vertical Sidebar Menu - Desktop only */}
       <SidebarMenu onMenuItemClick={setGameMode} isMobile={isMobile} />
 
-      {/* Decorative bee pattern background - hidden on mobile */}
       {!isMobile && (
         <div style={{
           position: 'absolute',
@@ -1292,7 +1288,6 @@ export default function SimpleWelcome() {
         </div>
       )}
 
-      {/* Main content card */}
       <div style={{
         background: 'rgba(0, 0, 0, 0.95)',
         borderRadius: isMobile ? '20px' : 'clamp(15px, 3vw, 25px)',
@@ -1314,14 +1309,11 @@ export default function SimpleWelcome() {
         justifyContent: 'space-between',
         overflowY: 'auto'
       }}>
-        {/* Main menu title */}
         <div style={{ marginBottom: isMobile ? '1.5rem' : 'clamp(1.5rem, 3vw, 2rem)' }}>
-          <h1 style={{ 
-            fontSize: isMobile ? 'clamp(1.5rem, 8vw, 2rem)' : 'clamp(2rem, 6vw, 3rem)', 
+          <h1 style={{
+            fontSize: isMobile ? 'clamp(1.5rem, 8vw, 2rem)' : 'clamp(2rem, 6vw, 3rem)',
             color: '#FFC30B',
-            textShadow: isMobile 
-              ? '2px 2px 0px black, -1px -1px 0px black' 
-              : '3px 3px 0px black, -1px -1px 0px black, 1px -1px 0px black, -1px 1px 0px black',
+            textShadow: isMobile ? '2px 2px 0px black, -1px -1px 0px black' : '3px 3px 0px black, -1px -1px 0px black, 1px -1px 0px black, -1px 1px 0px black',
             margin: '0 0 0.5rem 0',
             lineHeight: '1.2',
             fontWeight: 'bold',
@@ -1336,33 +1328,12 @@ export default function SimpleWelcome() {
             fontWeight: 'bold'
           }}>
             Your favourite version of{' '}
-            <span
-              style={{
-                fontWeight: 900,
-                color: '#ff4d4f',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                textShadow: '0 3px 8px rgba(0,0,0,0.4)'
-              }}
-            >
-              Connect-5
-            </span>
-            <span
-              style={{
-                fontWeight: 900,
-                color: '#ffffff',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                textShadow: '0 3px 8px rgba(0,0,0,0.4)'
-              }}
-            >
-              !
-            </span>
+            <span style={{ fontWeight: 900, color: '#ff4d4f', textTransform: 'uppercase', letterSpacing: '0.06em', textShadow: '0 3px 8px rgba(0,0,0,0.4)' }}>Connect-5</span>
+            <span style={{ fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.06em', textShadow: '0 3px 8px rgba(0,0,0,0.4)' }}>!</span>
           </p>
         </div>
 
-        {/* Main menu buttons */}
-        <div style={{ 
+        <div style={{
           display: 'flex',
           flexDirection: 'column',
           gap: isMobile ? '1rem' : 'clamp(0.75rem, 2vw, 1rem)',
@@ -1371,23 +1342,10 @@ export default function SimpleWelcome() {
           maxWidth: '100%',
           alignItems: 'center'
         }}>
-          <button 
-            onClick={() => {
-              soundManager.playClickSound();
-              setGameMode('show-take-turns-submenu');
-            }}
-            onMouseEnter={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
-              }
-            }}
+          <button
+            onClick={() => { soundManager.playClickSound(); setGameMode('show-take-turns-submenu'); }}
+            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
+            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
               background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
               color: 'white',
@@ -1414,23 +1372,10 @@ export default function SimpleWelcome() {
             <span>Take Turns</span>
           </button>
 
-          <button 
-            onClick={() => {
-              setGameMode('show-ai-submenu');
-              soundManager.playClickSound();
-            }}
-            onMouseEnter={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
-              }
-            }}
+          <button
+            onClick={() => { setGameMode('show-ai-submenu'); soundManager.playClickSound(); }}
+            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
+            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
               background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
               color: 'white',
@@ -1457,23 +1402,10 @@ export default function SimpleWelcome() {
             <span>AI Game</span>
           </button>
 
-          <button 
-            onClick={() => {
-              setGameMode('online-lobby');
-              soundManager.playClickSound();
-            }}
-            onMouseEnter={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
-              }
-            }}
+          <button
+            onClick={() => { setGameMode('online-lobby'); soundManager.playClickSound(); }}
+            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
+            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
               background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
               color: 'white',
@@ -1500,7 +1432,6 @@ export default function SimpleWelcome() {
             <span>Online Multiplayer</span>
           </button>
 
-          {/* Auth Section - Only show sign in button if not logged in */}
           {!user && (
             <div style={{
               marginTop: isMobile ? '1rem' : '1.5rem',
@@ -1513,10 +1444,7 @@ export default function SimpleWelcome() {
               alignItems: 'center'
             }}>
               <button
-                onClick={() => {
-                  setShowAuthModal(true);
-                  soundManager.playClickSound();
-                }}
+                onClick={() => { setShowAuthModal(true); soundManager.playClickSound(); }}
                 style={{
                   background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 100%)',
                   color: '#000',
@@ -1530,7 +1458,7 @@ export default function SimpleWelcome() {
                   boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                   width: '100%',
                   maxWidth: isMobile ? '100%' : '250px',
-                  touchAction: 'manipulation',
+                  touchAction: 'manipulation'
                 }}
               >
                 🔐 Sign In / Sign Up
@@ -1539,8 +1467,7 @@ export default function SimpleWelcome() {
           )}
         </div>
 
-        {/* Footer */}
-        <footer style={{ 
+        <footer style={{
           marginTop: isMobile ? '1rem' : 'clamp(1rem, 3vw, 2rem)',
           color: 'rgba(255,255,255,0.7)',
           fontSize: isMobile ? '0.8rem' : 'clamp(0.7rem, 2vw, 0.8rem)',
@@ -1548,21 +1475,14 @@ export default function SimpleWelcome() {
           zIndex: 1,
           padding: isMobile ? '0 1rem 0.5rem' : '0'
         }}>
-          <p style={{ margin: 0 }}>
-            🐝 &copy; 2025 Bee-Five. Product of MindGrind 🐝
-          </p>
+          <p style={{ margin: 0 }}>🐝 &copy; 2025 Bee-Five. Product of MindGrind 🐝</p>
         </footer>
       </div>
 
-      {/* Auth Modal */}
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
-          onSuccess={() => {
-            setShowAuthModal(false);
-            // Ensure we're on the main menu after sign in
-            setGameMode('menu');
-          }}
+          onSuccess={() => { setShowAuthModal(false); setGameMode('menu'); }}
         />
       )}
 

@@ -97,6 +97,211 @@ final List<AdventureStage> adventureStages = [
 const int totalGames = 2000;
 const Color primaryYellow = Color(0xFFFFC30B);
 
+/// Returns path for a flat-top hexagon centered at 0,0 with given radius.
+Path hexagonPath(double radius) {
+  const int sides = 6;
+  final path = Path();
+  for (int i = 0; i < sides; i++) {
+    final angle = (math.pi / 3) * i - math.pi / 6;
+    final x = radius * math.cos(angle);
+    final y = radius * math.sin(angle);
+    if (i == 0) {
+      path.moveTo(x, y);
+    } else {
+      path.lineTo(x, y);
+    }
+  }
+  path.close();
+  return path;
+}
+
+/// Golden winding path painter: draws a thick path through level positions.
+class WindingPathPainter extends CustomPainter {
+  final Size screenSize;
+  final List<Offset> pathPoints;
+  final double pathWidth;
+
+  WindingPathPainter({
+    required this.screenSize,
+    required this.pathPoints,
+    this.pathWidth = 28,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (pathPoints.length < 2) return;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    paint.color = const Color(0xFF6b5010);
+    paint.strokeWidth = pathWidth + 6;
+    canvas.drawPath(_pathFromPoints(), paint);
+    paint.color = const Color(0xFFa08020);
+    paint.strokeWidth = pathWidth;
+    canvas.drawPath(_pathFromPoints(), paint);
+    paint.color = const Color(0xFFE6AC00);
+    paint.strokeWidth = 3;
+    canvas.drawPath(_pathFromPoints(), paint);
+  }
+
+  Path _pathFromPoints() {
+    final path = Path()..moveTo(pathPoints.first.dx, pathPoints.first.dy);
+    for (int i = 1; i < pathPoints.length; i++) {
+      path.lineTo(pathPoints[i].dx, pathPoints[i].dy);
+    }
+    return path;
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Single level marker: hexagon with number (gold) or lock (grey). Optional bee on current.
+class HexagonLevelMarker extends StatelessWidget {
+  final int levelNumber;
+  final bool isCurrent;
+  final bool isLocked;
+  final bool isCompleted;
+  final VoidCallback? onTap;
+  final double size;
+
+  const HexagonLevelMarker({
+    super.key,
+    required this.levelNumber,
+    this.isCurrent = false,
+    this.isLocked = false,
+    this.isCompleted = false,
+    this.onTap,
+    this.size = 36,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fillColor = isLocked
+        ? const Color(0xFF9e9e9e)
+        : (isCompleted ? const Color(0xFF4CAF50) : primaryYellow);
+    return GestureDetector(
+      onTap: isLocked ? null : onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CustomPaint(
+            size: Size(size * 1.15, size * 1.15),
+            painter: _HexagonShapePainter(
+              fillColor: fillColor,
+              borderColor: isCurrent ? Colors.black : Colors.white,
+              borderWidth: isCurrent ? 3 : 2,
+            ),
+          ),
+          Positioned.fill(
+            child: Center(
+              child: isLocked
+                  ? const Text('🔒', style: TextStyle(fontSize: 18))
+                  : Text(
+                      '$levelNumber',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [Shadow(color: Colors.black45, offset: Offset(1, 1), blurRadius: 1)],
+                      ),
+                    ),
+            ),
+          ),
+          if (isCurrent && !isLocked)
+            Positioned(
+              top: -20,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text('🐝', style: TextStyle(fontSize: size * 0.55)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HexagonShapePainter extends CustomPainter {
+  final Color fillColor;
+  final Color borderColor;
+  final double borderWidth;
+
+  _HexagonShapePainter({
+    required this.fillColor,
+    required this.borderColor,
+    required this.borderWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2 - 2;
+    final path = hexagonPath(radius).shift(center);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = fillColor
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _VolcanoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width * 0.5, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFF4a4a4a)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.black26
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.5, size.height * 0.15),
+        width: size.width * 0.5,
+        height: size.height * 0.15,
+      ),
+      Paint()..color = const Color(0xFFE74C3C),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.5, size.height * 0.12),
+        width: size.width * 0.3,
+        height: size.height * 0.08,
+      ),
+      Paint()..color = const Color(0xFFF5B041),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 enum GameMode {
   menu,
   aiGame,
@@ -139,7 +344,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      void scrollToLevel1() {
+        if (!mounted || !mapScrollController.hasClients) return;
+        final pos = mapScrollController.position;
+        if (pos.hasContentDimensions && pos.maxScrollExtent > 0) {
+          mapScrollController.jumpTo(pos.maxScrollExtent);
+        }
+      }
+      scrollToLevel1();
+      Future.delayed(const Duration(milliseconds: 100), scrollToLevel1);
+    });
     // Initialize bee animations
     bee1Controller = AnimationController(
       duration: const Duration(seconds: 12),
@@ -177,7 +393,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final isMobile = screenSize.width <= 768;
     final gameIndex = gameNumber - 1;
     final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing * 0.2;
+    final totalHeight = totalGames * spacing;
     final y = totalHeight - (gameIndex * spacing);
     
     final gamesPerSide = 4;
@@ -229,26 +445,76 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     };
   }
 
+  List<Widget> _buildMapImagery(Size screenSize, double totalHeight) {
+    const imageSize = 144.0; // 2x bigger (was 72)
+    const sideOffset = 28.0; // distance from path to place on sides
+    final positions = <Widget>[];
+    // Pollen at 1, 11, 21, 31, ... on LEFT side of path (not behind numbers)
+    for (var level = 1; level <= totalGames; level += 10) {
+      final pos = getGamePosition(level, screenSize);
+      final pathX = screenSize.width * (pos['left']! / 100);
+      final top = (pos['top']! - imageSize / 2).clamp(4.0, totalHeight - imageSize - 4);
+      final left = (pathX - imageSize - sideOffset).clamp(4.0, screenSize.width - imageSize - 4);
+      positions.add(
+        Positioned(
+          left: left,
+          top: top,
+          child: Image.asset(
+            'assets/mapImagery/pollen.png',
+            width: imageSize,
+            height: imageSize,
+            fit: BoxFit.contain,
+            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
+    // Honeycomb at 5, 15, 25, 35, ... on RIGHT side of path (not behind numbers)
+    for (var level = 5; level <= totalGames; level += 10) {
+      final pos = getGamePosition(level, screenSize);
+      final pathX = screenSize.width * (pos['left']! / 100);
+      final top = (pos['top']! - imageSize / 2).clamp(4.0, totalHeight - imageSize - 4);
+      final left = (pathX + sideOffset).clamp(4.0, screenSize.width - imageSize - 4);
+      positions.add(
+        Positioned(
+          left: left,
+          top: top,
+          child: Image.asset(
+            'assets/mapImagery/honeycomb.png',
+            width: imageSize,
+            height: imageSize,
+            fit: BoxFit.contain,
+            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
+    return positions;
+  }
+
   Map<String, int> getVisibleGameRange(Size screenSize) {
     final isMobile = screenSize.width <= 768;
-    if (!isMobile) {
-      return {'startGame': 1, 'endGame': 100};
-    }
-    
-    final viewportHeight = screenSize.height;
     final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing * 0.2;
+    final totalHeight = totalGames * spacing;
+    final viewportHeight = math.max(100.0, (screenSize.height - 324) * 0.9); // map 10% shorter
     final buffer = viewportHeight * 2;
     final startY = math.max(0.0, mapScrollY - buffer);
     final endY = mapScrollY + viewportHeight + buffer;
-    
     final startGame = math.max(1, ((totalHeight - endY) / spacing).floor() + 1);
     final endGame = math.min(totalGames, ((totalHeight - startY) / spacing).floor() + 1);
-    
     return {
       'startGame': math.max(1, startGame - 20),
       'endGame': math.min(totalGames, endGame + 20),
     };
+  }
+
+  /// Vertical margin used to center the map between the two yellow bands.
+  double _mapVerticalMargin(Size screenSize) {
+    const topOfSpace = 114.0;   // below header + yellow band
+    const bottomOfSpaceFromBottom = 140.0; // above footer yellow band
+    final availableHeight = screenSize.height - topOfSpace - bottomOfSpaceFromBottom;
+    final mapHeight = (screenSize.height - 324) * 0.9;
+    return math.max(0.0, (availableHeight - mapHeight) / 2);
   }
 
   Widget buildMapBackground(Size screenSize) {
@@ -258,48 +524,82 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     
     final isMobile = screenSize.width <= 768;
     final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing * 0.2;
+    final totalHeight = totalGames * spacing;
     final visibleRange = getVisibleGameRange(screenSize);
     
     return Stack(
       children: [
-        // Header
+        // Header: back up 10px (top 0), opacity 0.5, padding top -20px, padding bottom -10px, height -30px
         Positioned(
-          top: 20,
+          top: 0,
           left: 0,
           right: 0,
           child: Container(
-            height: 60,
-            color: Colors.black,
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(),
-                Image.asset(
-                  'assets/BEE-FIVE.png',
-                  height: 40,
-                  fit: BoxFit.contain,
+            height: 74,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
-                const Spacer(),
-                // Profile button
+              ],
+            ),
+            padding: EdgeInsets.only(
+              top: 10,
+              left: isMobile ? 12 : 16,
+              right: isMobile ? 12 : 16,
+              bottom: 0,
+            ),
+            child: Row(
+              children: [
+                const Text('🐝', style: TextStyle(fontSize: 36)),
+                SizedBox(width: isMobile ? 6 : 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'BEE-FIVE',
+                        style: TextStyle(
+                          fontSize: isMobile ? 18 : 22,
+                          fontWeight: FontWeight.w900,
+                          color: primaryYellow,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        'Connect 5 + Outthink + Win',
+                        style: TextStyle(
+                          fontSize: isMobile ? 11 : 13,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 GestureDetector(
-                  onTap: () {
-                    _showProfileModal();
-                  },
+                  onTap: _showProfileModal,
                   child: Container(
-                    width: 45,
-                    height: 45,
+                    width: isMobile ? 40 : 48,
+                    height: isMobile ? 40 : 48,
                     decoration: BoxDecoration(
-                      color: primaryYellow.withValues(alpha: 0.2),
+                      color: const Color(0xFF2c2c2c),
                       shape: BoxShape.circle,
-                      border: Border.all(color: primaryYellow, width: 2),
+                      border: Border.all(color: Colors.black, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: const Center(
-                      child: Text(
-                        '👤',
-                        style: TextStyle(fontSize: 28),
-                      ),
+                      child: Text('👤', style: TextStyle(fontSize: 24)),
                     ),
                   ),
                 ),
@@ -308,21 +608,41 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
         
-        // Map Container
+        // Yellow band between header and map (header ends at 74)
         Positioned(
-          top: screenSize.height * 0.175, // Center vertically: (100% - 65%) / 2 = 17.5%
+          top: 74,
           left: 0,
           right: 0,
-          height: screenSize.height * 0.65, // 65% of screen height
+          height: 40,
+          child: Container(color: primaryYellow),
+        ),
+        // Map Container (world map style) - centered vertically, 10% shorter
+        Positioned(
+          top: 114 + _mapVerticalMargin(screenSize),
+          left: 0,
+          right: 0,
+          bottom: 140 + _mapVerticalMargin(screenSize),
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFF0FFF0),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFe8d48b),
+                  Color(0xFFc9b85c),
+                  Color(0xFFa89840),
+                  Color(0xFF8b7a2e),
+                ],
+              ),
               border: Border.all(
-                color: primaryYellow,
-                width: 4, // Medium thick border
+                color: Colors.black,
+                width: 3,
               ),
             ),
-            child: NotificationListener<ScrollNotification>(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                NotificationListener<ScrollNotification>(
               onNotification: (notification) {
                 if (notification is ScrollUpdateNotification) {
                   setState(() {
@@ -335,154 +655,250 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 controller: mapScrollController,
                 child: SizedBox(
                   height: totalHeight,
+                  width: screenSize.width,
                   child: Stack(
-                  children: [
-                    // Decorative elements
-                    ...List.generate(30, (i) {
-                      final gameIndex = 1 + (i * 10);
-                      if (gameIndex > totalGames) return null;
-                      final position = getGamePosition(gameIndex, screenSize);
-                      final decorations = ['🌿', '🌱', '🍃', '🌾', '🌺', '🌸', '🌻', '⭐', '✨', '🌼'];
-                      final decoration = decorations[i % decorations.length];
-                      
-                      return Positioned(
-                        left: screenSize.width * ((i % 4) * 25 + 5) / 100,
-                        top: position['top']! + ((i % 3) * 50 - 50),
-                        child: Text(
-                          decoration,
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.black.withValues(alpha: 0.4),
-                          ),
-                        ),
-                      );
-                    }).whereType<Widget>(),
-                    
-                    // Flying bees
-                    ...List.generate(15, (i) {
-                      final gameIndex = 1 + (i * 5);
-                      if (gameIndex > totalGames) return null;
-                      final position = getGamePosition(gameIndex, screenSize);
-                      
-                      return Positioned(
-                        left: screenSize.width * ((i % 5) * 18 + 8) / 100,
-                        top: position['top']! + ((i % 4) * 40 - 60),
-                        child: Text(
-                          '🐝',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.black.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      );
-                    }).whereType<Widget>(),
-                    
-                    // Stage markers
-                    ...adventureStages.map((stage) {
-                      final position = getGamePosition(stage.games, screenSize);
-                      return Positioned(
-                        left: screenSize.width / 2 - 50,
-                        top: position['top']! - 40,
+                    children: [
+                      // 1) Hills (background)
+                      Positioned(
+                        left: -80,
+                        top: totalHeight * 0.6,
                         child: Container(
-                          width: 100,
-                          padding: const EdgeInsets.all(6),
+                          width: 280,
+                          height: 120,
                           decoration: BoxDecoration(
-                            color: stage.color,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.black, width: 2),
+                            shape: BoxShape.rectangle,
+                            borderRadius: BorderRadius.circular(100),
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [Color(0xFFa89840), Color(0xFFc9b85c)],
+                            ),
                           ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(stage.emoji, style: const TextStyle(fontSize: 24)),
-                              Text(
-                                'S${adventureStages.indexOf(stage) + 1}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                              ),
+                        ),
+                      ),
+                      Positioned(
+                        right: -60,
+                        top: totalHeight * 0.65,
+                        child: Container(
+                          width: 220,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(80),
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [Color(0xFF8b7a2e), Color(0xFFb8982e)],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 2) Winding path (golden)
+                      CustomPaint(
+                        size: Size(screenSize.width, totalHeight),
+                        painter: WindingPathPainter(
+                          screenSize: screenSize,
+                          pathPoints: List.generate(
+                            visibleRange['endGame']! - visibleRange['startGame']! + 1,
+                            (i) {
+                              final g = visibleRange['startGame']! + i;
+                              final pos = getGamePosition(g, screenSize);
+                              return Offset(
+                                screenSize.width * (pos['left']! / 100),
+                                pos['top']!,
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      // 3) River + bridge
+                      Positioned(
+                        left: 0,
+                        top: totalHeight * 0.72,
+                        child: Container(
+                          width: screenSize.width,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0xFF5DADE2), Color(0xFF3498DB)],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: screenSize.width * 0.35,
+                        top: totalHeight * 0.71,
+                        child: Container(
+                          width: screenSize.width * 0.3,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: Color(0xFF8B4513),
+                            borderRadius: BorderRadius.circular(4),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
                             ],
                           ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(5, (_) => Container(width: 2, height: 10, color: Color(0xFF5D4037))),
+                          ),
                         ),
-                      );
-                    }),
-                    
-                    // Game pins
-                    ...List.generate(
-                      visibleRange['endGame']! - visibleRange['startGame']! + 1,
-                      (i) {
-                        final gameNumber = visibleRange['startGame']! + i;
-                        if (gameNumber < 1 || gameNumber > totalGames) {
-                          return const SizedBox.shrink();
-                        }
-                        final position = getGamePosition(gameNumber, screenSize);
-                        final isCompleted = gamesCompleted.contains(gameNumber);
-                        final isCurrent = gameNumber == currentGame;
-                        final isLocked = gameNumber > highestUnlockedGame;
-                        
+                      ),
+                      // 4) Volcano (bottom right)
+                      Positioned(
+                        right: screenSize.width * 0.05,
+                        top: totalHeight * 0.78,
+                        child: CustomPaint(
+                          size: Size(50, 70),
+                          painter: _VolcanoPainter(),
+                        ),
+                      ),
+                      // 4b) Map imagery: beefivemascot, honeycomb, pollen (appear as user scrolls)
+                      ..._buildMapImagery(screenSize, totalHeight),
+                      // 5) Beehive on branch (top-right area)
+                      Positioned(
+                        right: screenSize.width * 0.08,
+                        top: totalHeight * 0.08,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🌿', style: TextStyle(fontSize: 28)),
+                            Text('🏠', style: TextStyle(fontSize: 36)),
+                          ],
+                        ),
+                      ),
+                      // 6) Images on the LEFT side of the hexagonal path
+                      ...List.generate(40, (i) {
+                        final gameIndex = visibleRange['startGame']! + (i * 2);
+                        if (gameIndex > visibleRange['endGame']!) return null;
+                        final position = getGamePosition(gameIndex, screenSize);
+                        final pathX = screenSize.width * (position['left']! / 100);
+                        final leftX = pathX - 42 - (i % 3) * 8;
+                        if (leftX < -20) return null;
+                        final leftDecor = ['🌿', '🌱', '🍃', '🌾', '🌸', '🌺', '🌼', '🪴', '🌻', '🌷'];
                         return Positioned(
-                          left: screenSize.width * position['left']! / 100 - 16,
-                          top: position['top']!,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (!isLocked) {
-                                setState(() {
-                                  currentGame = gameNumber;
-                                  gameMode = GameMode.adventureGame;
-                                });
-                              }
-                            },
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: isLocked
-                                    ? Colors.grey
-                                    : isCompleted
-                                        ? Colors.green
-                                        : primaryYellow,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: isCurrent ? 3 : 2,
-                                ),
-                              ),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Text(
-                                    '$gameNumber',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  if (isLocked)
-                                    const Positioned(
-                                      top: -2,
-                                      right: -2,
-                                      child: Text('🔒', style: TextStyle(fontSize: 10)),
-                                    ),
-                                  if (isCompleted && !isLocked)
-                                    const Positioned(
-                                      top: -4,
-                                      right: -4,
-                                      child: Text('⭐', style: TextStyle(fontSize: 12)),
-                                    ),
-                                ],
-                              ),
+                          left: leftX,
+                          top: position['top']! - 12 + (i % 5) * 4,
+                          child: Text(
+                            leftDecor[i % leftDecor.length],
+                            style: TextStyle(fontSize: 18 + (i % 3) * 2, color: Colors.black.withValues(alpha: 0.75)),
+                          ),
+                        );
+                      }).whereType<Widget>(),
+                      // 7) Images on the RIGHT side of the hexagonal path
+                      ...List.generate(40, (i) {
+                        final gameIndex = visibleRange['startGame']! + (i * 2);
+                        if (gameIndex > visibleRange['endGame']!) return null;
+                        final position = getGamePosition(gameIndex, screenSize);
+                        final pathX = screenSize.width * (position['left']! / 100);
+                        final rightX = pathX + 42 + (i % 3) * 8;
+                        if (rightX > screenSize.width - 10) return null;
+                        final rightDecor = ['🌾', '🌼', '🌷', '🌻', '🌸', '🌺', '🌿', '🍃', '🪷', '🪴'];
+                        return Positioned(
+                          left: rightX,
+                          top: position['top']! - 18 - (i % 4) * 3,
+                          child: Text(
+                            rightDecor[i % rightDecor.length],
+                            style: TextStyle(fontSize: 18 + (i % 3) * 2, color: Colors.black.withValues(alpha: 0.75)),
+                          ),
+                        );
+                      }).whereType<Widget>(),
+                      // 8) Flying bees (in map, along path)
+                      ...List.generate(12, (i) {
+                        final gameIndex = visibleRange['startGame']! + (i * 4);
+                        if (gameIndex > visibleRange['endGame']!) return null;
+                        final position = getGamePosition(gameIndex, screenSize);
+                        return Positioned(
+                          left: screenSize.width * ((i % 3) * 0.25 + 0.15),
+                          top: position['top']! - 25 - (i % 2) * 20,
+                          child: Text('🐝', style: TextStyle(fontSize: 16, color: Colors.black.withValues(alpha: 0.6))),
+                        );
+                      }).whereType<Widget>(),
+                      // 9) Stage markers (compact)
+                      ...adventureStages.map((stage) {
+                        final position = getGamePosition(stage.games, screenSize);
+                        return Positioned(
+                          left: screenSize.width / 2 - 45,
+                          top: position['top']! - 36,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: stage.color,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.black, width: 2),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(stage.emoji, style: TextStyle(fontSize: 18)),
+                                SizedBox(width: 4),
+                                Text('S${adventureStages.indexOf(stage) + 1}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                              ],
                             ),
                           ),
                         );
-                      },
-                    ),
-                  ],
+                      }),
+                      // 10) Level markers = hexagons with numbers
+                      ...List.generate(
+                        visibleRange['endGame']! - visibleRange['startGame']! + 1,
+                        (i) {
+                          final gameNumber = visibleRange['startGame']! + i;
+                          if (gameNumber < 1 || gameNumber > totalGames) return const SizedBox.shrink();
+                          final position = getGamePosition(gameNumber, screenSize);
+                          final isCompleted = gamesCompleted.contains(gameNumber);
+                          final isCurrent = gameNumber == currentGame;
+                          final isLocked = gameNumber > highestUnlockedGame;
+                          const hexSize = 40.0;
+                          return Positioned(
+                            left: screenSize.width * position['left']! / 100 - hexSize / 2,
+                            top: position['top']! - hexSize / 2,
+                            child: HexagonLevelMarker(
+                              levelNumber: gameNumber,
+                              isCurrent: isCurrent,
+                              isLocked: isLocked,
+                              isCompleted: isCompleted,
+                              size: hexSize,
+                              onTap: () {
+                                if (!isLocked) {
+                                  setState(() {
+                                    currentGame = gameNumber;
+                                    gameMode = GameMode.adventureGame;
+                                  });
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
+                // Fixed mascot: larger, shifted more right and 100px down, bottom right of map, half visible (left side), does not scroll.
+                Positioned(
+                  right: -80,
+                  bottom: -100,
+                  child: SizedBox(
+                    width: 200,
+                    height: 320,
+                    child: ClipRect(
+                      clipBehavior: Clip.hardEdge,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Image.asset(
+                          'assets/mapImagery/beefivemascot.png',
+                          width: 400,
+                          height: 320,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -497,79 +913,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     
     return Stack(
       children: [
-        // Title
-        Positioned(
-          top: 90,
-          left: 0,
-          right: 0,
-          child: Column(
-            children: [
-              const Text(
-                'BEE-FIVE',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.normal,
-                  color: Colors.black,
-                  letterSpacing: 1,
-                ),
-              ),
-              const Text(
-                'Connect 5 • Outthink • Win',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white,
-                  fontWeight: FontWeight.normal,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-        
-        // Thought Bubble
-        Positioned(
-          top: screenSize.height * 0.18,
-          left: screenSize.width * 0.1,
-          right: screenSize.width * 0.1,
-          child: Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: const Color(0xFFD3D3D3),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.black, width: 3),
-            ),
-            child: RichText(
-              textAlign: TextAlign.center,
-              text: const TextSpan(
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.black,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-                children: [
-                  TextSpan(text: 'Connect 5 dots '),
-                  TextSpan(
-                    text: 'vertically',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                  ),
-                  TextSpan(text: ', '),
-                  TextSpan(
-                    text: 'horizontally',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                  ),
-                  TextSpan(text: ', or '),
-                  TextSpan(
-                    text: 'diagonally',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        
-        // Left side buttons
+        // Left side buttons (Play with a Friend, Classic Mode, Settings)
         Positioned(
           left: 10,
           top: 0,
@@ -578,171 +922,125 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Play with friend
-                ElevatedButton(
+                // Play with a Friend
+                _sideMenuButton(
+                  label: 'Play with a Friend',
+                  icon: '🌿',
+                  color: Colors.green,
                   onPressed: () {
-                    setState(() {
-                      gameMode = GameMode.localMultiplayer;
-                    });
+                    setState(() => gameMode = GameMode.localMultiplayer);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(color: Colors.black, width: 3),
-                    ),
-                    minimumSize: const Size(160, 45),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('👥', style: TextStyle(fontSize: 36)),
-                      SizedBox(width: 8),
-                      Text(
-                        'Play with a\nfriend',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
                 const SizedBox(height: 12),
-                
-                // Classic
-                ElevatedButton(
-                  onPressed: () {
-                    _showDifficultyModal();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(color: Colors.black, width: 3),
-                    ),
-                    minimumSize: const Size(160, 45),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('🤖', style: TextStyle(fontSize: 36)),
-                      SizedBox(width: 8),
-                      Text(
-                        'Classic',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                // Classic Mode
+                _sideMenuButton(
+                  label: 'Classic Mode',
+                  icon: '🎮',
+                  color: Colors.blue,
+                  onPressed: _showDifficultyModal,
                 ),
                 const SizedBox(height: 12),
-                
                 // Settings
-                ElevatedButton(
-                  onPressed: () {
-                    _showSettingsModal();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(color: Colors.black, width: 3),
-                    ),
-                    minimumSize: const Size(160, 45),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('⚙️', style: TextStyle(fontSize: 36)),
-                      SizedBox(width: 8),
-                      Text(
-                        'Settings',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                _sideMenuButton(
+                  label: 'Settings',
+                  icon: '⚙️',
+                  color: Colors.orange,
+                  onPressed: _showSettingsModal,
                 ),
               ],
             ),
           ),
         ),
         
-        // Play button at bottom
+        // Continue Level button (orange) — underneath the map, above footer
         Positioned(
-          bottom: 80,
+          bottom: 140,
           left: 0,
           right: 0,
           child: Center(
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  // Always allow playing - go to current game level
-                  gameMode = GameMode.adventureGame;
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  side: const BorderSide(color: Colors.black, width: 4),
-                ),
-                minimumSize: const Size(200, 64),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('▶️', style: TextStyle(fontSize: 28)),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Adventure Level $currentGame',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  setState(() => gameMode = GameMode.adventureGame);
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFFF57C00), Color(0xFFE65100)],
                     ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                      BoxShadow(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        blurRadius: 0,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('▶', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Continue Level $currentGame',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
         ),
-        
-        // Footer
+        // Yellow band between map and footer
         Positioned(
-          bottom: 20,
+          bottom: 100,
+          left: 0,
+          right: 0,
+          height: 40,
+          child: Container(color: primaryYellow),
+        ),
+        // Bottom nav: height -20px, padding top -20px
+        Positioned(
+          bottom: 0,
           left: 0,
           right: 0,
           child: Container(
-            color: Colors.black,
-            padding: const EdgeInsets.all(20),
-            child: TextButton(
-              onPressed: () {
-                setState(() {
-                  gameMode = GameMode.privacyPolicy;
-                });
-              },
-              child: const Text(
-                'Privacy Policy',
-                style: TextStyle(
-                  color: primaryYellow,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
+            height: 100,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, -4),
                 ),
-              ),
+              ],
+            ),
+            padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 40),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _bottomNavItem(icon: '🏠', label: 'Home', active: true, onTap: () {}),
+                _bottomNavItem(icon: '👥', label: 'Multiplayer', onTap: () => setState(() => gameMode = GameMode.localMultiplayer)),
+                _bottomNavItem(icon: '🌐', label: 'Community', onTap: () {}),
+                _bottomNavItem(icon: '⚙️', label: 'Settings', onTap: _showSettingsModal),
+              ],
             ),
           ),
         ),
@@ -751,60 +1049,128 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Widget buildAnimatedBees(Size screenSize) {
-    if (gameMode != GameMode.menu || screenSize.width <= 768) {
+    if (gameMode != GameMode.menu) {
       return const SizedBox.shrink();
     }
-    
+    // Show flying bees on all screen sizes (portrait and landscape)
+    final isPortrait = screenSize.width <= 768;
+    final range = isPortrait ? 0.25 : 0.35;
+    final baseX = 0.5;
+    final baseY = isPortrait ? 0.35 : 0.4;
+    final beeSize = isPortrait ? 20.0 : 24.0;
+
     return Stack(
       children: [
-        // Bee 1
         AnimatedBuilder(
           animation: bee1Controller,
           builder: (context, child) {
             final t = bee1Controller.value;
-            final x = screenSize.width * (0.5 + 0.3 * math.sin(t * 2 * math.pi));
-            final y = screenSize.height * (0.3 + 0.2 * math.cos(t * 2 * math.pi));
-            
+            final x = screenSize.width * (baseX + range * math.sin(t * 2 * math.pi));
+            final y = screenSize.height * (baseY + 0.18 * math.cos(t * 2 * math.pi));
             return Positioned(
               left: x,
               top: y,
-              child: const Text('🐝', style: TextStyle(fontSize: 24)),
+              child: Text('🐝', style: TextStyle(fontSize: beeSize)),
             );
           },
         ),
-        
-        // Bee 2
         AnimatedBuilder(
           animation: bee2Controller,
           builder: (context, child) {
             final t = bee2Controller.value;
-            final x = screenSize.width * (0.5 + 0.4 * math.cos(t * 2 * math.pi));
-            final y = screenSize.height * (0.5 + 0.3 * math.sin(t * 2 * math.pi));
-            
+            final x = screenSize.width * (baseX + (range + 0.05) * math.cos(t * 2 * math.pi));
+            final y = screenSize.height * (baseY + 0.22 * math.sin(t * 2 * math.pi));
             return Positioned(
               left: x,
               top: y,
-              child: const Text('🐝', style: TextStyle(fontSize: 24)),
+              child: Text('🐝', style: TextStyle(fontSize: beeSize)),
             );
           },
         ),
-        
-        // Bee 3
         AnimatedBuilder(
           animation: bee3Controller,
           builder: (context, child) {
             final t = bee3Controller.value;
-            final x = screenSize.width * (0.5 + 0.35 * math.sin(t * 2 * math.pi + math.pi / 3));
-            final y = screenSize.height * (0.4 + 0.25 * math.cos(t * 2 * math.pi + math.pi / 3));
-            
+            final x = screenSize.width * (baseX + range * math.sin(t * 2 * math.pi + math.pi / 3));
+            final y = screenSize.height * (baseY + 0.2 * math.cos(t * 2 * math.pi + math.pi / 3));
             return Positioned(
               left: x,
               top: y,
-              child: const Text('🐝', style: TextStyle(fontSize: 24)),
+              child: Text('🐝', style: TextStyle(fontSize: beeSize)),
             );
           },
         ),
       ],
+    );
+  }
+
+  Widget _sideMenuButton({
+    required String label,
+    required String icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Colors.black, width: 2),
+        ),
+        minimumSize: const Size(160, 48),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text('→', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomNavItem({
+    required String icon,
+    required String label,
+    bool active = false,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(icon, style: TextStyle(fontSize: 22, color: active ? primaryYellow : Colors.white.withValues(alpha: 0.85))),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: active ? primaryYellow : Colors.white.withValues(alpha: 0.85),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

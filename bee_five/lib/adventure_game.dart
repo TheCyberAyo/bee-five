@@ -4,7 +4,18 @@ import 'dart:async';
 import 'adventure_game_rules.dart';
 import 'adventure_game_logic.dart' as logic;
 
+/// Hides scrollbar completely (no vertical bar on the side).
+class _NoScrollbarBehavior extends ScrollBehavior {
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
+  }
+}
+
 const Color primaryYellow = Color(0xFFFFC30B);
+/// Classic board style (matches reference): sky blue grid, white lines, black border
+const Color classicBoardGridColor = Color(0xFF87CEEB);
+const Color classicBoardBackground = Color(0xFF424242);
 const int boardSize = 10; // Adventure games use 10x10 board
 
 class AdventureGame extends StatefulWidget {
@@ -1165,11 +1176,15 @@ class _AdventureGameState extends State<AdventureGame> {
     );
 
     return Scaffold(
-      backgroundColor: primaryYellow,
+      backgroundColor: classicBoardBackground,
       appBar: AppBar(
         title: Text('Adventure Game - Level $currentGame'),
         backgroundColor: Colors.black,
         foregroundColor: primaryYellow,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: Container(color: primaryYellow),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -1196,14 +1211,19 @@ class _AdventureGameState extends State<AdventureGame> {
           },
         ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Game status
+      body: ScrollConfiguration(
+        behavior: _NoScrollbarBehavior(),
+        child: SafeArea(
+          child: Column(
+            children: [
+            // Game status (black bar with yellow bottom border, like reference)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              color: Colors.black,
+              decoration: const BoxDecoration(
+                color: Colors.black,
+                border: Border(bottom: BorderSide(color: primaryYellow, width: 2)),
+              ),
               child: Column(
                 children: [
                   if (showStartCountdown)
@@ -1260,8 +1280,7 @@ class _AdventureGameState extends State<AdventureGame> {
                   ],
                 ],
               ),
-            ),
-
+            ),  // Game status Container - comma before next child
             // Game board
             Expanded(
               child: Container(
@@ -1278,8 +1297,9 @@ class _AdventureGameState extends State<AdventureGame> {
                             opacity: ((isBlindPlay || temporaryBlindPlay) && gameStarted && gameInitialized) ? 0 : 1,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.black, width: 2),
+                                color: classicBoardGridColor,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.black, width: 3),
                               ),
                               child: Column(
                                 children: List.generate(boardSize, (row) {
@@ -1307,12 +1327,12 @@ class _AdventureGameState extends State<AdventureGame> {
                                                     ? Colors.grey.shade400
                                                     : isMudZone
                                                         ? Colors.brown.shade200
-                                                        : Colors.white,
+                                                        : classicBoardGridColor,
                                             border: Border.all(
                                               color: isBlindMudZone
                                                   ? Colors.red.shade300
-                                                  : Colors.grey.shade300,
-                                              width: isBlindMudZone ? 2 : 0.5,
+                                                  : Colors.white,
+                                              width: isBlindMudZone ? 2 : 1,
                                             ),
                                           ),
                                           child: Center(
@@ -1386,8 +1406,79 @@ class _AdventureGameState extends State<AdventureGame> {
                   ),
                 ),
               ),
+            // Footer (black bar with yellow top border, Home & Restart - like reference)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Colors.black,
+                border: Border(top: BorderSide(color: primaryYellow, width: 2)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Exit Game?'),
+                              content: const Text(
+                                  'Are you sure you want to exit? Your progress will be saved.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    widget.onBackToMenu();
+                                  },
+                                  child: const Text('Exit'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor: primaryYellow,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: const BorderSide(color: Colors.black, width: 2),
+                          ),
+                        ),
+                        child: const Text('Home'),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          _initializeGame();
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor: primaryYellow,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: const BorderSide(color: Colors.black, width: 2),
+                          ),
+                        ),
+                        child: const Text('Restart'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
+      ),
       ),
     );
   }

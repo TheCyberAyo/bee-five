@@ -2062,7 +2062,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         `}
       </style>
       <div style={{ 
-        background: '#808080',
+        background: '#424242',
         width: '100vw', 
         height: '100vh', 
         display: 'flex', 
@@ -2190,22 +2190,25 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
         )}
       </div>
 
-      {/* Game Board Container - Match BeefiveApp */}
+      {/* Game Board Container - Match reference: dark gray, substantial padding, board ~70–80% width, classic look */}
       <div style={{
         flex: 1,
+        display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '20px' : '20px',
-        paddingTop: isMobile ? '10px' : '10px',
-        display: 'flex',
+        padding: isMobile ? '1.5rem' : '1.5rem',
+        position: 'relative',
         minHeight: 0,
-        overflow: 'auto'
+        overflow: 'auto',
+        width: '100%'
       }}>
         <div style={{
           position: 'relative',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center'
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: '85%'
         }}>
             <GameCanvas
               gameState={gameState}
@@ -2216,6 +2219,8 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                   handleCellClick(row, col);
                 }
               }}
+              fillWidth
+              classicBoardStyle
             />
             
             {/* Start Countdown Overlay */}
