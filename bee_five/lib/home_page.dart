@@ -1069,6 +1069,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               children: [
                 _bottomNavItem(icon: '🏠', label: 'Home', active: true, onTap: () {}),
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
+                _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () {}),
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
               ],

@@ -52,7 +52,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   void _resetGame() {
     setState(() {
       board = List.generate(boardSize, (_) => List.filled(boardSize, 0));
-      currentPlayer = 2; // Human starts (yellow)
+      currentPlayer = 1; // Human starts (yellow), AI (black) responds after each move
       winner = 0;
       showWinModal = false;
       winMessage = '';
@@ -484,13 +484,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final boardPadding = 20.0;
-    final borderWidth = 2.0;
-    final availableSize = screenSize.width - (boardPadding * 2);
+    const double borderWidth = 2.0;
     final totalBorders = (boardSize + 1) * borderWidth;
-    final availableForCells = availableSize - totalBorders;
-    final cellSize = (availableForCells / boardSize).floorToDouble();
 
     return Stack(
       children: [
@@ -547,58 +542,63 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
               ),
             ),
 
-            // Game Board
+            // Game Board - same sizing as Play with a Friend: full width of available space, centered
             Expanded(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(boardPadding),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF87CEEB), // Sky blue
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.black, width: 3),
-                    ),
-                    padding: EdgeInsets.all(borderWidth),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(boardSize, (row) {
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: List.generate(boardSize, (col) {
-                            return GestureDetector(
-                              onTap: () => _handleCellClick(row, col),
-                              child: Container(
-                                width: cellSize,
-                                height: cellSize,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF87CEEB),
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: borderWidth,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final boardSide = constraints.maxWidth;
+                  final cellSize = (boardSide - totalBorders) / boardSize;
+                  return Center(
+                    child: Container(
+                      width: boardSide,
+                      height: boardSide,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF87CEEB), // Sky blue
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.black, width: 3),
+                      ),
+                      padding: EdgeInsets.all(borderWidth),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(boardSize, (row) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(boardSize, (col) {
+                              return GestureDetector(
+                                onTap: () => _handleCellClick(row, col),
+                                child: Container(
+                                  width: cellSize,
+                                  height: cellSize,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF87CEEB),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: borderWidth,
+                                    ),
                                   ),
-                                ),
-                                child: board[row][col] != 0
-                                    ? Center(
-                                        child: Container(
-                                          width: cellSize / 1.5,
-                                          height: cellSize / 1.5,
-                                          decoration: BoxDecoration(
-                                            color: board[row][col] == 1
-                                                ? primaryYellow
-                                                : Colors.black,
-                                            shape: BoxShape.circle,
+                                  child: board[row][col] != 0
+                                      ? Center(
+                                          child: Container(
+                                            width: cellSize / 1.5,
+                                            height: cellSize / 1.5,
+                                            decoration: BoxDecoration(
+                                              color: board[row][col] == 1
+                                                  ? primaryYellow
+                                                  : Colors.black,
+                                              shape: BoxShape.circle,
+                                            ),
                                           ),
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                            );
-                          }),
-                        );
-                      }),
+                                        )
+                                      : null,
+                                ),
+                              );
+                            }),
+                          );
+                        }),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
 
