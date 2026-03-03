@@ -1170,8 +1170,9 @@ class _AdventureGameState extends State<AdventureGame> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
+    // Use 46 so board fits in padded area (avoids "Right overflowed by 6.0 Pixels" with SafeArea)
     final cellSize = math.min(
-      (screenSize.width - 40) / boardSize,
+      (screenSize.width - 46) / boardSize,
       (screenSize.height - 300) / boardSize,
     );
 

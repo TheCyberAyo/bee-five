@@ -509,12 +509,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   /// Vertical margin used to center the map between the two yellow bands.
-  double _mapVerticalMargin(Size screenSize) {
-    const topOfSpace = 114.0;   // below header + yellow band
+  (double, double) _mapVerticalMargins(Size screenSize) {
+    const topOfSpace = 166.0;   // below header + yellow band (74 + 92)
     const bottomOfSpaceFromBottom = 140.0; // above footer yellow band
     final availableHeight = screenSize.height - topOfSpace - bottomOfSpaceFromBottom;
     final mapHeight = (screenSize.height - 324) * 0.9;
-    return math.max(0.0, (availableHeight - mapHeight) / 2);
+    final totalMargin = math.max(0.0, availableHeight - mapHeight);
+    // More margin at bottom so the map sits higher / more centred
+    final marginTop = totalMargin * 0.25;
+    final marginBottom = totalMargin * 0.75;
+    return (marginTop, marginBottom);
   }
 
   Widget buildMapBackground(Size screenSize) {
@@ -526,6 +530,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final spacing = isMobile ? 60.0 : 80.0;
     final totalHeight = totalGames * spacing;
     final visibleRange = getVisibleGameRange(screenSize);
+    final (mapMarginTop, mapMarginBottom) = _mapVerticalMargins(screenSize);
     
     return Stack(
       children: [
@@ -554,31 +559,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
             child: Row(
               children: [
-                const Text('🐝', style: TextStyle(fontSize: 36)),
-                SizedBox(width: isMobile ? 6 : 10),
+                SizedBox(width: isMobile ? 40 : 48),
                 Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                  child: Center(
+                    child: Image.asset(
+                      'assets/BEE-FIVE.png',
+                      height: isMobile ? 44 : 52,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
                         'BEE-FIVE',
                         style: TextStyle(
                           fontSize: isMobile ? 18 : 22,
                           fontWeight: FontWeight.w900,
                           color: primaryYellow,
-                          letterSpacing: 0.5,
                         ),
                       ),
-                      Text(
-                        'Connect 5 + Outthink + Win',
-                        style: TextStyle(
-                          fontSize: isMobile ? 11 : 13,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 GestureDetector(
@@ -608,20 +604,55 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
         
-        // Yellow band between header and map (header ends at 74)
+        // Yellow band between header and map: BEE-FIVE (black) + tagline
         Positioned(
           top: 74,
           left: 0,
           right: 0,
-          height: 40,
-          child: Container(color: primaryYellow),
+          height: 92,
+          child: Container(
+            color: primaryYellow,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'BEE-FIVE',
+                  style: TextStyle(
+                    fontSize: isMobile ? 36 : 40,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: isMobile ? 20 : 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    children: [
+                      const TextSpan(text: 'Connect 5', style: TextStyle(color: Colors.red)),
+                      const TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
+                      const TextSpan(text: 'Outthink', style: TextStyle(color: Colors.orange)),
+                      const TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
+                      const TextSpan(text: 'Win', style: TextStyle(color: Colors.green)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        // Map Container (world map style) - centered vertically, 10% shorter
+        // Map Container (world map style) - centred vertically
         Positioned(
-          top: 114 + _mapVerticalMargin(screenSize),
+          top: 166 + mapMarginTop,
           left: 0,
           right: 0,
-          bottom: 140 + _mapVerticalMargin(screenSize),
+          bottom: 140 + mapMarginBottom,
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -925,7 +956,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 // Play with a Friend
                 _sideMenuButton(
                   label: 'Play with a Friend',
-                  icon: '🌿',
+                  iconImagePath: 'assets/homeImagery/play-with-friend.png',
                   color: Colors.green,
                   onPressed: () {
                     setState(() => gameMode = GameMode.localMultiplayer);
@@ -935,7 +966,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 // Classic Mode
                 _sideMenuButton(
                   label: 'Classic Mode',
-                  icon: '🎮',
+                  iconImagePath: 'assets/homeImagery/classic-mode.png',
                   color: Colors.blue,
                   onPressed: _showDifficultyModal,
                 ),
@@ -943,7 +974,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 // Settings
                 _sideMenuButton(
                   label: 'Settings',
-                  icon: '⚙️',
+                  iconImagePath: 'assets/homeImagery/settings.png',
                   color: Colors.orange,
                   onPressed: _showSettingsModal,
                 ),
@@ -971,7 +1002,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     gradient: const LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xFFF57C00), Color(0xFFE65100)],
+                      colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
                     ),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
@@ -993,7 +1024,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       const Text('▶', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 10),
                       Text(
-                        'Continue Level $currentGame',
+                        'Level $currentGame',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -1037,9 +1068,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _bottomNavItem(icon: '🏠', label: 'Home', active: true, onTap: () {}),
-                _bottomNavItem(icon: '👥', label: 'Multiplayer', onTap: () => setState(() => gameMode = GameMode.localMultiplayer)),
-                _bottomNavItem(icon: '🌐', label: 'Community', onTap: () {}),
-                _bottomNavItem(icon: '⚙️', label: 'Settings', onTap: _showSettingsModal),
+                _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
+                _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () {}),
+                _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
               ],
             ),
           ),
@@ -1106,7 +1137,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   Widget _sideMenuButton({
     required String label,
-    required String icon,
+    String? icon,
+    String? iconImagePath,
     required Color color,
     required VoidCallback onPressed,
   }) {
@@ -1114,18 +1146,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: const BorderSide(color: Colors.black, width: 2),
         ),
-        minimumSize: const Size(160, 48),
+        minimumSize: const Size(100, 48),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: 8),
+          if (iconImagePath != null)
+            Image.asset(
+              iconImagePath,
+              width: 24,
+              height: 24,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const SizedBox(width: 24, height: 24),
+            )
+          else if (icon != null)
+            Text(icon, style: const TextStyle(fontSize: 22)),
+          if (iconImagePath != null || icon != null) const SizedBox(width: 6),
           Flexible(
             child: Text(
               label,
@@ -1137,19 +1178,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 4),
-          const Text('→', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
   Widget _bottomNavItem({
-    required String icon,
+    String? icon,
+    String? iconImagePath,
     required String label,
     bool active = false,
     required VoidCallback onTap,
   }) {
+    final iconColor = active ? primaryYellow : Colors.white.withValues(alpha: 0.85);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -1158,7 +1199,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(icon, style: TextStyle(fontSize: 22, color: active ? primaryYellow : Colors.white.withValues(alpha: 0.85))),
+            if (iconImagePath != null)
+              Image.asset(
+                iconImagePath,
+                width: 26,
+                height: 26,
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const SizedBox(width: 26, height: 26),
+              )
+            else if (icon != null)
+              Text(icon, style: TextStyle(fontSize: 22, color: iconColor)),
             const SizedBox(height: 2),
             Text(
               label,
