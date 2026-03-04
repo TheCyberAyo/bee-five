@@ -58,7 +58,10 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-/// First splash: yellow background, "Product of" and MindGrind logo image.
+/// Shared logo size so MindGrind matches BEE-FIVE logo on second splash.
+const _splashLogoSize = 220.0;
+
+/// First splash: yellow background, "Product of" and MindGrind logo image (same size as BEE-FIVE logo, central).
 class _ProductOfScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -68,6 +71,7 @@ class _ProductOfScreen extends StatelessWidget {
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Product of',
@@ -78,12 +82,13 @@ class _ProductOfScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 48),
+              SizedBox(
+                width: _splashLogoSize,
+                height: _splashLogoSize,
                 child: Image.asset(
                   'assets/MindGrind.jpg',
                   fit: BoxFit.contain,
-                  height: 80,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -107,9 +112,14 @@ class _BeeFiveLogoScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset(
-                'assets/BEE-FIVE.png',
-                fit: BoxFit.contain,
+              SizedBox(
+                width: _splashLogoSize,
+                height: _splashLogoSize,
+                child: Image.asset(
+                  'assets/BEE-FIVE.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
               ),
               const SizedBox(height: 16),
               Text(

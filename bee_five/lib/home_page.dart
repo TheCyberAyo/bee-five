@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game.dart';
 import 'simple_game.dart';
 import 'classic_ai_game.dart';
+import 'background_sound.dart';
 
 // Adventure stages for map background
 class AdventureStage {
@@ -347,6 +349,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    // Load saved sound preference and start looping background sound when player enters the game
+    SharedPreferences.getInstance().then((prefs) {
+      if (!mounted) return;
+      final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
+      if (saved != soundEnabled) setState(() => soundEnabled = saved);
+    });
+    BackgroundSound.instance.startIfEnabled().then((_) {
+      if (mounted) setState(() => soundEnabled = BackgroundSound.instance.soundEnabled);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       void scrollToLevel1() {
@@ -832,22 +843,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                       // 4b) Map imagery: beefivemascot, honeycomb, pollen (appear as user scrolls)
                       ..._buildMapImagery(screenSize, totalHeight),
-                      // 5) Beehive on branch (top-right area)
+                      // 5) Beehive (top-right area, no leaves)
                       Positioned(
                         right: screenSize.width * 0.08,
                         top: totalHeight * 0.08,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('🌿', style: TextStyle(fontSize: 28)),
-                            Image.asset(
-                              'assets/homeImagery/home.png',
-                              width: 36,
-                              height: 36,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                            ),
-                          ],
+                        child: Image.asset(
+                          'assets/homeImagery/home.png',
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                         ),
                       ),
                       // 6) Images on the LEFT side of the hexagonal path
@@ -858,7 +863,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         final pathX = screenSize.width * (position['left']! / 100);
                         final leftX = pathX - 42 - (i % 3) * 8;
                         if (leftX < -20) return null;
-                        final leftDecor = ['🌿', '🌱', '🍃', '🌾', '🌸', '🌺', '🌼', '🪴', '🌻', '🌷'];
+                        final leftDecor = ['🌾', '🌸', '🌺', '🌼', '🌻', '🌷'];
                         return Positioned(
                           left: leftX,
                           top: position['top']! - 12 + (i % 5) * 4,
@@ -876,7 +881,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         final pathX = screenSize.width * (position['left']! / 100);
                         final rightX = pathX + 42 + (i % 3) * 8;
                         if (rightX > screenSize.width - 10) return null;
-                        final rightDecor = ['🌾', '🌼', '🌷', '🌻', '🌸', '🌺', '🌿', '🍃', '🪷', '🪴'];
+                        final rightDecor = ['🌾', '🌼', '🌷', '🌻', '🌸', '🌺', '🪷'];
                         return Positioned(
                           left: rightX,
                           top: position['top']! - 18 - (i % 4) * 3,
@@ -886,18 +891,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           ),
                         );
                       }).whereType<Widget>(),
-                      // 8) Flying bees (in map, along path)
-                      ...List.generate(12, (i) {
-                        final gameIndex = visibleRange['startGame']! + (i * 4);
-                        if (gameIndex > visibleRange['endGame']!) return null;
-                        final position = getGamePosition(gameIndex, screenSize);
-                        return Positioned(
-                          left: screenSize.width * ((i % 3) * 0.25 + 0.15),
-                          top: position['top']! - 25 - (i % 2) * 20,
-                          child: Text('🐝', style: TextStyle(fontSize: 16, color: Colors.black.withValues(alpha: 0.6))),
-                        );
-                      }).whereType<Widget>(),
-                      // 9) Stage markers (compact)
+                      // 8) Stage markers (compact)
                       ...adventureStages.map((stage) {
                         final position = getGamePosition(stage.games, screenSize);
                         return Positioned(
@@ -930,7 +924,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           ),
                         );
                       }),
-                      // 10) Level markers = hexagons with numbers
+                      // 9) Level markers = hexagons with numbers
                       ...List.generate(
                         visibleRange['endGame']! - visibleRange['startGame']! + 1,
                         (i) {
@@ -1642,10 +1636,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      soundEnabled = !soundEnabled;
-                    });
+                  onPressed: () async {
+                    final newValue = await BackgroundSound.instance.toggle();
+                    if (mounted) setState(() => soundEnabled = newValue);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: soundEnabled ? Colors.green : Colors.red,
