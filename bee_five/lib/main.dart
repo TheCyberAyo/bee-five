@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
+import 'splash_screen.dart';
 
 /// Hides scrollbars app-wide (no vertical striped bar on scrollable content).
 class _NoScrollbarScrollBehavior extends ScrollBehavior {
@@ -26,7 +27,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFFC30B)),
         useMaterial3: true,
       ),
-      home: const HomePage(),
+      home: const SplashScreen(),
     );
   }
 }

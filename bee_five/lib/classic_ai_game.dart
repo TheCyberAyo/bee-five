@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game_logic.dart' as logic;
 
 const Color primaryYellow = Color(0xFFFFC30B);
 const int boardSize = 10;
+const int _classicSessionSeconds = 10 * 60; // 10 minutes
+const String _prefClassicBestStreak = 'classic_best_streak';
 
 class ClassicAIGame extends StatefulWidget {
   final VoidCallback onBackToMenu;
   final String initialDifficulty;
   final int initialTimer;
   final String? backgroundColor;
+  final bool isClassicStreakMode;
 
   const ClassicAIGame({
     super.key,
@@ -18,6 +22,7 @@ class ClassicAIGame extends StatefulWidget {
     this.initialDifficulty = 'medium',
     this.initialTimer = 15,
     this.backgroundColor,
+    this.isClassicStreakMode = false,
   });
 
   @override
@@ -35,34 +40,98 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   Timer? timer;
   bool isAITurn = false;
 
+  // Classic streak mode only
+  int classicSessionTimeLeft = _classicSessionSeconds;
+  int classicGamesWon = 0;
+  int classicBestStreak = 0;
+  Timer? sessionTimer;
+  bool classicGameOver = false;
+
   @override
   void initState() {
     super.initState();
-    aiDifficulty = widget.initialDifficulty;
-    timeLeft = widget.initialTimer;
-    _resetGame();
+    if (widget.isClassicStreakMode) {
+      aiDifficulty = 'hard';
+      timeLeft = 0;
+      _loadBestStreak();
+      _startSessionTimer();
+    } else {
+      aiDifficulty = widget.initialDifficulty;
+      timeLeft = widget.initialTimer;
+    }
+    _resetBoard();
+  }
+
+  Future<void> _loadBestStreak() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      classicBestStreak = prefs.getInt(_prefClassicBestStreak) ?? 0;
+    });
+  }
+
+  Future<void> _saveBestStreak(int streak) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefClassicBestStreak, streak);
+  }
+
+  void _startSessionTimer() {
+    sessionTimer?.cancel();
+    sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || classicGameOver) return;
+      setState(() {
+        if (classicSessionTimeLeft > 0 && winner == 0) {
+          classicSessionTimeLeft--;
+        }
+        if (classicSessionTimeLeft <= 0) {
+          _classicSessionEnd(timeUp: true);
+        }
+      });
+    });
+  }
+
+  void _classicSessionEnd({required bool timeUp}) {
+    if (classicGameOver) return;
+    sessionTimer?.cancel();
+    classicGameOver = true;
+    if (classicGamesWon > classicBestStreak) {
+      classicBestStreak = classicGamesWon;
+      _saveBestStreak(classicBestStreak);
+    }
+    setState(() {
+      winMessage = timeUp
+          ? 'Time\'s up! 🐝\nScore: $classicGamesWon\nBest: $classicBestStreak'
+          : 'Game Over 🐝\nScore: $classicGamesWon\nBest: $classicBestStreak';
+      showWinModal = true;
+    });
   }
 
   @override
   void dispose() {
     timer?.cancel();
+    sessionTimer?.cancel();
     super.dispose();
   }
 
-  void _resetGame() {
+  void _resetBoard() {
     setState(() {
       board = List.generate(boardSize, (_) => List.filled(boardSize, 0));
-      currentPlayer = 1; // Human starts (yellow), AI (black) responds after each move
+      currentPlayer = 1;
       winner = 0;
       showWinModal = false;
       winMessage = '';
       isAITurn = false;
-      timeLeft = widget.initialTimer;
+      if (!widget.isClassicStreakMode) {
+        timeLeft = widget.initialTimer;
+      }
     });
     timer?.cancel();
-    if (widget.initialTimer > 0) {
+    if (!widget.isClassicStreakMode && widget.initialTimer > 0) {
       _startTimer();
     }
+  }
+
+  void _resetGame() {
+    _resetBoard();
   }
 
   void _startTimer() {
@@ -76,7 +145,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
         if (timeLeft > 0 && currentPlayer == 1 && winner == 0) {
           timeLeft--;
         } else if (timeLeft <= 0) {
-          // Time's up - AI wins
           _handleTimeUp();
           timer.cancel();
         }
@@ -85,6 +153,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   void _handleTimeUp() {
+    if (widget.isClassicStreakMode) {
+      _classicSessionEnd(timeUp: true);
+      return;
+    }
     setState(() {
       winner = 2;
       winMessage = 'Time\'s up! AI wins! 🐝';
@@ -108,6 +180,17 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
     // Check for winner
     if (_checkWinner(row, col, currentPlayer)) {
+      if (widget.isClassicStreakMode) {
+        setState(() {
+          classicGamesWon++;
+          if (classicGamesWon > classicBestStreak) {
+            classicBestStreak = classicGamesWon;
+            _saveBestStreak(classicBestStreak);
+          }
+        });
+        _resetBoard();
+        return;
+      }
       setState(() {
         winner = currentPlayer;
         winMessage = 'You win! 🐝';
@@ -128,6 +211,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
 
       if (isDraw) {
+        if (widget.isClassicStreakMode) {
+          _classicSessionEnd(timeUp: false);
+          return;
+        }
         setState(() {
           winner = 0;
           winMessage = 'Game Over - Draw! 🐝';
@@ -181,6 +268,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
       // Check for winner
       if (_checkWinner(row, col, 2)) {
+        if (widget.isClassicStreakMode) {
+          _classicSessionEnd(timeUp: false);
+          return;
+        }
         setState(() {
           winner = 2;
           winMessage = 'AI wins! 🐝';
@@ -201,6 +292,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
         }
 
         if (isDraw) {
+          if (widget.isClassicStreakMode) {
+            _classicSessionEnd(timeUp: false);
+            return;
+          }
           setState(() {
             winner = 0;
             winMessage = 'Game Over - Draw! 🐝';
@@ -516,7 +611,46 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
               ),
             ),
 
-            // Game Info
+            // Classic mode: Best streak at top
+            if (widget.isClassicStreakMode)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                color: primaryYellow.withValues(alpha: 0.95),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Best: $classicBestStreak',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    Text(
+                      'Score: $classicGamesWon',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    Text(
+                      'Time: ${classicSessionTimeLeft ~/ 60}:${(classicSessionTimeLeft % 60).toString().padLeft(2, '0')}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: classicSessionTimeLeft <= 60 ? Colors.red : Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Game Info (non-classic or turn/timer below best bar)
             Container(
               padding: const EdgeInsets.all(15),
               child: Column(
@@ -529,7 +663,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                       color: Colors.black,
                     ),
                   ),
-                  if (widget.initialTimer > 0 && currentPlayer == 1 && winner == 0)
+                  if (!widget.isClassicStreakMode && widget.initialTimer > 0 && currentPlayer == 1 && winner == 0)
                     Text(
                       'Time: ${timeLeft}s',
                       style: TextStyle(
@@ -602,7 +736,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
               ),
             ),
 
-            // Footer
+            // Footer (Classic: Home only; Practice: Home + Restart)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
@@ -628,41 +762,55 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                             side: const BorderSide(color: Colors.black, width: 2),
                           ),
                         ),
-                        child: const Text(
-                          '🏠 Home',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Image.asset(
+                              'assets/homeImagery/home.png',
+                              width: 20,
+                              height: 20,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Home',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: ElevatedButton(
-                        onPressed: _resetGame,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryYellow,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: const BorderSide(color: Colors.black, width: 2),
+                  if (!widget.isClassicStreakMode)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: ElevatedButton(
+                          onPressed: _resetGame,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryYellow,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: const BorderSide(color: Colors.black, width: 2),
+                            ),
                           ),
-                        ),
-                        child: const Text(
-                          '🔄 Restart',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                          child: const Text(
+                            '🔄 Restart',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -702,49 +850,83 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    winMessage.contains('You win')
-                        ? 'Sweet victory! 🍯'
-                        : winMessage.contains('AI wins')
-                            ? 'The AI strikes back! 🍯'
-                            : 'Great game! 🍯',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF333333),
+                  if (!classicGameOver)
+                    Text(
+                      winMessage.contains('You win')
+                          ? 'Sweet victory! 🍯'
+                          : winMessage.contains('AI wins')
+                              ? 'The AI strikes back! 🍯'
+                              : 'Great game! 🍯',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF333333),
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
                   const SizedBox(height: 30),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            showWinModal = false;
-                          });
-                          _resetGame();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
+                      if (classicGameOver)
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              classicGameOver = false;
+                              classicSessionTimeLeft = _classicSessionSeconds;
+                              classicGamesWon = 0;
+                              showWinModal = false;
+                            });
+                            _resetBoard();
+                            _startSessionTimer();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: const BorderSide(color: Colors.black, width: 2),
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: const BorderSide(color: Colors.black, width: 2),
+                          child: const Text(
+                            'Try Again',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        )
+                      else
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              showWinModal = false;
+                            });
+                            _resetGame();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: const BorderSide(color: Colors.black, width: 2),
+                            ),
+                          ),
+                          child: const Text(
+                            'Play Again',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
-                        child: const Text(
-                          'Play Again',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
                       const SizedBox(width: 15),
                       ElevatedButton(
                         onPressed: () {

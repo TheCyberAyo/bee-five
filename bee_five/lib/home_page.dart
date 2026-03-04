@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:url_launcher/url_launcher.dart';
 import 'adventure_game.dart';
 import 'simple_game.dart';
 import 'classic_ai_game.dart';
@@ -308,6 +309,7 @@ enum GameMode {
   adventureGame,
   localMultiplayer,
   privacyPolicy,
+  connect,
   settings,
   profile,
   signIn,
@@ -331,6 +333,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String selectedDifficulty = '';
   String aiDifficulty = 'medium';
   int aiTimer = 15;
+  bool isClassicStreakMode = false;
   int currentGame = 1;
   int highestUnlockedGame = totalGames; // All games unlocked for testing
   List<int> gamesCompleted = [];
@@ -447,6 +450,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   List<Widget> _buildMapImagery(Size screenSize, double totalHeight) {
     const imageSize = 144.0; // 2x bigger (was 72)
+    const imageSizeSmall = 72.0; // half of honeycomb/pollen for honey and nectar
     const sideOffset = 28.0; // distance from path to place on sides
     final positions = <Widget>[];
     // Pollen at 1, 11, 21, 31, ... on LEFT side of path (not behind numbers)
@@ -483,6 +487,47 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             'assets/mapImagery/honeycomb.png',
             width: imageSize,
             height: imageSize,
+            fit: BoxFit.contain,
+            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
+    // Honey at multiples of 16 on RIGHT side (half size; does not overlap nectar)
+    for (var level = 16; level <= totalGames; level += 16) {
+      final pos = getGamePosition(level, screenSize);
+      final pathX = screenSize.width * (pos['left']! / 100);
+      final top = (pos['top']! - imageSizeSmall / 2).clamp(4.0, totalHeight - imageSizeSmall - 4);
+      final left = (pathX + sideOffset).clamp(4.0, screenSize.width - imageSizeSmall - 4);
+      positions.add(
+        Positioned(
+          left: left,
+          top: top,
+          child: Image.asset(
+            'assets/mapImagery/honey.png',
+            width: imageSizeSmall,
+            height: imageSizeSmall,
+            fit: BoxFit.contain,
+            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
+    // Nectar at multiples of 13 on LEFT side (half size; skip multiples of 16 so no overlap with honey)
+    for (var level = 13; level <= totalGames; level += 13) {
+      if (level % 16 == 0) continue; // same position as honey
+      final pos = getGamePosition(level, screenSize);
+      final pathX = screenSize.width * (pos['left']! / 100);
+      final top = (pos['top']! - imageSizeSmall / 2).clamp(4.0, totalHeight - imageSizeSmall - 4);
+      final left = (pathX - imageSizeSmall - sideOffset).clamp(4.0, screenSize.width - imageSizeSmall - 4);
+      positions.add(
+        Positioned(
+          left: left,
+          top: top,
+          child: Image.asset(
+            'assets/mapImagery/nectar.png',
+            width: imageSizeSmall,
+            height: imageSizeSmall,
             fit: BoxFit.contain,
             errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
           ),
@@ -795,7 +840,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text('🌿', style: TextStyle(fontSize: 28)),
-                            Text('🏠', style: TextStyle(fontSize: 36)),
+                            Image.asset(
+                              'assets/homeImagery/home.png',
+                              width: 36,
+                              height: 36,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            ),
                           ],
                         ),
                       ),
@@ -862,7 +913,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(stage.emoji, style: TextStyle(fontSize: 18)),
+                                if (stage.emoji == '🏠')
+                                  Image.asset(
+                                    'assets/homeImagery/home.png',
+                                    width: 18,
+                                    height: 18,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Text(stage.emoji, style: TextStyle(fontSize: 18)),
+                                  )
+                                else
+                                  Text(stage.emoji, style: TextStyle(fontSize: 18)),
                                 SizedBox(width: 4),
                                 Text('S${adventureStages.indexOf(stage) + 1}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
                               ],
@@ -963,12 +1023,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Classic Mode
+                // Classic Mode (10 min streak only — no difficulty; practice has Easy/Medium/Hard)
                 _sideMenuButton(
                   label: 'Classic Mode',
                   iconImagePath: 'assets/homeImagery/classic-mode.png',
                   color: Colors.blue,
-                  onPressed: _showDifficultyModal,
+                  onPressed: () {
+                    setState(() {
+                      isClassicStreakMode = true;
+                      aiDifficulty = 'hard';
+                      aiTimer = 0;
+                      gameMode = GameMode.aiGame;
+                    });
+                  },
                 ),
                 const SizedBox(height: 12),
                 // Settings
@@ -1067,10 +1134,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _bottomNavItem(icon: '🏠', label: 'Home', active: true, onTap: () {}),
+                _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', active: true, onTap: () {}),
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
                 _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
-                _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () {}),
+                _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
               ],
             ),
@@ -1182,6 +1249,74 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ],
       ),
     );
+  }
+
+  Widget _policySection(String title, List<String> paragraphs) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...paragraphs.map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                p,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  Widget _connectTile({required String imagePath, String? link}) {
+    final content = Container(
+      height: 100,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black26),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.asset(
+          imagePath,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_not_supported, size: 48)),
+        ),
+      ),
+    );
+    if (link != null) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _launchUrl(link),
+        child: content,
+      );
+    }
+    return content;
   }
 
   Widget _bottomNavItem({
@@ -1645,11 +1780,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         onBackToMenu: () {
           setState(() {
             gameMode = GameMode.menu;
+            isClassicStreakMode = false;
           });
         },
         initialDifficulty: aiDifficulty,
         initialTimer: aiTimer,
         backgroundColor: 'yellow',
+        isClassicStreakMode: isClassicStreakMode,
       );
     }
     
@@ -1680,15 +1817,221 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         appBar: AppBar(
           title: const Text('Privacy Policy'),
           backgroundColor: primaryYellow,
-        ),
-        body: Center(
-          child: ElevatedButton(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
             onPressed: () {
-              setState(() {
-                gameMode = GameMode.menu;
-              });
+              setState(() => gameMode = GameMode.menu);
             },
-            child: const Text('Back to Menu'),
+          ),
+        ),
+        body: Container(
+          color: primaryYellow,
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Bee-Five ("we", "our", or "us") operates the Bee-Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.',
+                        style: TextStyle(
+                          fontSize: 16,
+                          height: 1.6,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Last Updated: January 2025',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ),
+                      _policySection('Information We Collect', [
+                        'We may collect the following types of information:',
+                        '• Non-personal data: Device information, operating system, app version, and general usage statistics',
+                        '• Account information: If you sign up for an account or multiplayer features, we may collect an email address for login and account management purposes',
+                        '• Game progress: Local game progress and statistics stored on your device',
+                        'We do not collect sensitive personal information such as payment details, location data, or contact lists.',
+                      ]),
+                      _policySection('Third-Party Services', [
+                        'Our app may use the following third-party services:',
+                        '• Supabase: For backend services and data storage (if applicable). See Supabase\'s Privacy Policy for details.',
+                        'These services have their own privacy policies governing the collection and use of your information. We encourage you to review their privacy policies.',
+                      ]),
+                      _policySection('Your Rights (GDPR & CCPA)', [
+                        'If you are located in the European Economic Area (EEA) or California, you have the following rights:',
+                        '• Right to Access: You can request a copy of the personal data we hold about you',
+                        '• Right to Rectification: You can request correction of inaccurate personal data',
+                        '• Right to Erasure: You can request deletion of your personal data',
+                        '• Right to Data Portability: You can request your data in a portable format',
+                        '• Right to Object: You can object to processing of your personal data',
+                        '• Right to Withdraw Consent: You can withdraw consent for data processing at any time',
+                        'To exercise these rights, please contact us using the information in the "Contact Us" section below.',
+                      ]),
+                      _policySection('Children\'s Privacy', [
+                        'Our Service is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.',
+                        'If we discover that we have collected personal information from a child under 13, we will delete that information promptly.',
+                      ]),
+                      _policySection('Data Security', [
+                        'We implement appropriate technical and organizational measures to protect your personal information. However, no method of transmission over the internet or electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your data, we cannot guarantee absolute security.',
+                      ]),
+                      _policySection('Data Retention', [
+                        'We retain your personal information only for as long as necessary to provide our Service and fulfill the purposes outlined in this Privacy Policy. When you request deletion of your data, we will delete it within 30 days, except where we are required to retain it by law.',
+                      ]),
+                      _policySection('Changes to This Policy', [
+                        'We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date. You are advised to review this Privacy Policy periodically for any changes.',
+                      ]),
+                      _policySection('Contact Us', [
+                        'If you have any questions about this Privacy Policy, wish to exercise your rights, or need to contact us regarding your personal data, please reach out to us:',
+                        'Email: admin@mindgrind.co.za',
+                        'Developer: MindGrind',
+                        'App: Bee-Five',
+                        'We will respond to your inquiry within 30 days.',
+                      ]),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 24, bottom: 16),
+                        child: Center(
+                          child: Text(
+                            '© 2025 Bee-Five. Product of MindGrind.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Same footer as homepage
+              Container(
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                  border: const Border(
+                    top: BorderSide(color: primaryYellow, width: 2),
+                  ),
+                ),
+                padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 40),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () => setState(() => gameMode = GameMode.menu)),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', active: true, onTap: () {}),
+                    _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (gameMode == GameMode.connect) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Connect'),
+          backgroundColor: primaryYellow,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => setState(() => gameMode = GameMode.menu),
+          ),
+        ),
+        body: Container(
+          color: primaryYellow,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 24, bottom: 20),
+                child: Text(
+                  'Connect with us',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _connectTile(imagePath: 'assets/BEE-FIVE.png', link: 'https://www.beefiveweb.com')),
+                          const SizedBox(width: 20),
+                          Expanded(child: _connectTile(imagePath: 'assets/socials/instagram.png', link: 'https://www.instagram.com/beefive1.01?igsh=ZjhnbjV4ZW1sYTlx&utm_source=qr')),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(child: _connectTile(imagePath: 'assets/socials/tiktok.png', link: 'https://www.tiktok.com/@beefive1.1?_r=1&_t=ZS-94N1ujIm1AH')),
+                          const SizedBox(width: 20),
+                          Expanded(child: _connectTile(imagePath: 'assets/socials/linkedIn.png', link: null)),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(child: _connectTile(imagePath: 'assets/socials/youtube.png', link: null)),
+                          const SizedBox(width: 20),
+                          Expanded(child: _connectTile(imagePath: 'assets/socials/facebook.png', link: null)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Same footer as homepage: yellow band + black nav bar
+              Container(color: primaryYellow, height: 40),
+              Container(
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 40),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () => setState(() => gameMode = GameMode.menu)),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
+                    _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', active: true, onTap: () {}),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       );
