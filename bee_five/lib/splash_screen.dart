@@ -88,7 +88,7 @@ class _ProductOfScreen extends StatelessWidget {
                 child: Image.asset(
                   'assets/MindGrind.jpg',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -118,7 +118,7 @@ class _BeeFiveLogoScreen extends StatelessWidget {
                 child: Image.asset(
                   'assets/BEE-FIVE.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
               const SizedBox(height: 16),

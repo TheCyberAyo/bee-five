@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
+import 'package:flutter/services.dart';
 import 'splash_screen.dart';
 
 /// Hides scrollbars app-wide (no vertical striped bar on scrollable content).
@@ -11,6 +11,11 @@ class _NoScrollbarScrollBehavior extends ScrollBehavior {
 }
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Lock to portrait only; ignore device rotation settings.
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
   runApp(const MyApp());
 }
 

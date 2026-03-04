@@ -770,7 +770,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                               width: 20,
                               height: 20,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
                             ),
                             const SizedBox(width: 6),
                             const Text(

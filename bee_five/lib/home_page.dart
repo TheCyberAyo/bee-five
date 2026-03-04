@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -100,6 +101,27 @@ final List<AdventureStage> adventureStages = [
 const int totalGames = 2000;
 const Color primaryYellow = Color(0xFFFFC30B);
 
+/// Limits text input to [maxWords] words.
+class _WordLimitInputFormatter extends TextInputFormatter {
+  final int maxWords;
+  _WordLimitInputFormatter(this.maxWords);
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return newValue;
+    final words = newValue.text.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (words.length <= maxWords) return newValue;
+    final truncated = words.take(maxWords).join(' ');
+    return TextEditingValue(
+      text: truncated,
+      selection: TextSelection.collapsed(offset: truncated.length),
+    );
+  }
+}
+
 /// Returns path for a flat-top hexagon centered at 0,0 with given radius.
 Path hexagonPath(double radius) {
   const int sides = 6;
@@ -181,9 +203,15 @@ class HexagonLevelMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fillColor = isLocked
-        ? const Color(0xFF9e9e9e)
-        : (isCompleted ? const Color(0xFF4CAF50) : primaryYellow);
+    // Passed = green, current = orange, levels ahead = red
+    final Color fillColor;
+    if (isCompleted) {
+      fillColor = const Color(0xFF4CAF50); // green
+    } else if (isCurrent) {
+      fillColor = const Color(0xFFFF9800); // orange
+    } else {
+      fillColor = const Color(0xFFE53935); // red (levels ahead / locked)
+    }
     return GestureDetector(
       onTap: isLocked ? null : onTap,
       child: Stack(
@@ -341,6 +369,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   List<int> gamesCompleted = [];
   double mapScrollY = 0;
   final ScrollController mapScrollController = ScrollController();
+  final TextEditingController _talkToUsController = TextEditingController();
 
   late AnimationController bee1Controller;
   late AnimationController bee2Controller;
@@ -396,6 +425,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _talkToUsController.dispose();
     bee1Controller.dispose();
     bee2Controller.dispose();
     bee3Controller.dispose();
@@ -852,7 +882,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           width: 36,
                           height: 36,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
                         ),
                       ),
                       // 6) Images on the LEFT side of the hexagonal path
@@ -913,7 +943,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     width: 18,
                                     height: 18,
                                     fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => Text(stage.emoji, style: TextStyle(fontSize: 18)),
+                                    errorBuilder: (_, _, _) => Text(stage.emoji, style: TextStyle(fontSize: 18)),
                                   )
                                 else
                                   Text(stage.emoji, style: TextStyle(fontSize: 18)),
@@ -1299,7 +1329,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         child: Image.asset(
           imagePath,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_not_supported, size: 48)),
+          errorBuilder: (_, _, _) => const Center(child: Icon(Icons.image_not_supported, size: 48)),
         ),
       ),
     );
@@ -1363,14 +1393,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: Colors.black, width: 4),
         ),
-        title: const Text(
-          '🤖 Select Difficulty 🤖',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
-          textAlign: TextAlign.center,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/homeImagery/robot_head.png',
+              height: 32,
+              width: 32,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Difficulty',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Image.asset(
+              'assets/homeImagery/robot_head.png',
+              height: 32,
+              width: 32,
+              fit: BoxFit.contain,
+            ),
+          ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1392,7 +1441,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _showTimerModal();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+                backgroundColor: Colors.black,
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -1420,7 +1469,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _showTimerModal();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
+                backgroundColor: Colors.black,
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -1448,7 +1497,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _showTimerModal();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: Colors.black,
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -1810,12 +1859,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         appBar: AppBar(
           title: const Text('Privacy Policy'),
           backgroundColor: primaryYellow,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              setState(() => gameMode = GameMode.menu);
-            },
-          ),
+          automaticallyImplyLeading: false,
         ),
         body: Container(
           color: primaryYellow,
@@ -1840,7 +1884,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         child: Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: Text(
-                            'Last Updated: January 2025',
+                            'Last Updated: January 2026',
                             style: TextStyle(
                               fontSize: 14,
                               fontStyle: FontStyle.italic,
@@ -1895,7 +1939,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         padding: EdgeInsets.only(top: 24, bottom: 16),
                         child: Center(
                           child: Text(
-                            '© 2025 Bee-Five. Product of MindGrind.',
+                            '© 2026 Bee-Five. Product of MindGrind.',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.black54,
@@ -1994,6 +2038,72 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           Expanded(child: _connectTile(imagePath: 'assets/socials/facebook.png', link: null)),
                         ],
                       ),
+                      const SizedBox(height: 32),
+                      const Text(
+                        'Talk To Us!',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Give us a compliment, suggest improvements... We value your input.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          height: 1.3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.black, width: 2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: TextField(
+                          controller: _talkToUsController,
+                          maxLines: 4,
+                          inputFormatters: [_WordLimitInputFormatter(100)],
+                          decoration: const InputDecoration(
+                            hintText: 'Your message (max 100 words)',
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          style: const TextStyle(fontSize: 15, color: Colors.black87),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            final body = _talkToUsController.text.trim();
+                            if (body.isEmpty) return;
+                            final uri = Uri.parse(
+                              'mailto:admin@mindgrind.co.za?body=${Uri.encodeComponent(body)}',
+                            );
+                            try {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            } catch (_) {}
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text('Send to admin@mindgrind.co.za'),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
