@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game_logic.dart' as logic;
+import 'xp_service.dart';
 
 const Color primaryYellow = Color(0xFFFFC30B);
 const int boardSize = 10;
@@ -47,6 +48,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   Timer? sessionTimer;
   bool classicGameOver = false;
 
+  int _headerXp = 0;
+  int _lastXpDelta = 0;
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +64,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       timeLeft = widget.initialTimer;
     }
     _resetBoard();
+    getXp().then((xp) {
+      if (mounted) setState(() => _headerXp = xp);
+    });
   }
 
   Future<void> _loadBestStreak() async {
@@ -98,9 +105,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       _saveBestStreak(classicBestStreak);
     }
     setState(() {
+      _lastXpDelta = 0;
       winMessage = timeUp
-          ? 'Time\'s up! 🐝\nScore: $classicGamesWon\nBest: $classicBestStreak'
-          : 'Game Over 🐝\nScore: $classicGamesWon\nBest: $classicBestStreak';
+          ? 'Time\'s up!\nScore: $classicGamesWon\nBest: $classicBestStreak'
+          : 'Game Over\nScore: $classicGamesWon\nBest: $classicBestStreak';
       showWinModal = true;
     });
   }
@@ -119,6 +127,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       winner = 0;
       showWinModal = false;
       winMessage = '';
+      _lastXpDelta = 0;
       isAITurn = false;
       if (!widget.isClassicStreakMode) {
         timeLeft = widget.initialTimer;
@@ -158,8 +167,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       return;
     }
     setState(() {
+      _lastXpDelta = 0;
       winner = 2;
-      winMessage = 'Time\'s up! AI wins! 🐝';
+      winMessage = 'Time\'s up! AI wins!';
       showWinModal = true;
     });
   }
@@ -188,12 +198,32 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             _saveBestStreak(classicBestStreak);
           }
         });
+        onClassicStreakWin(classicGamesWon).then((result) {
+          if (mounted) {
+            setState(() {
+              _headerXp = result.$1;
+              _lastXpDelta = result.$2;
+            });
+          }
+        });
         _resetBoard();
         return;
       }
+      if (widget.initialDifficulty == 'hard') {
+        onHardPracticeWin().then((result) {
+          if (mounted) {
+            setState(() {
+              _headerXp = result.$1;
+              _lastXpDelta = result.$2;
+            });
+          }
+        });
+      } else {
+        setState(() => _lastXpDelta = 0);
+      }
       setState(() {
         winner = currentPlayer;
-        winMessage = 'You win! 🐝';
+        winMessage = 'You win!';
         showWinModal = true;
       });
       timer?.cancel();
@@ -216,8 +246,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           return;
         }
         setState(() {
+          _lastXpDelta = 0;
           winner = 0;
-          winMessage = 'Game Over - Draw! 🐝';
+          winMessage = 'Game Over - Draw!';
           showWinModal = true;
         });
         timer?.cancel();
@@ -245,8 +276,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
     if (availableCells.isEmpty) {
       setState(() {
+        _lastXpDelta = 0;
         winner = 0;
-        winMessage = 'Game Over - Draw! 🐝';
+        winMessage = 'Game Over - Draw!';
         showWinModal = true;
       });
       timer?.cancel();
@@ -273,8 +305,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           return;
         }
         setState(() {
+          _lastXpDelta = 0;
           winner = 2;
-          winMessage = 'AI wins! 🐝';
+          winMessage = 'AI wins!';
           showWinModal = true;
         });
         timer?.cancel();
@@ -297,8 +330,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             return;
           }
           setState(() {
+            _lastXpDelta = 0;
             winner = 0;
-            winMessage = 'Game Over - Draw! 🐝';
+            winMessage = 'Game Over - Draw!';
             showWinModal = true;
           });
           timer?.cancel();
@@ -600,12 +634,34 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                 ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  const SizedBox(width: 40),
                   Image.asset(
                     'assets/BEE-FIVE.png',
                     height: 40,
                     fit: BoxFit.contain,
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/homeImagery/xp_gem.png',
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_headerXp',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: primaryYellow,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -835,11 +891,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    '🐝',
-                    style: TextStyle(fontSize: 60),
-                  ),
-                  const SizedBox(height: 20),
                   Text(
                     winMessage,
                     style: const TextStyle(
@@ -849,6 +900,17 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  if (_lastXpDelta != 0) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _lastXpDelta > 0 ? '+$_lastXpDelta XP' : '$_lastXpDelta XP',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: _lastXpDelta > 0 ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   if (!classicGameOver)
                     Text(

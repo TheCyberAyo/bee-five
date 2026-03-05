@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'adventure_game_logic.dart' as logic;
+import 'xp_service.dart';
 
 const Color primaryYellow = Color(0xFFFFC30B);
 const int boardSize = 10;
@@ -24,11 +25,15 @@ class _SimpleGameState extends State<SimpleGame> {
   int winner = 0; // 0 = no winner/draw, 1 = black, 2 = yellow
   bool showWinModal = false;
   String winMessage = '';
+  int _headerXp = 0;
 
   @override
   void initState() {
     super.initState();
     _resetGame();
+    getXp().then((xp) {
+      if (mounted) setState(() => _headerXp = xp);
+    });
   }
 
   void _resetGame() {
@@ -58,7 +63,7 @@ class _SimpleGameState extends State<SimpleGame> {
     if (_checkWinner(row, col, currentPlayer)) {
       setState(() {
         winner = currentPlayer;
-        winMessage = '${currentPlayer == 1 ? 'Black' : 'Yellow'} wins! 🐝';
+        winMessage = '${currentPlayer == 1 ? 'Black' : 'Yellow'} wins!';
         showWinModal = true;
       });
     } else {
@@ -77,7 +82,7 @@ class _SimpleGameState extends State<SimpleGame> {
       if (isDraw) {
         setState(() {
           winner = 0;
-          winMessage = 'Game Over - Draw! 🐝';
+          winMessage = 'Game Over - Draw!';
           showWinModal = true;
         });
       } else {
@@ -116,12 +121,34 @@ class _SimpleGameState extends State<SimpleGame> {
                 ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  const SizedBox(width: 40),
                   Image.asset(
                     'assets/BEE-FIVE.png',
                     height: 40,
                     fit: BoxFit.contain,
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/homeImagery/xp_gem.png',
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_headerXp',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: primaryYellow,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -298,11 +325,6 @@ class _SimpleGameState extends State<SimpleGame> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    '🐝',
-                    style: TextStyle(fontSize: 60),
-                  ),
-                  const SizedBox(height: 20),
                   Text(
                     winMessage,
                     style: const TextStyle(

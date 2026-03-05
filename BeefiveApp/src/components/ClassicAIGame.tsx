@@ -48,14 +48,13 @@ import {
 import { getGameRules } from '../utils/adventureGameRules';
 import { getWinningPieces } from '../utils/gameLogic';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BOARD_SIZE = 10;
 const BORDER_WIDTH = 2;
 const BOARD_PADDING = 20;
 
 // Calculate cell size to fill full width of screen
 const calculateCellSize = () => {
-  const isMobile = SCREEN_WIDTH <= 768;
   // Use full screen width, accounting for minimal padding
   const availableSize = SCREEN_WIDTH - (BOARD_PADDING * 2);
   // Account for borders: BOARD_SIZE cells + (BOARD_SIZE + 1) borders
@@ -100,7 +99,7 @@ export default function ClassicAIGame({
   onBackToMenu, 
   initialDifficulty = 'medium', 
   initialTimer = 15,
-  backgroundColor = 'yellow',
+  backgroundColor: _backgroundColor = 'yellow',
   onNextGame,
   showCountdown = false,
   gameNumber,
@@ -109,7 +108,7 @@ export default function ClassicAIGame({
   currentMatch,
   playerWins,
   aiWins,
-  requiredWins,
+  requiredWins: _requiredWins,
   totalGames,
   isMatchComplete,
   isWaitingForNextGame,
@@ -129,6 +128,8 @@ export default function ClassicAIGame({
   const isAdventureMode = !!gameNumber;
   const persistentBlindPlay = gameRules?.hasBlindPlay || false; // Persistent blind play (e.g., multiples of 50 match 2)
   const hasMudZones = gameRules?.hasMudZones || false;
+  const [temporaryBlindPlay, setTemporaryBlindPlay] = useState(false); // Track temporary blind play state
+  const [blindPlayTriggerMove, setBlindPlayTriggerMove] = useState(0); // Track when temporary blind play was triggered
   
   // Calculate effective blind play (persistent OR temporary)
   const isBlindPlay = persistentBlindPlay || temporaryBlindPlay;
@@ -152,7 +153,7 @@ export default function ClassicAIGame({
   const [timeLimit] = useState(initialTimer);
   const [timeLeft, setTimeLeft] = useState(timeLimit);
 
-  const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>(initialDifficulty);
+  const [aiDifficulty, _setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>(initialDifficulty);
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [winMessage, setWinMessage] = useState('');
   const [showStartCountdown, setShowStartCountdown] = useState(showCountdown);
@@ -201,11 +202,9 @@ export default function ClassicAIGame({
   const [player1MoveCount, setPlayer1MoveCount] = useState(0);
   const [player2MoveCount, setPlayer2MoveCount] = useState(0);
   const [totalMoveCount, setTotalMoveCount] = useState(0); // Track total moves for board rearrangement
-  const [temporaryBlindPlay, setTemporaryBlindPlay] = useState(false); // Track temporary blind play state
-  const [blindPlayTriggerMove, setBlindPlayTriggerMove] = useState(0); // Track when temporary blind play was triggered
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gameActiveRef = useRef(true);
-  const winPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const winPopupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pieceAgesRef = useRef<number[][]>(pieceAges);
   const player1MoveCountRef = useRef(player1MoveCount);
   const player2MoveCountRef = useRef(player2MoveCount);
@@ -269,7 +268,6 @@ export default function ClassicAIGame({
   const [gameProcessed, setGameProcessed] = useState(false);
   const popupScheduledRef = useRef<boolean>(false);
   const countdownCompletedRef = useRef(false); // Track if countdown has completed naturally
-  const timeoutPopupAutoCloseRef = useRef<NodeJS.Timeout | null>(null); // For auto-closing timeout popups in match games
 
   const backgroundStyle = '#808080'; // Gray background like BattleGame
 
@@ -340,7 +338,7 @@ export default function ClassicAIGame({
               setGameProcessed(true);
               popupScheduledRef.current = true;
               setWinner(0);
-              setWinMessage('Draw! 🐝');
+              setWinMessage('Draw!');
               gameActiveRef.current = false;
               
               // Clear timer
@@ -372,7 +370,7 @@ export default function ClassicAIGame({
               setGameProcessed(true);
               popupScheduledRef.current = true;
               setWinner(timeWinner);
-              const winText = timeWinner === 1 ? 'Time\'s Up - You Won! 🐝' : 'Time\'s Up - You Lost 🐝';
+              const winText = timeWinner === 1 ? 'Time\'s Up - You Won!' : 'Time\'s Up - You Lost';
               setWinMessage(winText);
               gameActiveRef.current = false;
               
@@ -447,7 +445,7 @@ export default function ClassicAIGame({
       popupScheduledRef.current = true;
       
       setWinner(0);
-      setWinMessage('Draw! 🐝');
+      setWinMessage('Draw!');
       gameActiveRef.current = false; // Stop timer immediately
       
       // Clear any running timer
@@ -681,7 +679,7 @@ export default function ClassicAIGame({
 
     // Priority 3: Random move
     return availableCells[Math.floor(Math.random() * availableCells.length)];
-  }, [checkWinCondition]);
+  }, []);
 
   const getMediumAIMove = useCallback((availableCells: {row: number, col: number}[], currentBoard: CellValue[][]): {row: number, col: number} => {
     // Priority 1: Take winning move if available
@@ -740,7 +738,7 @@ export default function ClassicAIGame({
 
     // Priority 7: Random move
     return availableCells[Math.floor(Math.random() * availableCells.length)];
-  }, [checkWinCondition, checkThreeInARow, checkTwoInARow, canReachFive]);
+  }, [checkThreeInARow, checkTwoInARow, canReachFive]);
 
   const getHardAIMove = useCallback((availableCells: {row: number, col: number}[], currentBoard: CellValue[][]): {row: number, col: number} => {
     // Priority 1: Take winning move if available
@@ -836,7 +834,7 @@ export default function ClassicAIGame({
 
     // Priority 11: Random move
     return availableCells[Math.floor(Math.random() * availableCells.length)];
-  }, [checkWinCondition, checkFourInARow, checkThreeInARow, checkTwoInARow, canReachFive, isNearHumanPiece]);
+  }, [checkFourInARow, checkThreeInARow, checkTwoInARow, canReachFive, isNearHumanPiece]);
 
   const getBestAIMove = useCallback((availableCells: {row: number, col: number}[], currentBoard: CellValue[][]): {row: number, col: number} => {
     // For blind play games, AI makes completely random moves
@@ -982,7 +980,7 @@ export default function ClassicAIGame({
         }
         
         // Get winning pieces for highlighting
-        const pieces = getWinningPieces(newBoard, selectedCell.row, selectedCell.col, 2);
+        const pieces = getWinningPieces(newBoard as (0 | 1 | 2)[][], selectedCell.row, selectedCell.col, 2);
         setWinningPieces(pieces);
         
         // AI wins - process the win
@@ -991,7 +989,7 @@ export default function ClassicAIGame({
         popupScheduledRef.current = true;
         
         setWinner(2);
-        setWinMessage('You Lost 🐝');
+        setWinMessage('You Lost');
         gameActiveRef.current = false;
         
         // Clear winning pieces highlight after 3 seconds
@@ -1035,7 +1033,7 @@ export default function ClassicAIGame({
           // In adventure mode, draw means the game ends - stop timer and show draw popup
           if (isAdventureMode) {
             setWinner(0);
-            setWinMessage('Draw! 🐝');
+            setWinMessage('Draw!');
             gameActiveRef.current = false;
             
             // Show draw popup after 1 second delay
@@ -1060,7 +1058,7 @@ export default function ClassicAIGame({
           
           // Classic mode: show draw popup
           setWinner(0);
-          setWinMessage('Draw! 🐝');
+          setWinMessage('Draw!');
           gameActiveRef.current = false;
           
           // Show win popup after 1 second delay (matching bee-five-web)
@@ -1081,7 +1079,7 @@ export default function ClassicAIGame({
 
       return newBoard;
     });
-  }, [winner, getBestAIMove, checkWinCondition, isBlindPlay, mudZones, isAdventureMode, onGameWin, gameProcessed, gameInitialized, currentMatch, isMatchComplete]);
+  }, [winner, getBestAIMove, isBlindPlay, mudZones, isAdventureMode, onGameWin, gameProcessed, gameInitialized, currentMatch, isMatchComplete, gameNumber, isBoardFull]);
 
   // AI move logic
   useEffect(() => {
@@ -1274,14 +1272,14 @@ export default function ClassicAIGame({
     // Check for winner
     if (checkWinner(row, col, 1)) {
       // Get winning pieces for highlighting
-      const pieces = getWinningPieces(newBoard, row, col, 1);
+      const pieces = getWinningPieces(newBoard as (0 | 1 | 2)[][], row, col, 1);
       setWinningPieces(pieces);
       
       setGameProcessed(true);
       popupScheduledRef.current = true;
       
       setWinner(1);
-      setWinMessage('You Won! 🐝');
+      setWinMessage('You Won!');
       gameActiveRef.current = false;
       
       // Clear winning pieces highlight after 3 seconds
@@ -1316,7 +1314,7 @@ export default function ClassicAIGame({
         // In adventure mode, draw means the game ends - stop timer and show draw popup
         if (isAdventureMode) {
           setWinner(0);
-          setWinMessage('Draw! 🐝');
+          setWinMessage('Draw!');
           gameActiveRef.current = false;
           
           // Show draw popup after 1 second delay
@@ -1341,7 +1339,7 @@ export default function ClassicAIGame({
         
         // Classic mode: show draw popup
         setWinner(0);
-        setWinMessage('Draw! 🐝');
+        setWinMessage('Draw!');
         gameActiveRef.current = false;
         
         // Show win popup after 1 second delay (matching bee-five-web)
@@ -1358,7 +1356,6 @@ export default function ClassicAIGame({
 
   // Reset game
   const resetGame = () => {
-    const matchNumber = currentMatch || 1;
     const resetBoard = isAdventureMode 
       ? createBoardWithBlocks(gameNumber || 1, persistentBlindPlay, matchNumber)
       : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
@@ -1456,7 +1453,7 @@ export default function ClassicAIGame({
             Game {currentMatch} of {totalGames}
           </Text>
         ) : (
-          <View style={{ flex: 1 }} />
+          <View style={styles.flex1} />
         )}
         <Text style={styles.playerText}>
           <Text style={styles.playSign}>▶</Text> {turnAnnouncement}
@@ -1571,7 +1568,6 @@ export default function ClassicAIGame({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalEmoji}>🐝</Text>
             <Text style={styles.modalTitle}>{winMessage}</Text>
             
             {/* Match progress display in win popup */}
@@ -1852,6 +1848,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
+  },
+  flex1: {
+    flex: 1,
   },
   gameNumberText: {
     fontSize: 14,

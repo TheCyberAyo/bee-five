@@ -43,7 +43,7 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
   React.useEffect(() => {
     if (gameState.winner > 0) {
       const winnerName = gameState.winner === 1 ? 'Black' : 'Yellow';
-      setWinMessage(`${winnerName} wins! 🐝`);
+      setWinMessage(`${winnerName} wins!`);
       setShowWinPopup(true);
       
       if (gameState.winner === 1) {
@@ -245,14 +245,6 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
           }}>
             {/* Celebration Icons */}
-            <div style={{
-              fontSize: '4em',
-              marginBottom: '20px',
-              animation: 'bounce 1s ease-out infinite'
-            }}>
-              🐝
-            </div>
-            
             {/* Win Message */}
             <h1 style={{
               fontSize: '2.5em',

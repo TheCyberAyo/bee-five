@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game_rules.dart';
 import 'adventure_game_logic.dart' as logic;
+import 'xp_service.dart';
+
+const String _prefAdventureLevel = 'adventure_current_level';
 
 /// Hides scrollbar completely (no vertical bar on the side).
 class _NoScrollbarBehavior extends ScrollBehavior {
@@ -78,11 +82,17 @@ class _AdventureGameState extends State<AdventureGame> {
   // AI difficulty
   String aiDifficulty = 'medium';
 
+  int _headerXp = 0;
+  int _lastXpDelta = 0;
+
   @override
   void initState() {
     super.initState();
     currentGame = widget.initialGame;
     _initializeGame();
+    getXp().then((xp) {
+      if (mounted) setState(() => _headerXp = xp);
+    });
   }
 
   @override
@@ -188,7 +198,7 @@ class _AdventureGameState extends State<AdventureGame> {
           final timeWinner = currentPlayer == 1 ? 2 : 1;
           winner = timeWinner;
           isGameOver = true;
-          gameStatus = timeWinner == 1 ? 'Time\'s Up - You Won! 🐝' : 'Time\'s Up - You Lost 🐝';
+          gameStatus = timeWinner == 1 ? 'Time\'s Up - You Won!' : 'Time\'s Up - You Lost';
           _handleGameEnd();
         }
       });
@@ -254,7 +264,8 @@ class _AdventureGameState extends State<AdventureGame> {
       if (_isBoardFull()) {
         winner = 0;
         isGameOver = true;
-        gameStatus = 'Draw! 🐝';
+        gameStatus = 'Draw!';
+        setState(() => _lastXpDelta = 0);
         _handleGameEnd();
         return;
       }
@@ -453,7 +464,8 @@ class _AdventureGameState extends State<AdventureGame> {
         // Board is full - draw
         winner = 0;
         isGameOver = true;
-        gameStatus = 'Draw! 🐝';
+        gameStatus = 'Draw!';
+        setState(() => _lastXpDelta = 0);
         _handleGameEnd();
         return;
       }
@@ -490,7 +502,8 @@ class _AdventureGameState extends State<AdventureGame> {
       if (_isBoardFull()) {
         winner = 0;
         isGameOver = true;
-        gameStatus = 'Draw! 🐝';
+        gameStatus = 'Draw!';
+        setState(() => _lastXpDelta = 0);
         _handleGameEnd();
         return;
       }
@@ -930,10 +943,26 @@ class _AdventureGameState extends State<AdventureGame> {
     
     if (winner == 1) {
       playerWins++;
-      gameStatus = 'You won! 🐝';
+      gameStatus = 'You won!';
+      onAdventureGameWon().then((result) {
+        if (mounted) {
+          setState(() {
+            _headerXp = result.$1;
+            _lastXpDelta = result.$2;
+          });
+        }
+      });
     } else if (winner == 2) {
       aiWins++;
-      gameStatus = 'AI won! 🐝';
+      gameStatus = 'AI won!';
+      onAdventureMatchLost().then((result) {
+        if (mounted) {
+          setState(() {
+            _headerXp = result.$1;
+            _lastXpDelta = result.$2;
+          });
+        }
+      });
     }
 
     final requiresMatch = gameRules?.isMatchGame ?? false;
@@ -969,14 +998,12 @@ class _AdventureGameState extends State<AdventureGame> {
   
   void _showGameOverPopup() {
     String title;
-    String emoji = '🐝';
-    
     if (winner == 1) {
-      title = 'You Won! 🐝';
+      title = 'You Won!';
     } else if (winner == 2) {
-      title = 'You Lost 🐝';
+      title = 'You Lost';
     } else {
-      title = 'Draw! 🐝';
+      title = 'Draw!';
     }
     
     showDialog(
@@ -1003,12 +1030,6 @@ class _AdventureGameState extends State<AdventureGame> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Emoji
-                Text(
-                  emoji,
-                  style: const TextStyle(fontSize: 60),
-                ),
-                const SizedBox(height: 20),
                 // Title
                 Text(
                   title,
@@ -1019,6 +1040,17 @@ class _AdventureGameState extends State<AdventureGame> {
                   ),
                   textAlign: TextAlign.center,
                 ),
+                if (_lastXpDelta != 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _lastXpDelta > 0 ? '+$_lastXpDelta XP' : '$_lastXpDelta XP',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: _lastXpDelta > 0 ? Colors.green : Colors.red,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 // Match progress if it's a match game
                 if (gameRules?.isMatchGame ?? false) ...[
@@ -1115,7 +1147,7 @@ class _AdventureGameState extends State<AdventureGame> {
                     ElevatedButton(
                       onPressed: () {
                         Navigator.of(context).pop();
-                        widget.onBackToMenu();
+                        _saveAndBackToMenu();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
@@ -1157,6 +1189,10 @@ class _AdventureGameState extends State<AdventureGame> {
   }
   
   void _nextGame() {
+    final levelJustCompleted = currentGame;
+    onAdventureLevelWon(levelJustCompleted).then((result) {
+      if (mounted) setState(() => _headerXp = result.$1);
+    });
     setState(() {
       currentGame++;
       currentMatch = 1;
@@ -1165,6 +1201,18 @@ class _AdventureGameState extends State<AdventureGame> {
       isMatchComplete = false;
       _initializeGame();
     });
+    _saveAdventureLevel();
+  }
+
+  Future<void> _saveAdventureLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefAdventureLevel, currentGame);
+  }
+
+  Future<void> _saveAndBackToMenu() async {
+    await _saveAdventureLevel();
+    if (!context.mounted) return;
+    widget.onBackToMenu();
   }
 
   @override
@@ -1186,6 +1234,32 @@ class _AdventureGameState extends State<AdventureGame> {
           preferredSize: const Size.fromHeight(2),
           child: Container(color: primaryYellow),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/homeImagery/xp_gem.png',
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$_headerXp',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: primaryYellow,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -1202,7 +1276,7 @@ class _AdventureGameState extends State<AdventureGame> {
                   TextButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      widget.onBackToMenu();
+                      _saveAndBackToMenu();
                     },
                     child: const Text('Exit'),
                   ),
@@ -1435,7 +1509,7 @@ class _AdventureGameState extends State<AdventureGame> {
                                 TextButton(
                                   onPressed: () {
                                     Navigator.pop(context);
-                                    widget.onBackToMenu();
+                                    _saveAndBackToMenu();
                                   },
                                   child: const Text('Exit'),
                                 ),

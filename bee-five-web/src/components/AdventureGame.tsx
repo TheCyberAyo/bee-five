@@ -504,7 +504,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       
       if (requiresMatchSystem(currentGame)) {
         const winText = gameState.winner === 1 ? 'You Won!' : 'You Lost';
-        setWinMessage(`${winText} 🐝`);
+        setWinMessage(winText);
         winPopupTimerRef.current = window.setTimeout(() => {
           setShowWinPopup(true);
           winPopupTimerRef.current = null;
@@ -602,7 +602,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
          }
        } else {
         const winText = gameState.winner === 1 ? 'You Won!' : 'You Lost';
-        setWinMessage(`${winText} 🐝`);
+        setWinMessage(winText);
         
          if (gameState.winner === 1) {
            setGamesWon(prev => {
@@ -650,7 +650,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       setGameProcessed(true);
       popupScheduledRef.current = true;
       
-      setWinMessage('Draw! 🐝');
+      setWinMessage('Draw!');
       
       if (requiresMatchSystem(currentGame)) {
       } else {
@@ -684,7 +684,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
       popupScheduledRef.current = true;
       
       const winText = gameState.currentPlayer === 1 ? 'Time\'s Up - You Lost' : 'Time\'s Up - You Won!';
-      setWinMessage(`${winText} 🐝`);
+      setWinMessage(winText);
       
       if (requiresMatchSystem(currentGame)) {
         winPopupTimerRef.current = window.setTimeout(() => {
@@ -784,7 +784,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
          }
        } else {
         const winText = gameState.currentPlayer === 1 ? 'Time\'s Up - You Lost' : 'Time\'s Up - You Won!';
-        setWinMessage(`${winText} 🐝`);
+        setWinMessage(winText);
         
         if (gameState.currentPlayer === 2) {
           setGamesWon(prev => {
@@ -2437,14 +2437,6 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
             animation: 'popIn 0.5s ease-out',
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
           }}>
-            <div style={{
-              fontSize: '4em',
-              marginBottom: '20px',
-              animation: 'bounce 1s ease-out infinite'
-            }}>
-              🐝
-            </div>
-            
             <h1 style={{
               fontSize: '2.5em',
               color: 'black',

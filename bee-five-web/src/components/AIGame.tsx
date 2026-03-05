@@ -63,7 +63,7 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
   React.useEffect(() => {
     if (gameState.winner > 0) {
       const winText = gameState.winner === 1 ? 'You win!' : 'You lost!';
-      setWinMessage(`${winText} 🐝`);
+      setWinMessage(winText);
       setShowWinPopup(true);
       
       if (gameState.winner === 1) {
@@ -72,12 +72,12 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
         soundManager.playDefeatSound();
       }
     } else if (!gameState.isGameActive && gameState.winner === 0) {
-      setWinMessage('Game Over - Draw! 🐝');
+      setWinMessage('Game Over - Draw!');
       setShowWinPopup(true);
     } else if (gameState.timeLeft === 0 && timeLimit > 0) {
       // Only check for timeout if timer is enabled
       const winText = gameState.currentPlayer === 1 ? 'You lost due to time limit!' : 'You win due to time limit!';
-      setWinMessage(`${winText} 🐝`);
+      setWinMessage(winText);
       setShowWinPopup(true);
     }
   }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer, timeLimit]);
@@ -929,15 +929,6 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
             animation: 'popIn 0.5s ease-out',
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
           }}>
-            {/* Celebration Icons */}
-            <div style={{
-              fontSize: '4em',
-              marginBottom: '20px',
-              animation: 'bounce 1s ease-out infinite'
-            }}>
-              🐝
-            </div>
-            
             {/* Win Message */}
             <h1 style={{
               fontSize: '2.5em',

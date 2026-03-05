@@ -7,6 +7,8 @@ import 'adventure_game.dart';
 import 'simple_game.dart';
 import 'classic_ai_game.dart';
 import 'background_sound.dart';
+import 'dashboard_page.dart';
+import 'xp_service.dart';
 
 // Adventure stages for map background
 class AdventureStage {
@@ -357,7 +359,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   GameMode gameMode = GameMode.menu;
   bool showDifficultyModal = false;
   bool showTimerModal = false;
-  bool showProfileModal = false;
   bool showSettingsModal = false;
   bool soundEnabled = true;
   String selectedDifficulty = '';
@@ -370,6 +371,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   double mapScrollY = 0;
   final ScrollController mapScrollController = ScrollController();
   final TextEditingController _talkToUsController = TextEditingController();
+  int? _headerXp;
 
   late AnimationController bee1Controller;
   late AnimationController bee2Controller;
@@ -383,6 +385,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (!mounted) return;
       final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
       if (saved != soundEnabled) setState(() => soundEnabled = saved);
+      final savedLevel = prefs.getInt('adventure_current_level');
+      if (savedLevel != null && savedLevel != currentGame) {
+        setState(() => currentGame = savedLevel);
+      }
     });
     BackgroundSound.instance.startIfEnabled().then((_) {
       if (mounted) setState(() => soundEnabled = BackgroundSound.instance.soundEnabled);
@@ -420,6 +426,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (mounted) {
         bee3Controller.repeat();
       }
+    });
+    // XP: apply login bonus and show in header
+    onAppOpen().then((_) => getXp()).then((xp) {
+      if (mounted) setState(() => _headerXp = xp);
     });
   }
 
@@ -663,8 +673,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
+                _buildHeaderXpGem(isMobile),
                 GestureDetector(
-                  onTap: _showProfileModal,
+                  onTap: () => setState(() => gameMode = GameMode.profile),
                   child: Container(
                     width: isMobile ? 40 : 48,
                     height: isMobile ? 40 : 48,
@@ -717,7 +728,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   textAlign: TextAlign.center,
                   text: TextSpan(
                     style: TextStyle(
-                      fontSize: isMobile ? 20 : 24,
+                      fontSize: isMobile ? 15 : 18,
                       fontWeight: FontWeight.w600,
                     ),
                     children: [
@@ -976,9 +987,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               size: hexSize,
                               onTap: () {
                                 if (!isLocked) {
-                                  setState(() {
-                                    currentGame = gameNumber;
-                                    gameMode = GameMode.adventureGame;
+                                  _tryStartAdventure(() {
+                                    setState(() {
+                                      currentGame = gameNumber;
+                                      gameMode = GameMode.adventureGame;
+                                    });
                                   });
                                 }
                               },
@@ -1018,6 +1031,73 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _tryStartAdventure(void Function() startAdventure) async {
+    final xp = await getXp();
+    if (!mounted) return;
+    if (xp <= 0) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: primaryYellow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.black, width: 4),
+          ),
+          title: const Text(
+            'No XP',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          content: const Text(
+            'You have zero XPs, win Practice hard game, or win 3 games in a classic game to gain XPs.',
+            style: TextStyle(fontSize: 16, color: Colors.black87),
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    startAdventure();
+  }
+
+  Widget _buildHeaderXpGem(bool isMobile) {
+    final size = isMobile ? 28.0 : 32.0;
+    return Padding(
+      padding: EdgeInsets.only(right: isMobile ? 8 : 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/homeImagery/xp_gem.png',
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+            errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: size),
+          ),
+          SizedBox(width: isMobile ? 4 : 6),
+          Text(
+            '${_headerXp ?? 0}',
+            style: TextStyle(
+              fontSize: isMobile ? 16 : 18,
+              fontWeight: FontWeight.bold,
+              color: primaryYellow,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1084,7 +1164,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                  setState(() => gameMode = GameMode.adventureGame);
+                  _tryStartAdventure(() => setState(() => gameMode = GameMode.adventureGame));
                 },
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
@@ -1736,82 +1816,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  void _showProfileModal() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: primaryYellow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Colors.black, width: 4),
-        ),
-        title: const Text(
-          '👤 Profile',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'User Profile',
-              style: TextStyle(fontSize: 16, color: Colors.black87),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // Sign out logic would go here
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                'Sign Out',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                'Close',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
@@ -1823,6 +1827,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           setState(() {
             gameMode = GameMode.menu;
             isClassicStreakMode = false;
+          });
+          getXp().then((xp) {
+            if (mounted) setState(() => _headerXp = xp);
           });
         },
         initialDifficulty: aiDifficulty,
@@ -1846,11 +1853,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (gameMode == GameMode.adventureGame) {
       return AdventureGame(
         onBackToMenu: () {
-          setState(() {
-            gameMode = GameMode.menu;
+          setState(() => gameMode = GameMode.menu);
+          SharedPreferences.getInstance().then((prefs) {
+            final level = prefs.getInt('adventure_current_level');
+            if (mounted && level != null && level != currentGame) {
+              setState(() => currentGame = level);
+            }
+          });
+          getXp().then((xp) {
+            if (mounted) setState(() => _headerXp = xp);
           });
         },
         initialGame: currentGame,
+      );
+    }
+    
+    if (gameMode == GameMode.profile) {
+      return DashboardPage(
+        onBack: () => setState(() => gameMode = GameMode.menu),
       );
     }
     

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { showExitConfirmation, setupBackButtonHandler } from '../utils/exitConfirmation';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BOARD_SIZE = 10; // Match bee-five-web (10x10 grid)
 const BORDER_WIDTH = 2; // Match web version
 const BOARD_PADDING = 20;
@@ -19,7 +19,6 @@ const BOARD_PADDING = 20;
 // Calculate cell size to fill full width of screen
 // Height will increase proportionally since board is square
 const calculateCellSize = () => {
-  const isMobile = SCREEN_WIDTH <= 768;
   // Use full screen width, accounting for minimal padding
   const availableSize = SCREEN_WIDTH - (BOARD_PADDING * 2);
   // Account for borders: BOARD_SIZE cells + (BOARD_SIZE + 1) borders
@@ -39,7 +38,7 @@ interface SimpleGameProps {
 
 type CellValue = 0 | 1 | 2; // 0 = empty, 1 = player 1 (black), 2 = player 2 (yellow)
 
-export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }: SimpleGameProps) {
+export default function SimpleGame({ onBackToMenu, backgroundColor: _backgroundColor = 'yellow' }: SimpleGameProps) {
   const [board, setBoard] = useState<CellValue[][]>(
     Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0))
   );
@@ -126,14 +125,14 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
     // Check for winner
     if (checkWinner(row, col, currentPlayer)) {
       setWinner(currentPlayer);
-      setWinMessage(`${currentPlayer === 1 ? 'Black' : 'Yellow'} wins! 🐝`);
+      setWinMessage(`${currentPlayer === 1 ? 'Black' : 'Yellow'} wins!`);
       setShowWinModal(true);
     } else {
       // Check for draw
-      const isDraw = newBoard.every(row => row.every(cell => cell !== 0));
+      const isDraw = newBoard.every(boardRow => boardRow.every(cell => cell !== 0));
       if (isDraw) {
         setWinner(0);
-        setWinMessage('Game Over - Draw! 🐝');
+        setWinMessage('Game Over - Draw!');
         setShowWinModal(true);
       } else {
         // Switch player
@@ -208,7 +207,6 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalEmoji}>🐝</Text>
             <Text style={styles.modalTitle}>{winMessage}</Text>
             <Text style={styles.modalSubtitle}>
               {winMessage.includes('Black') 
@@ -431,4 +429,3 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
-
