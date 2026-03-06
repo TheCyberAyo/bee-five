@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game_rules.dart';
 import 'adventure_game_logic.dart' as logic;
+import 'background_sound.dart';
 import 'xp_service.dart';
 
 const String _prefAdventureLevel = 'adventure_current_level';
@@ -90,6 +91,7 @@ class _AdventureGameState extends State<AdventureGame> {
     super.initState();
     currentGame = widget.initialGame;
     _initializeGame();
+    BackgroundSound.instance.startIfEnabled();
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
@@ -1133,7 +1135,7 @@ class _AdventureGameState extends State<AdventureGame> {
                           ),
                         ),
                         child: const Text(
-                          '🔄 Play Again',
+                          'Play Again',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,

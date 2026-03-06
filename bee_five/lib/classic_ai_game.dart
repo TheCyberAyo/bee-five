@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game_logic.dart' as logic;
+import 'background_sound.dart';
 import 'xp_service.dart';
 
 const Color primaryYellow = Color(0xFFFFC30B);
@@ -64,6 +65,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       timeLeft = widget.initialTimer;
     }
     _resetBoard();
+    BackgroundSound.instance.startIfEnabled();
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });

@@ -387,7 +387,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (saved != soundEnabled) setState(() => soundEnabled = saved);
       final savedLevel = prefs.getInt('adventure_current_level');
       if (savedLevel != null && savedLevel != currentGame) {
-        setState(() => currentGame = savedLevel);
+        setState(() {
+          currentGame = savedLevel;
+          gamesCompleted = savedLevel > 1 ? List.generate(savedLevel - 1, (i) => i + 1) : [];
+        });
+      } else if (savedLevel != null && gamesCompleted.isEmpty && savedLevel > 1) {
+        setState(() => gamesCompleted = List.generate(savedLevel - 1, (i) => i + 1));
       }
     });
     BackgroundSound.instance.startIfEnabled().then((_) {
@@ -653,28 +658,35 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               right: isMobile ? 12 : 16,
               bottom: 0,
             ),
-            child: Row(
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                SizedBox(width: isMobile ? 40 : 48),
-                Expanded(
-                  child: Center(
-                    child: Image.asset(
-                      'assets/BEE-FIVE.png',
-                      height: isMobile ? 44 : 52,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
-                        'BEE-FIVE',
-                        style: TextStyle(
-                          fontSize: isMobile ? 18 : 22,
-                          fontWeight: FontWeight.w900,
-                          color: primaryYellow,
-                        ),
+                // Logo centered in header
+                Center(
+                  child: Image.asset(
+                    'assets/BEE-FIVE.png',
+                    height: isMobile ? 44 : 52,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
+                      'BEE-FIVE',
+                      style: TextStyle(
+                        fontSize: isMobile ? 18 : 22,
+                        fontWeight: FontWeight.w900,
+                        color: primaryYellow,
                       ),
                     ),
                   ),
                 ),
-                _buildHeaderXpGem(isMobile),
-                GestureDetector(
+                // Right side: XP gem + profile
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeaderXpGem(isMobile),
+                      GestureDetector(
                   onTap: () => setState(() => gameMode = GameMode.profile),
                   child: Container(
                     width: isMobile ? 40 : 48,
@@ -694,6 +706,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     child: const Center(
                       child: Text('👤', style: TextStyle(fontSize: 24)),
                     ),
+                  ),
+                ),
+                    ],
                   ),
                 ),
               ],
@@ -1856,8 +1871,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           setState(() => gameMode = GameMode.menu);
           SharedPreferences.getInstance().then((prefs) {
             final level = prefs.getInt('adventure_current_level');
-            if (mounted && level != null && level != currentGame) {
-              setState(() => currentGame = level);
+            if (mounted && level != null) {
+              setState(() {
+                currentGame = level;
+                gamesCompleted = level > 1 ? List.generate(level - 1, (i) => i + 1) : [];
+              });
             }
           });
           getXp().then((xp) {
@@ -2008,12 +2026,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (gameMode == GameMode.connect) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Connect'),
-          backgroundColor: primaryYellow,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => setState(() => gameMode = GameMode.menu),
+          title: Image.asset(
+            'assets/BEE-FIVE.png',
+            height: 36,
+            fit: BoxFit.contain,
+            errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
+              'BEE-FIVE',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+              ),
+            ),
           ),
+          centerTitle: true,
+          backgroundColor: primaryYellow,
+          automaticallyImplyLeading: false,
         ),
         body: Container(
           color: primaryYellow,

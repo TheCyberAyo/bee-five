@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'adventure_game_logic.dart' as logic;
+import 'background_sound.dart';
 import 'xp_service.dart';
 
 const Color primaryYellow = Color(0xFFFFC30B);
@@ -31,6 +32,7 @@ class _SimpleGameState extends State<SimpleGame> {
   void initState() {
     super.initState();
     _resetGame();
+    BackgroundSound.instance.startIfEnabled();
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
