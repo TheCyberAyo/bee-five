@@ -372,6 +372,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final ScrollController mapScrollController = ScrollController();
   final TextEditingController _talkToUsController = TextEditingController();
   int? _headerXp;
+  int _appRating = 0;
 
   late AnimationController bee1Controller;
   late AnimationController bee2Controller;
@@ -381,10 +382,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     // Load saved sound preference and start looping background sound when player enters the game
-    SharedPreferences.getInstance().then((prefs) {
+      SharedPreferences.getInstance().then((prefs) {
       if (!mounted) return;
       final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
       if (saved != soundEnabled) setState(() => soundEnabled = saved);
+      final savedRating = prefs.getInt('bee_five_app_rating');
+      if (savedRating != null && savedRating != _appRating) setState(() => _appRating = savedRating);
       final savedLevel = prefs.getInt('adventure_current_level');
       if (savedLevel != null && savedLevel != currentGame) {
         setState(() {
@@ -1157,12 +1160,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Settings
+                // Buy XPs
                 _sideMenuButton(
-                  label: 'Settings',
-                  iconImagePath: 'assets/homeImagery/settings.png',
+                  label: 'Buy XPs',
+                  iconImagePath: 'assets/homeImagery/buy_icon.png',
                   color: Colors.orange,
-                  onPressed: _showSettingsModal,
+                  onPressed: _showBuyXPsModal,
                 ),
               ],
             ),
@@ -1751,7 +1754,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  void _showSettingsModal() {
+  void _showBuyXPsModal() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1760,74 +1763,131 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: Colors.black, width: 4),
         ),
-        title: const Text(
-          '⚙️ Settings ⚙️',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Sound:',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final newValue = await BackgroundSound.instance.toggle();
-                    if (mounted) setState(() => soundEnabled = newValue);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: soundEnabled ? Colors.green : Colors.red,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: const BorderSide(color: Colors.black, width: 2),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  ),
-                  child: Text(
-                    soundEnabled ? '🔊 On' : '🔇 Off',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+            Image.asset(
+              'assets/homeImagery/buy_icon.png',
+              height: 32,
+              width: 32,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Icon(Icons.shopping_bag, size: 32),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                'Close',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+            const SizedBox(width: 8),
+            const Text(
+              'Buy XPs',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
               ),
             ),
           ],
         ),
+        content: const Text(
+          'Purchase experience points to progress faster.',
+          style: TextStyle(fontSize: 16, color: Colors.black87),
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
+    );
+  }
+
+  void _showSettingsModal() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        bool soundOn = BackgroundSound.instance.soundEnabled;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: primaryYellow,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.black, width: 4),
+              ),
+              title: const Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Sound:',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            soundOn ? 'On' : 'Off',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Switch(
+                            value: soundOn,
+                            onChanged: (value) async {
+                              final newValue = await BackgroundSound.instance.setEnabled(value);
+                              setDialogState(() => soundOn = newValue);
+                              if (mounted) setState(() => soundEnabled = newValue);
+                            },
+                            activeTrackColor: Colors.green.shade700,
+                            activeThumbColor: primaryYellow,
+                            inactiveThumbColor: Colors.white,
+                            inactiveTrackColor: Colors.grey.shade600,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: const BorderSide(color: Colors.black, width: 2),
+                      ),
+                    ),
+                    child: const Text(
+                      'Close',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1895,7 +1955,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (gameMode == GameMode.privacyPolicy) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Privacy Policy'),
+          title: Center(
+            child: Image.asset(
+              'assets/BEE-FIVE.png',
+              height: 36,
+              fit: BoxFit.contain,
+              errorBuilder: (_, Object error, StackTrace? stackTrace) => const Text('BEE-FIVE'),
+            ),
+          ),
           backgroundColor: primaryYellow,
           automaticallyImplyLeading: false,
         ),
@@ -2048,7 +2115,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           child: Column(
             children: [
               const Padding(
-                padding: EdgeInsets.only(top: 24, bottom: 20),
+                padding: EdgeInsets.only(top: 24, bottom: 12),
                 child: Text(
                   'Connect with us',
                   style: TextStyle(
@@ -2056,6 +2123,44 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Rate the App',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        final star = index + 1;
+                        final filled = _appRating >= star;
+                        return GestureDetector(
+                          onTap: () async {
+                            setState(() => _appRating = star);
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setInt('bee_five_app_rating', star);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              filled ? Icons.star : Icons.star_border,
+                              size: 40,
+                              color: filled ? primaryYellow : Colors.black54,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
                 ),
               ),
               Expanded(
