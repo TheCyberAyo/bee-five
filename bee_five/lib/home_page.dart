@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game.dart';
+import 'contexts/auth_context.dart';
 import 'simple_game.dart';
 import 'classic_ai_game.dart';
 import 'background_sound.dart';
@@ -1859,6 +1861,97 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         ],
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(color: Colors.black54, height: 1),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Account',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final auth = context.read<AuthContext>();
+                      Navigator.pop(dialogContext);
+                      await auth.signOut();
+                      // AuthGate rebuilds and shows SignInPage when user is null
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black87,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: const BorderSide(color: Colors.black, width: 2),
+                      ),
+                    ),
+                    child: const Text(
+                      'Sign out',
+                      style: TextStyle(
+                        color: primaryYellow,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: primaryYellow,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: const BorderSide(color: Colors.black, width: 4),
+                          ),
+                          title: const Text('Delete account?'),
+                          content: const Text(
+                            'This will permanently delete your account and data. You cannot undo this.',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true || !mounted) return;
+                      Navigator.pop(dialogContext);
+                      final auth = context.read<AuthContext>();
+                      final err = await auth.deleteAccount();
+                      if (!mounted) return;
+                      if (err != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(err.message),
+                            backgroundColor: Colors.red.shade700,
+                          ),
+                        );
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                      side: BorderSide(color: Colors.red.shade700, width: 2),
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Delete account',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(
