@@ -55,58 +55,42 @@ class _DeepLinkHandlerState extends State<DeepLinkHandler> {
         ? uri.host
         : (uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '');
 
-    // Fragment: #access_token=...&refresh_token=...&type=signup|recovery
-    final fragment = uri.fragment;
-    if (fragment.isEmpty) {
-      _showError(context, 'Invalid link', 'This link is missing required data. Please try again from your email.');
-      return;
-    }
-
-    final params = <String, String>{};
-    for (final pair in fragment.split('&')) {
-      final kv = pair.split('=');
-      if (kv.length == 2) {
-        params[kv[0]] = Uri.decodeComponent(kv[1]);
-      }
-    }
-
-    final refreshToken = params['refresh_token'];
-
-    if (refreshToken == null || refreshToken.isEmpty) {
-      _showError(context, 'Invalid link', 'This link is missing security tokens. Please use the latest link from your email.');
-      return;
-    }
-
-    // Email confirmation: bee-five://confirm-email#...&type=signup
+    // Email confirmation: bee-five://confirm-email (fragment optional; e.g. when opened from browser page)
+    // Don't set session — show "Confirmed" and prompt user to sign in in the app.
     if (pathBase == 'confirm-email' || pathBase.startsWith('confirm-email')) {
-      final err = await widget.auth.setSessionFromRefreshToken(refreshToken);
       if (!mounted) return;
-      if (err != null) {
-        _showError(
-          context,
-          'Confirmation failed',
-          'We couldn’t confirm your email. The link may have expired. Please try signing up again or request a new confirmation email.',
-        );
-        return;
-      }
-      _showSuccess(context, 'Email confirmed!', 'You can now sign in and play.');
+      _showEmailConfirmedScreen(context);
       return;
     }
 
-    // Password reset: bee-five://reset-password#...&type=recovery
+    // Password reset: bee-five://reset-password (PKCE: ?code=... or implicit: #access_token=...&refresh_token=...)
     if (pathBase == 'reset-password' || pathBase.startsWith('reset-password')) {
-      final err = await widget.auth.setSessionFromRefreshToken(refreshToken);
-      if (!mounted) return;
-      if (err != null) {
+      try {
+        // Use getSessionFromUrl so both PKCE (query code) and implicit (fragment tokens) work
+        final err = await widget.auth.setSessionFromRecoveryUrl(uri);
+        if (!mounted) return;
+        if (err != null) {
+          _showError(
+            context,
+            'Reset link invalid',
+            err.message.contains('code_verifier') || err.message.contains('verifier')
+                ? 'Open BEE-FIVE, use Forgot password again, then tap the new link from the same device.'
+                : 'This password reset link is invalid or has expired. Please request a new one from the app.',
+          );
+          return;
+        }
+        // Sync session into AuthContext so AuthGate sees user != null when we set recovery flag
+        widget.auth.syncSessionFromClient();
+        widget.auth.setRecoverySessionPending(true);
+        // No dialog — AuthGate will show ResetPasswordPage immediately
+      } catch (e) {
+        if (!mounted) return;
         _showError(
           context,
-          'Reset link invalid',
-          'This password reset link is invalid or has expired. Please request a new one from the app.',
+          'Something went wrong',
+          'We couldn\'t complete the reset. Please use Forgot password again and tap the new link on this device.',
         );
-        return;
       }
-      widget.auth.setRecoverySessionPending(true);
-      _showSuccess(context, 'Link opened', 'Enter your new password below.');
     }
   }
 
@@ -129,20 +113,74 @@ class _DeepLinkHandlerState extends State<DeepLinkHandler> {
     });
   }
 
-  void _showSuccess(BuildContext context, String title, String message) {
+  static const Color _confirmYellow = Color(0xFFFFC30B);
+
+  void _showEmailConfirmedScreen(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (ctx) => Scaffold(
+            backgroundColor: _confirmYellow,
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline,
+                      size: 80,
+                      color: Colors.black87,
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Email confirmed!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Return to the app and sign in with your email and password.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.black87,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black87,
+                          foregroundColor: _confirmYellow,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Colors.black, width: 2),
+                          ),
+                        ),
+                        child: const Text(
+                          'Continue',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
+          ),
         ),
       );
     });

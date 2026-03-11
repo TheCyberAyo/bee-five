@@ -79,6 +79,27 @@ class AuthContext extends ChangeNotifier {
     }
   }
 
+  /// Recover session from the password-reset redirect URL (handles both PKCE ?code= and implicit #fragment).
+  /// Returns null on success, AuthException on failure.
+  Future<AuthException?> setSessionFromRecoveryUrl(Uri uri) async {
+    if (supabaseClient == null) return null;
+    try {
+      await supabaseClient!.auth.getSessionFromUrl(uri);
+      return null;
+    } on AuthException catch (e) {
+      return e;
+    }
+  }
+
+  /// Sync _session and _user from Supabase client (e.g. after getSessionFromUrl, before setting recovery flag).
+  /// Ensures AuthGate sees the user when recoverySessionPending is set so ResetPasswordPage is shown.
+  void syncSessionFromClient() {
+    if (supabaseClient == null) return;
+    _session = supabaseClient!.auth.currentSession;
+    _user = _session?.user;
+    notifyListeners();
+  }
+
   void setRecoverySessionPending(bool value) {
     if (_recoverySessionPending == value) return;
     _recoverySessionPending = value;
@@ -119,9 +140,22 @@ class AuthContext extends ChangeNotifier {
   Future<AuthException?> resetPasswordForEmail(String email) async {
     if (supabaseClient == null) return null;
     try {
-      await supabaseClient!.auth.resetPasswordForEmail(
-        email.trim(),
-        redirectTo: 'bee-five://reset-password',
+      await supabaseClient!.auth.resetPasswordForEmail(email.trim());
+      return null;
+    } on AuthException catch (e) {
+      return e;
+    }
+  }
+
+  /// Verify the 6-digit code from the reset email, then returns null on success.
+  /// Call this before updatePassword when using the in-app code flow.
+  Future<AuthException?> verifyOtpForRecovery(String email, String token) async {
+    if (supabaseClient == null) return null;
+    try {
+      await supabaseClient!.auth.verifyOTP(
+        email: email.trim(),
+        token: token.trim(),
+        type: OtpType.recovery,
       );
       return null;
     } on AuthException catch (e) {

@@ -10,6 +10,8 @@ import 'simple_game.dart';
 import 'classic_ai_game.dart';
 import 'background_sound.dart';
 import 'dashboard_page.dart';
+import 'daily_challenge_game.dart';
+import 'game_mode.dart';
 import 'xp_service.dart';
 
 // Adventure stages for map background
@@ -337,19 +339,6 @@ class _VolcanoPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-enum GameMode {
-  menu,
-  aiGame,
-  adventureGame,
-  localMultiplayer,
-  privacyPolicy,
-  connect,
-  settings,
-  profile,
-  signIn,
-  signUp,
-}
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -375,6 +364,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final TextEditingController _talkToUsController = TextEditingController();
   int? _headerXp;
   int _appRating = 0;
+  bool _dailyChallengePlayedToday = false;
+  bool? _dailyChallengeWon;
 
   late AnimationController bee1Controller;
   late AnimationController bee2Controller;
@@ -400,8 +391,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         setState(() => gamesCompleted = List.generate(savedLevel - 1, (i) => i + 1));
       }
     });
+    getDailyChallengeStatus().then((status) {
+      if (!mounted) return;
+      setState(() {
+        _dailyChallengePlayedToday = status.$1;
+        _dailyChallengeWon = status.$2;
+      });
+    });
     BackgroundSound.instance.startIfEnabled().then((_) {
-      if (mounted) setState(() => soundEnabled = BackgroundSound.instance.soundEnabled);
+      if (mounted) {
+        setState(() => soundEnabled = BackgroundSound.instance.soundEnabled);
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -439,7 +439,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
     // XP: apply login bonus and show in header
     onAppOpen().then((_) => getXp()).then((xp) {
-      if (mounted) setState(() => _headerXp = xp);
+      if (mounted) {
+        setState(() => _headerXp = xp);
+      }
     });
   }
 
@@ -1169,6 +1171,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   color: Colors.orange,
                   onPressed: _showBuyXPsModal,
                 ),
+                const SizedBox(height: 12),
+                // Daily Challenge
+                _sideMenuButton(
+                  label: _dailyChallengePlayedToday
+                      ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
+                      : 'Daily Challenge',
+                  icon: '🎯',
+                  color: const Color(0xFF6A1B9A),
+                  onPressed: _onDailyChallengePressed,
+                ),
               ],
             ),
           ),
@@ -1756,6 +1768,41 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  void _onDailyChallengePressed() {
+    if (_dailyChallengePlayedToday) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: primaryYellow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.black, width: 4),
+          ),
+          title: const Text(
+            'Daily Challenge',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
+            textAlign: TextAlign.center,
+          ),
+          content: Text(
+            _dailyChallengeWon == true
+                ? "You've already played today — you won! Come back tomorrow for a new challenge."
+                : "You've already played today — better luck tomorrow!",
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    setState(() => gameMode = GameMode.dailyChallenge);
+  }
+
   void _showBuyXPsModal() {
     showDialog(
       context: context,
@@ -1851,7 +1898,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             onChanged: (value) async {
                               final newValue = await BackgroundSound.instance.setEnabled(value);
                               setDialogState(() => soundOn = newValue);
-                              if (mounted) setState(() => soundEnabled = newValue);
+                              if (mounted) {
+                                setState(() => soundEnabled = newValue);
+                              }
                             },
                             activeTrackColor: Colors.green.shade700,
                             activeThumbColor: primaryYellow,
@@ -1901,6 +1950,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   const SizedBox(height: 10),
                   OutlinedButton(
                     onPressed: () async {
+                      final auth = context.read<AuthContext>();
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogContext);
                       final confirmed = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
@@ -1926,13 +1978,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           ],
                         ),
                       );
-                      if (confirmed != true || !mounted) return;
-                      Navigator.pop(dialogContext);
-                      final auth = context.read<AuthContext>();
+                      if (confirmed != true) return;
+                      navigator.pop();
                       final err = await auth.deleteAccount();
-                      if (!mounted) return;
                       if (err != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           SnackBar(
                             content: Text(err.message),
                             backgroundColor: Colors.red.shade700,
@@ -1997,7 +2047,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             isClassicStreakMode = false;
           });
           getXp().then((xp) {
-            if (mounted) setState(() => _headerXp = xp);
+            if (mounted) {
+              setState(() => _headerXp = xp);
+            }
           });
         },
         initialDifficulty: aiDifficulty,
@@ -2032,10 +2084,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             }
           });
           getXp().then((xp) {
-            if (mounted) setState(() => _headerXp = xp);
+            if (mounted) {
+              setState(() => _headerXp = xp);
+            }
           });
         },
         initialGame: currentGame,
+      );
+    }
+
+    if (gameMode == GameMode.dailyChallenge) {
+      return DailyChallengeGame(
+        onBackToMenu: () {
+          setState(() => gameMode = GameMode.menu);
+          getXp().then((xp) {
+            if (mounted) {
+              setState(() => _headerXp = xp);
+            }
+          });
+          getDailyChallengeStatus().then((status) {
+            if (mounted) {
+              setState(() {
+                _dailyChallengePlayedToday = status.$1;
+                _dailyChallengeWon = status.$2;
+              });
+            }
+          });
+        },
       );
     }
     

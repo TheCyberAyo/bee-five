@@ -60,6 +60,12 @@ class _AuthGateState extends State<AuthGate> {
             onNavigateToSignUp: () => setState(() => _screen = AuthScreen.signUp),
             onNavigateToForgotPassword: () =>
                 setState(() => _screen = AuthScreen.forgotPassword),
+            onTrySetNewPassword: () {
+              widget.auth.syncSessionFromClient();
+              if (widget.auth.user != null) {
+                widget.auth.setRecoverySessionPending(true);
+              }
+            },
           );
         case AuthScreen.signUp:
           return SignUpPage(

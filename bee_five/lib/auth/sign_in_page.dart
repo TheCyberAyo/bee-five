@@ -9,11 +9,14 @@ class SignInPage extends StatefulWidget {
     required this.auth,
     required this.onNavigateToSignUp,
     required this.onNavigateToForgotPassword,
+    required this.onTrySetNewPassword,
   });
 
   final AuthContext auth;
   final VoidCallback onNavigateToSignUp;
   final VoidCallback onNavigateToForgotPassword;
+  /// Call when user taps "Set new password"; auth will sync session and may show reset page.
+  final VoidCallback onTrySetNewPassword;
 
   @override
   State<SignInPage> createState() => _SignInPageState();
@@ -214,15 +217,54 @@ class _SignInPageState extends State<SignInPage> {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: _loading ? null : widget.onNavigateToForgotPassword,
-                    child: const Text(
-                      'Forgot Password?',
-                      style: TextStyle(
-                        color: Color(0xFFFFC30B),
-                        fontWeight: FontWeight.w600,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () {
+                                widget.onTrySetNewPassword();
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (!mounted) return;
+                                  if (widget.auth.user == null) {
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Set new password'),
+                                        content: const Text(
+                                          'Open the reset link from your email on this device first. The link will open this app and show the form to enter your new password.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text('OK'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                });
+                              },
+                        child: const Text(
+                          'Set new password',
+                          style: TextStyle(
+                            color: Color(0xFFFFC30B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
+                      TextButton(
+                        onPressed: _loading ? null : widget.onNavigateToForgotPassword,
+                        child: const Text(
+                          'Forgot Password?',
+                          style: TextStyle(
+                            color: Color(0xFFFFC30B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),

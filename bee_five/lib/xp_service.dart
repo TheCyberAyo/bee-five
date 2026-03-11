@@ -25,7 +25,12 @@ const int xpAdventureTwoWins = 1;
 /// XP for completing a multiple-of-10 adventure level.
 const int xpAdventureMultipleOf10 = 5;
 
+/// XP for winning the daily challenge (once per day).
+const int xpDailyChallengeWin = 3;
+
 const String _prefLastLoginDate = 'last_login_date';
+const String _prefDailyChallengeDate = 'daily_challenge_date';
+const String _prefDailyChallengeWon = 'daily_challenge_won';
 const String _prefAdventureConsecutiveLosses = 'adventure_consecutive_losses';
 const String _prefAdventureConsecutiveWins = 'adventure_consecutive_wins';
 
@@ -155,4 +160,34 @@ Future<(int, int)> onClassicStreakWin(int classicGamesWonAfterThisWin) async {
 Future<(int, int)> onHardPracticeWin() async {
   final newXp = await addXp(xpHardPracticeWin);
   return (newXp, xpHardPracticeWin);
+}
+
+/// Daily challenge: returns whether the user played today and if so whether they won.
+/// (playedToday, wonOrNull). wonOrNull is null if not played today.
+Future<(bool playedToday, bool? won)> getDailyChallengeStatus() async {
+  final prefs = await SharedPreferences.getInstance();
+  final now = DateTime.now();
+  final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  final lastDate = prefs.getString(_prefDailyChallengeDate);
+  if (lastDate != today) return (false, null);
+  final won = prefs.getBool(_prefDailyChallengeWon);
+  return (true, won);
+}
+
+/// Daily challenge: call when the user finishes today's challenge. Awards +3 XP if [won].
+Future<int> setDailyChallengeResult(bool won) async {
+  final prefs = await SharedPreferences.getInstance();
+  final now = DateTime.now();
+  final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  await prefs.setString(_prefDailyChallengeDate, today);
+  await prefs.setBool(_prefDailyChallengeWon, won);
+  if (won) return await addXp(xpDailyChallengeWin);
+  return await getXp();
+}
+
+/// Returns today's challenge game index (0-based). Same for all users on the same calendar day.
+int getTodaysChallengeGameIndex() {
+  final now = DateTime.now();
+  final dayCode = now.year * 10000 + now.month * 100 + now.day;
+  return dayCode % 6; // 6 different challenge types
 }
