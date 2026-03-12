@@ -7,6 +7,7 @@ import 'supabase_client.dart';
 import 'contexts/auth_context.dart';
 import 'auth/auth_gate.dart';
 import 'auth/deep_link_handler.dart';
+import 'background_sound.dart';
 
 /// Hides scrollbars app-wide (no vertical striped bar on scrollable content).
 class _NoScrollbarScrollBehavior extends ScrollBehavior {
@@ -34,8 +35,41 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        BackgroundSound.instance.pause();
+        break;
+      case AppLifecycleState.resumed:
+        BackgroundSound.instance.resumeIfEnabled();
+        break;
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

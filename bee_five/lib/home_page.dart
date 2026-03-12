@@ -1164,14 +1164,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Buy XPs
-                _sideMenuButton(
-                  label: 'Buy XPs',
-                  iconImagePath: 'assets/homeImagery/buy_icon.png',
-                  color: Colors.orange,
-                  onPressed: _showBuyXPsModal,
-                ),
-                const SizedBox(height: 12),
                 // Daily Challenge
                 _sideMenuButton(
                   label: _dailyChallengePlayedToday
@@ -1180,6 +1172,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   icon: '🎯',
                   color: const Color(0xFF6A1B9A),
                   onPressed: _onDailyChallengePressed,
+                ),
+                const SizedBox(height: 12),
+                // Gain XPs
+                _sideMenuButton(
+                  label: 'Gain XPs',
+                  iconImagePath: 'assets/homeImagery/buy_icon.png',
+                  color: Colors.orange,
+                  onPressed: _showGainXPsModal,
+                ),
+                const SizedBox(height: 12),
+                // Bee-Five Tour
+                _sideMenuButton(
+                  label: 'Bee-Five Tour',
+                  icon: '📖',
+                  color: const Color(0xFF1976D2),
+                  onPressed: _showBeeFiveTourModal,
                 ),
               ],
             ),
@@ -1803,7 +1811,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     setState(() => gameMode = GameMode.dailyChallenge);
   }
 
-  void _showBuyXPsModal() {
+  void _showGainXPsModal() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1821,11 +1829,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               height: 32,
               width: 32,
               fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const Icon(Icons.shopping_bag, size: 32),
+              errorBuilder: (_, _, _) => const Icon(Icons.star, size: 32),
             ),
             const SizedBox(width: 8),
             const Text(
-              'Buy XPs',
+              'Gain XPs',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -1834,10 +1842,101 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ],
         ),
-        content: const Text(
-          'Purchase experience points to progress faster.',
-          style: TextStyle(fontSize: 16, color: Colors.black87),
-          textAlign: TextAlign.center,
+        content: const SingleChildScrollView(
+          child: Text(
+            'How to gain XPs in Bee-Five:\n\n'
+            '• Login: +2 XP per calendar day (once per day).\n\n'
+            '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
+            '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
+            '• Adventure: +1 XP for every 2 consecutive level wins; −1 XP per loss. '
+            'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
+            '• Daily Challenge: Win today’s challenge → +3 XP (once per day).',
+            style: TextStyle(fontSize: 16, color: Colors.black87),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBeeFiveTourModal() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: primaryYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Colors.black, width: 4),
+        ),
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('📖 ', style: TextStyle(fontSize: 28)),
+            Text(
+              'Bee-Five Tour',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Adventure (main game)',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Play through levels on the map. Each level is a Bee-Five game; win to advance. Time per move gets shorter as you progress: from 12 seconds early on down to 2 seconds in the highest levels. Obstacles appear as you go: blocked cells, mud zones, blind play (hidden board), progressive or disappearing blocks, shifting blocks, disappearing pieces, piece capacity limits, and match rounds (best-of-3 or best-of-5). This is the main story mode.',
+                style: TextStyle(fontSize: 15, color: Colors.black87),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Classic Mode',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'You have a 10‑minute session to win as many games as you can against the AI. Each move has a 15‑second timer; if time runs out on your turn, you lose that game. Your best score (most wins in one session) is saved. Win 3 games in a row in that session to earn +2 XP.',
+                style: TextStyle(fontSize: 15, color: Colors.black87),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Daily Challenge',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'One challenge per day: same Bee-Five rules with a fixed daily puzzle (e.g. Beat the Clock, Obstacle Course, Blitz, Speed Round). Play once per day. Winning the Daily Challenge awards +3 XP and is the only way to earn XP from a single daily attempt — great for building your total and comparing with others.',
+                style: TextStyle(fontSize: 15, color: Colors.black87),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(

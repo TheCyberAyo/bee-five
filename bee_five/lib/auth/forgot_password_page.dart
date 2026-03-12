@@ -382,7 +382,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Enter your email and we'll send a 6-digit code to reset your password.",
+                  "Enter your email and we'll send a 6-digit code.",
                   style: TextStyle(
                     fontSize: 16,
                     color: isDark ? Colors.grey : Colors.black87,

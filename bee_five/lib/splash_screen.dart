@@ -153,41 +153,49 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
 
   @override
   Widget build(BuildContext context) {
+    final side = MediaQuery.sizeOf(context).shortestSide;
     return Scaffold(
       backgroundColor: _splashYellow,
       body: SafeArea(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
-            return Column(
-              children: [
-                const SizedBox(height: 32),
-                Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(_squareCount, (index) {
-                      final position = _playOrder.indexOf(index);
-                      // Use (position + 0.5) so each move appears mid-slot and is visible; the 5th move
-                      // appears at 90% of the animation (~5.4s) so it's visible for ~0.6s before the screen changes.
-                      final threshold = (position + 0.5) / _squareCount;
-                      final visible = position >= 0 && _controller.value >= threshold;
-                      final isBlack = position >= 0 ? _isBlack[position] : false;
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          right: index < _squareCount - 1 ? _gap : 0,
+        child: Center(
+          child: SizedBox(
+            width: side,
+            height: side,
+            child: Container(
+              color: _splashYellow,
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  return Column(
+                    children: [
+                      const SizedBox(height: 32),
+                      Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(_squareCount, (index) {
+                            final position = _playOrder.indexOf(index);
+                            final threshold = (position + 0.5) / _squareCount;
+                            final visible = position >= 0 && _controller.value >= threshold;
+                            final isBlack = position >= 0 ? _isBlack[position] : false;
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: index < _squareCount - 1 ? _gap : 0,
+                              ),
+                              child: _buildSquare(
+                                hasPiece: visible,
+                                isBlack: isBlack,
+                              ),
+                            );
+                          }),
                         ),
-                        child: _buildSquare(
-                          hasPiece: visible,
-                          isBlack: isBlack,
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-                const Spacer(),
-              ],
-            );
-          },
+                      ),
+                      const Spacer(),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
     );

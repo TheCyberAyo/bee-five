@@ -112,6 +112,7 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
   int _headerXp = 0;
   int _xpEarned = 0;
   bool _resultRecorded = false;
+  bool _showRulesOverlay = true;
 
   @override
   void initState() {
@@ -123,10 +124,21 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     _initBoard();
     BackgroundSound.instance.startIfEnabled();
     getXp().then((xp) {
-      if (mounted) setState(() => _headerXp = xp);
+      if (mounted) {
+        setState(() => _headerXp = xp);
+      }
     });
-    if (config.totalSeconds > 0) _startMainTimer();
-    if (config.moveSeconds > 0 && currentPlayer == 1) _startMoveTimer();
+    // Timers start only after user taps Continue on rules
+  }
+
+  void _onRulesContinue() {
+    setState(() => _showRulesOverlay = false);
+    if (config.totalSeconds > 0) {
+      _startMainTimer();
+    }
+    if (config.moveSeconds > 0 && currentPlayer == 1) {
+      _startMoveTimer();
+    }
   }
 
   void _initBoard() {
@@ -463,6 +475,27 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     return false;
   }
 
+  List<String> _getRulesForToday() {
+    final rules = <String>[];
+    if (config.totalSeconds > 0) {
+      final min = config.totalSeconds ~/ 60;
+      final sec = config.totalSeconds % 60;
+      rules.add('• Total time: ${min > 0 ? "$min min " : ""}${sec > 0 ? "$sec sec" : ""}'.trim());
+    }
+    if (config.moveSeconds > 0) {
+      rules.add('• You have ${config.moveSeconds} seconds per move.');
+    }
+    if (config.numObstacles > 0) {
+      rules.add('• The board has ${config.numObstacles} blocked cells — plan around them!');
+    }
+    rules.addAll([
+      '• You play as Yellow; the AI plays as Black.',
+      '• Get 5 in a row (horizontal, vertical, or diagonal) to win.',
+      '• One game per day — win for +3 XP!',
+    ]);
+    return rules;
+  }
+
   @override
   Widget build(BuildContext context) {
     const double borderWidth = 2.0;
@@ -675,7 +708,109 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
               ),
             ),
           ),
+        if (_showRulesOverlay) _buildRulesOverlay(),
       ],
+    );
+  }
+
+  Widget _buildRulesOverlay() {
+    final rules = _getRulesForToday();
+    return Material(
+      color: Colors.black.withValues(alpha: 0.85),
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: primaryYellow,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.black, width: 4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.emoji_events, color: Colors.black87, size: 32),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Today\'s Challenge',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    config.name,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    config.description,
+                    style: TextStyle(fontSize: 15, color: Colors.black87, fontStyle: FontStyle.italic),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Rules',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...rules.map(
+                    (r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        r,
+                        style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _onRulesContinue,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: primaryYellow,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.black87, width: 2),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: const Text('Continue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

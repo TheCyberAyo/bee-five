@@ -44,6 +44,21 @@ class BackgroundSound {
     } catch (_) {}
   }
 
+  /// Pause playback (e.g. when app goes to background). Does not change soundEnabled.
+  Future<void> pause() async {
+    try {
+      await _player.pause();
+    } catch (_) {}
+  }
+
+  /// Resume playback if sound is enabled (e.g. when app returns to foreground).
+  Future<void> resumeIfEnabled() async {
+    if (!_soundEnabled || !_initialized) return;
+    try {
+      await _player.resume();
+    } catch (_) {}
+  }
+
   /// Call when player enters the game (e.g. HomePage first build). Starts looping if sound is enabled.
   Future<void> startIfEnabled() async {
     await init();
