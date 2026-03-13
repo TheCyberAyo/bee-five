@@ -1948,6 +1948,72 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// Shows a password confirmation dialog. Returns the entered password on Confirm, null on Cancel.
+  static Future<String?> _showPasswordConfirmDialog({
+    required BuildContext context,
+    required String title,
+    required String message,
+  }) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: primaryYellow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.black, width: 4),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  message,
+                  style: const TextStyle(fontSize: 15, color: Colors.black87),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  onSubmitted: (value) {
+                    if (value.isNotEmpty) Navigator.pop(ctx, value);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final pwd = controller.text.trim();
+                if (pwd.isEmpty) return;
+                Navigator.pop(ctx, pwd);
+              },
+              child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showSettingsModal() {
     showDialog(
       context: context,
@@ -2014,12 +2080,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   const Divider(color: Colors.black54, height: 1),
                   const SizedBox(height: 16),
                   const Text(
-                    'Account',
+                    'Account & data',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'These actions require your password to confirm.',
+                    style: TextStyle(fontSize: 14, color: Colors.black54),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
@@ -2047,41 +2118,100 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  // Reset adventure progress — password required
+                  if (context.read<AuthContext>().user != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final auth = context.read<AuthContext>();
+                          final user = auth.user;
+                          if (user?.email == null) return;
+                          final password = await _showPasswordConfirmDialog(
+                            context: context,
+                            title: 'Reset adventure progress',
+                            message: 'Enter your password to reset your adventure progress and start from level 1. This cannot be undone.',
+                          );
+                          if (password == null || !context.mounted) return;
+                          try {
+                            await auth.signIn(email: user!.email!, password: password);
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e.toString().contains('Invalid login') ? 'Incorrect password.' : e.toString()),
+                                backgroundColor: Colors.red.shade700,
+                              ),
+                            );
+                            return;
+                          }
+                          if (!context.mounted) return;
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setInt('adventure_current_level', 1);
+                          await prefs.setInt('adventure_consecutive_losses', 0);
+                          await prefs.setInt('adventure_consecutive_wins', 0);
+                          if (!context.mounted) return;
+                          setState(() {
+                            currentGame = 1;
+                            gamesCompleted = [];
+                          });
+                          Navigator.pop(dialogContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Adventure progress reset. You will start from level 1.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange.shade800,
+                          side: BorderSide(color: Colors.orange.shade700, width: 2),
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Reset adventure progress — start from level 1',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  // Delete account — password required
                   OutlinedButton(
                     onPressed: () async {
                       final auth = context.read<AuthContext>();
-                      final messenger = ScaffoldMessenger.of(context);
-                      final navigator = Navigator.of(dialogContext);
-                      final confirmed = await showDialog<bool>(
+                      final user = auth.user;
+                      if (user?.email == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Sign in to delete your account.'), backgroundColor: Colors.red),
+                        );
+                        return;
+                      }
+                      final password = await _showPasswordConfirmDialog(
                         context: context,
-                        builder: (ctx) => AlertDialog(
-                          backgroundColor: primaryYellow,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            side: const BorderSide(color: Colors.black, width: 4),
-                          ),
-                          title: const Text('Delete account?'),
-                          content: const Text(
-                            'This will permanently delete your account and data. You cannot undo this.',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
+                        title: 'Delete account',
+                        message: 'Enter your password to confirm. This will permanently delete your account and data. You cannot undo this.',
                       );
-                      if (confirmed != true) return;
-                      navigator.pop();
+                      if (password == null || !context.mounted) return;
+                      try {
+                        await auth.signIn(email: user!.email!, password: password);
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.toString().contains('Invalid login') ? 'Incorrect password.' : e.toString()),
+                            backgroundColor: Colors.red.shade700,
+                          ),
+                        );
+                        return;
+                      }
+                      if (!context.mounted) return;
+                      Navigator.pop(dialogContext);
                       final err = await auth.deleteAccount();
+                      if (!context.mounted) return;
                       if (err != null) {
-                        messenger.showSnackBar(
+                        ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(err.message),
                             backgroundColor: Colors.red.shade700,

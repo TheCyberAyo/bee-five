@@ -141,3 +141,15 @@ export async function autoSaveProgress(
   }, SAVE_DELAY);
 }
 
+/**
+ * Reset adventure progress to level 1 for the given user (requires prior password confirmation by caller).
+ */
+export async function resetAdventureProgress(userId: string): Promise<boolean> {
+  return saveAdventureProgress(userId, {
+    current_game: 1,
+    highest_unlocked_game: 1,
+    games_completed: [],
+    games_won: 0,
+  });
+}
+

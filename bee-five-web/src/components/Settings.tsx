@@ -2,6 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { soundManager } from '../utils/sounds';
+import { useAuth } from '../contexts/AuthContext';
+import { resetAdventureProgress } from '../services/progressService';
+
+const LOCAL_PROGRESS_KEY_PREFIX = 'beeAdventureProgress:';
 
 interface SettingsProps {
   onBackToMenu: () => void;
@@ -16,8 +20,16 @@ export default function Settings({
   backgroundColor,
   onBackgroundColorChange 
 }: SettingsProps) {
+  const { user, signIn } = useAuth();
   const [volume, setVolume] = useState(soundManager.getVolume());
   const [isMuted, setIsMuted] = useState(soundManager.isSoundMuted());
+
+  // Password confirmation modal for account/danger actions
+  const [confirmModal, setConfirmModal] = useState<'reset' | 'delete' | null>(null);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmError, setConfirmError] = useState('');
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmSuccess, setConfirmSuccess] = useState('');
 
   // Sync volume changes with sound manager
   useEffect(() => {
@@ -40,6 +52,63 @@ export default function Settings({
   const handleTestSound = () => {
     soundManager.playBuzzSound();
   };
+
+  const openConfirmModal = (action: 'reset' | 'delete') => {
+    setConfirmModal(action);
+    setConfirmPassword('');
+    setConfirmError('');
+    setConfirmSuccess('');
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmModal(null);
+    setConfirmPassword('');
+    setConfirmError('');
+    setConfirmSuccess('');
+    setConfirmLoading(false);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!user?.email) {
+      setConfirmError('You must be signed in.');
+      return;
+    }
+    if (!confirmPassword.trim()) {
+      setConfirmError('Please enter your password.');
+      return;
+    }
+    setConfirmError('');
+    setConfirmLoading(true);
+    try {
+      const { error } = await signIn(user.email, confirmPassword.trim());
+      if (error) {
+        setConfirmError(error.message || 'Incorrect password.');
+        setConfirmLoading(false);
+        return;
+      }
+      if (confirmModal === 'reset') {
+        const ok = await resetAdventureProgress(user.id);
+        if (ok) {
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.removeItem(`${LOCAL_PROGRESS_KEY_PREFIX}${user.id}`);
+            } catch (_) {}
+          }
+          setConfirmSuccess('Adventure progress has been reset. You will start from level 1.');
+          soundManager.playClickSound();
+        } else {
+          setConfirmError('Failed to reset progress. Please try again.');
+        }
+      } else if (confirmModal === 'delete') {
+        setConfirmSuccess('Account deletion must be requested via support. Please contact us to permanently delete your account.');
+        soundManager.playClickSound();
+      }
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : 'Something went wrong.');
+    }
+    setConfirmLoading(false);
+  };
+
   return (
     <div style={{ 
       background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)',
@@ -442,6 +511,75 @@ export default function Settings({
             </div>
           </div>
 
+          {/* Account & data — password required for reset / delete */}
+          {user && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <h3 style={{
+                fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+                color: '#FFC30B',
+                marginBottom: '1rem',
+                fontWeight: 'bold'
+              }}>
+                🔐 Account & data
+              </h3>
+              <p style={{ marginBottom: '1rem', color: 'rgba(255,255,255,0.8)', fontSize: '0.95rem' }}>
+                These actions require your password to confirm.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <button
+                  onClick={() => { soundManager.playClickSound(); openConfirmModal('reset'); }}
+                  style={{
+                    padding: '1rem',
+                    backgroundColor: 'rgba(255, 180, 0, 0.2)',
+                    color: '#FFC30B',
+                    border: '2px solid #FFC30B',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '1rem',
+                    textAlign: 'left',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isMobile) {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 195, 11, 0.3)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 180, 0, 0.2)';
+                  }}
+                >
+                  🔄 Reset adventure progress — start from level 1
+                </button>
+                <button
+                  onClick={() => { soundManager.playClickSound(); openConfirmModal('delete'); }}
+                  style={{
+                    padding: '1rem',
+                    backgroundColor: 'rgba(200, 60, 60, 0.15)',
+                    color: '#f88',
+                    border: '2px solid #c44',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '1rem',
+                    textAlign: 'left',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isMobile) {
+                      e.currentTarget.style.backgroundColor = 'rgba(200, 60, 60, 0.25)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(200, 60, 60, 0.15)';
+                  }}
+                >
+                  🗑️ Delete account
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{
             textAlign: 'center',
             marginTop: '2rem',
@@ -455,6 +593,120 @@ export default function Settings({
         </div>
       </div>
       </div>
+
+      {/* Password confirmation modal for reset / delete */}
+      {confirmModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '1rem'
+          }}
+          onClick={closeConfirmModal}
+        >
+          <div
+            style={{
+              background: 'rgba(0, 0, 0, 0.98)',
+              borderRadius: '16px',
+              padding: isMobile ? '1.5rem' : '2rem',
+              maxWidth: '400px',
+              width: '100%',
+              border: '2px solid #FFC30B',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ color: '#FFC30B', margin: '0 0 1rem 0', fontSize: '1.25rem' }}>
+              {confirmModal === 'reset' ? 'Reset adventure progress' : 'Delete account'}
+            </h3>
+            {confirmSuccess ? (
+              <>
+                <p style={{ color: '#8f8', marginBottom: '1rem' }}>{confirmSuccess}</p>
+                <button
+                  onClick={() => { soundManager.playClickSound(); closeConfirmModal(); }}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    backgroundColor: '#FFC30B',
+                    color: '#000',
+                    border: '2px solid #000',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  OK
+                </button>
+              </>
+            ) : (
+              <>
+                <p style={{ color: 'rgba(255,255,255,0.85)', marginBottom: '1rem', fontSize: '0.95rem' }}>
+                  {confirmModal === 'reset'
+                    ? 'Enter your password to reset your adventure progress and start from level 1. This cannot be undone.'
+                    : 'Enter your password to confirm account deletion. Account deletion must be completed via support.'}
+                </p>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); setConfirmError(''); }}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    marginBottom: '0.75rem',
+                    borderRadius: '8px',
+                    border: '2px solid #666',
+                    background: '#222',
+                    color: '#fff',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {confirmError && (
+                  <p style={{ color: '#f66', marginBottom: '0.75rem', fontSize: '0.9rem' }}>{confirmError}</p>
+                )}
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => { soundManager.playClickSound(); closeConfirmModal(); }}
+                    disabled={confirmLoading}
+                    style={{
+                      padding: '0.75rem 1.25rem',
+                      backgroundColor: '#555',
+                      color: '#fff',
+                      border: '2px solid #666',
+                      borderRadius: '8px',
+                      cursor: confirmLoading ? 'not-allowed' : 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmSubmit}
+                    disabled={confirmLoading || !confirmPassword.trim()}
+                    style={{
+                      padding: '0.75rem 1.25rem',
+                      backgroundColor: confirmModal === 'delete' ? '#a44' : '#FFC30B',
+                      color: confirmModal === 'delete' ? '#fff' : '#000',
+                      border: '2px solid #000',
+                      borderRadius: '8px',
+                      cursor: confirmLoading || !confirmPassword.trim() ? 'not-allowed' : 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {confirmLoading ? 'Checking…' : 'Confirm'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
