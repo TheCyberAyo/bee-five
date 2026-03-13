@@ -221,40 +221,6 @@ class _SignInPageState extends State<SignInPage> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: _loading
-                            ? null
-                            : () {
-                                widget.onTrySetNewPassword();
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  if (!mounted) return;
-                                  if (widget.auth.user == null) {
-                                    showDialog(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('Set new password'),
-                                        content: const Text(
-                                          'Open the reset link from your email on this device first. The link will open this app and show the form to enter your new password.',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(ctx),
-                                            child: const Text('OK'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
-                                });
-                              },
-                        child: const Text(
-                          'Set new password',
-                          style: TextStyle(
-                            color: Color(0xFFFFC30B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      TextButton(
                         onPressed: _loading ? null : widget.onNavigateToForgotPassword,
                         child: const Text(
                           'Forgot Password?',

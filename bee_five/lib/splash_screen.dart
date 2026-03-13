@@ -155,7 +155,7 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
   Widget build(BuildContext context) {
     final side = MediaQuery.sizeOf(context).shortestSide;
     return Scaffold(
-      backgroundColor: _splashYellow,
+      backgroundColor: Colors.black,
       body: SafeArea(
         child: Center(
           child: SizedBox(

@@ -280,10 +280,10 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     setLocalProgressInitialized(true);
   }, [userId]);
 
-  // Load progress on mount if user is logged in, or when user changes
+  // Load progress per account: each user (or guest) sees only their own level and records.
+  // On sign-out we clear and load guest progress; when another account signs in we load that account's progress.
   useEffect(() => {
     const loadProgress = async () => {
-      // If user is logged in and we haven't loaded their progress yet
       if (user && progressLoadedUserId !== user.id) {
         try {
           const progress = await loadAdventureProgress(user.id);
@@ -296,10 +296,9 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
           setProgressLoadedUserId(user.id);
         } catch (error) {
           console.error('Error loading progress:', error);
-          setProgressLoadedUserId(user.id); // Mark as attempted even on error
+          setProgressLoadedUserId(user.id);
         }
       } else if (!user) {
-        // Reset progress when user logs out
         setProgressLoadedUserId(null);
         const guestProgress = loadLocalAdventureProgress(null);
         if (guestProgress) {

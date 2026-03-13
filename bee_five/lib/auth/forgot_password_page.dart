@@ -447,7 +447,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             ),
                           )
                         : const Text(
-                            'Send Reset Link',
+                            'Send 6-digit pin',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

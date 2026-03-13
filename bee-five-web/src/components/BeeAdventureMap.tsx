@@ -155,39 +155,51 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
     [highestUnlockedGame]
   );
 
+  // Max scroll: do not allow scrolling "up" to see levels beyond highestUnlockedGame
+  const computeMaxScrollTop = React.useCallback(
+    (container: HTMLDivElement) => {
+      const { spacing, totalHeight } = getMapMetrics();
+      const containerHeight = container.clientHeight || 0;
+      const absoluteMax = Math.max(0, container.scrollHeight - containerHeight);
+      if (containerHeight === 0) return absoluteMax;
+      const firstLockedY = totalHeight - (highestUnlockedGame * spacing);
+      const maxScrollTop = Math.min(absoluteMax, Math.max(0, firstLockedY - containerHeight));
+      return Number.isFinite(maxScrollTop) ? maxScrollTop : absoluteMax;
+    },
+    [highestUnlockedGame]
+  );
+
   const clampScrollTop = React.useCallback(() => {
     if (!scrollContainerRef.current) return;
     const minScrollTop = computeMinScrollTop(scrollContainerRef.current);
-    if (scrollContainerRef.current.scrollTop < minScrollTop) {
-      scrollContainerRef.current.scrollTop = minScrollTop;
-    }
-  }, [computeMinScrollTop]);
+    const maxScrollTop = computeMaxScrollTop(scrollContainerRef.current);
+    let top = scrollContainerRef.current.scrollTop;
+    if (top < minScrollTop) top = minScrollTop;
+    if (top > maxScrollTop) top = maxScrollTop;
+    scrollContainerRef.current.scrollTop = top;
+  }, [computeMinScrollTop, computeMaxScrollTop]);
 
   // Use theme system
   const { currentTheme } = useTheme({ gameNumber: currentGame });
 
-  // Auto-scroll to current game position when map opens
+  // Auto-scroll to current game position when map opens (keeps view within reached levels only)
   React.useEffect(() => {
     if (scrollContainerRef.current) {
       const { spacing, totalHeight } = getMapMetrics();
       const gameIndex = currentGame - 1;
-      
-      // Calculate the Y position of the current game
       const gameY = totalHeight - (gameIndex * spacing);
-      
-      // Scroll to position the current game in the center of the viewport
       const containerHeight = scrollContainerRef.current.clientHeight;
       const scrollToPosition = Math.max(0, gameY - containerHeight / 2);
       const minScrollTop = computeMinScrollTop(scrollContainerRef.current);
-      const targetPosition = Math.max(minScrollTop, scrollToPosition);
-      
-      // Smooth scroll to the current game position
+      const maxScrollTop = computeMaxScrollTop(scrollContainerRef.current);
+      const targetPosition = Math.min(maxScrollTop, Math.max(minScrollTop, scrollToPosition));
+
       scrollContainerRef.current.scrollTo({
         top: targetPosition,
         behavior: 'smooth'
       });
     }
-  }, [currentGame, computeMinScrollTop]);
+  }, [currentGame, computeMinScrollTop, computeMaxScrollTop]);
 
   React.useEffect(() => {
     clampScrollTop();
@@ -989,7 +1001,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
           {ADVENTURE_THEMES.map((stage, index) => {
             const milestoneGame = (index * 200) + 1;
             const position = getGamePosition(milestoneGame);
-            
+            const milestoneLocked = isGameLocked(milestoneGame);
             return (
               <div
                 key={`milestone-${index}`}
@@ -1000,7 +1012,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                   width: isMobile ? '80px' : '60px',
                   height: isMobile ? '80px' : '60px',
                   borderRadius: '50%',
-                  backgroundColor: stage.primaryColor,
+                  backgroundColor: milestoneLocked ? '#999' : stage.primaryColor,
                   border: isMobile ? '5px solid #fff' : '4px solid #fff',
                   display: 'flex',
                   flexDirection: 'column',
@@ -1010,17 +1022,19 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                   fontWeight: 'bold',
                   color: '#fff',
                   textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-                  cursor: 'pointer',
+                  cursor: milestoneLocked ? 'not-allowed' : 'pointer',
                   transition: 'all 0.3s ease',
                   boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
                   zIndex: 5,
-                  animation: 'milestonePulse 3s ease-in-out infinite',
+                  animation: milestoneLocked ? 'none' : 'milestonePulse 3s ease-in-out infinite',
                   animationDelay: `${index * 0.5}s`,
-                  transform: 'translateZ(0)' // Force hardware acceleration
+                  transform: 'translateZ(0)',
+                  opacity: milestoneLocked ? 0.6 : 1,
+                  filter: milestoneLocked ? 'grayscale(60%)' : 'none'
                 }}
-                onClick={() => handleGameClick(milestoneGame)}
+                onClick={() => !milestoneLocked && handleGameClick(milestoneGame)}
                 onMouseEnter={(e) => {
-                  if (!isMobile) {
+                  if (!isMobile && !milestoneLocked) {
                     e.currentTarget.style.transform = 'scale(1.15)';
                     e.currentTarget.style.zIndex = '15';
                   }
@@ -1031,10 +1045,10 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                     e.currentTarget.style.zIndex = '5';
                   }
                 }}
-                title={`Stage ${index + 1}: ${stage.name}\nStarting at Game ${milestoneGame}\n${stage.beeLifeStage}`}
+                title={milestoneLocked ? `🔒 Locked - Complete previous levels to unlock Stage ${index + 1}` : `Stage ${index + 1}: ${stage.name}\nStarting at Game ${milestoneGame}\n${stage.beeLifeStage}`}
               >
                 <div style={{ fontSize: isMobile ? '32px' : '24px', marginBottom: '2px' }}>
-                  {getStageEmoji(index)}
+                  {milestoneLocked ? '🔒' : getStageEmoji(index)}
                 </div>
                 <div style={{ fontSize: isMobile ? '12px' : '10px', textAlign: 'center' }}>
                   S{index + 1}
@@ -1468,7 +1482,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
           {ADVENTURE_THEMES.map((stage, index) => {
             const milestoneGame = (index * 200) + 1;
             const position = getGamePosition(milestoneGame);
-            
+            const milestoneLocked = isGameLocked(milestoneGame);
             return (
               <div
                 key={`milestone-${index}`}
@@ -1479,7 +1493,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                   width: isMobile ? '80px' : '60px',
                   height: isMobile ? '80px' : '60px',
                   borderRadius: '50%',
-                  backgroundColor: stage.primaryColor,
+                  backgroundColor: milestoneLocked ? '#999' : stage.primaryColor,
                   border: isMobile ? '5px solid #fff' : '4px solid #fff',
                   display: 'flex',
                   flexDirection: 'column',
@@ -1489,17 +1503,19 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                   fontWeight: 'bold',
                   color: '#fff',
                   textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-                  cursor: 'pointer',
+                  cursor: milestoneLocked ? 'not-allowed' : 'pointer',
                   transition: 'all 0.3s ease',
                   boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
                   zIndex: 5,
-                  animation: 'milestonePulse 3s ease-in-out infinite',
+                  animation: milestoneLocked ? 'none' : 'milestonePulse 3s ease-in-out infinite',
                   animationDelay: `${index * 0.5}s`,
-                  transform: 'translateZ(0)' // Force hardware acceleration
+                  transform: 'translateZ(0)',
+                  opacity: milestoneLocked ? 0.6 : 1,
+                  filter: milestoneLocked ? 'grayscale(60%)' : 'none'
                 }}
-                onClick={() => handleGameClick(milestoneGame)}
+                onClick={() => !milestoneLocked && handleGameClick(milestoneGame)}
                 onMouseEnter={(e) => {
-                  if (!isMobile) {
+                  if (!isMobile && !milestoneLocked) {
                     e.currentTarget.style.transform = 'scale(1.15)';
                     e.currentTarget.style.zIndex = '15';
                   }
@@ -1510,10 +1526,10 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
                     e.currentTarget.style.zIndex = '5';
                   }
                 }}
-                title={`Stage ${index + 1}: ${stage.name}\nStarting at Game ${milestoneGame}\n${stage.beeLifeStage}`}
+                title={milestoneLocked ? `🔒 Locked - Complete previous levels to unlock Stage ${index + 1}` : `Stage ${index + 1}: ${stage.name}\nStarting at Game ${milestoneGame}\n${stage.beeLifeStage}`}
               >
                 <div style={{ fontSize: isMobile ? '32px' : '24px', marginBottom: '2px' }}>
-                  {getStageEmoji(index)}
+                  {milestoneLocked ? '🔒' : getStageEmoji(index)}
                 </div>
                 <div style={{ fontSize: isMobile ? '12px' : '10px', textAlign: 'center' }}>
                   S{index + 1}
