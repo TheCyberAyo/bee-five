@@ -48,15 +48,25 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   int classicBestStreak = 0;
   Timer? sessionTimer;
   bool classicGameOver = false;
+  /// Game index in the current streak session (1-based). Sequence: 2 easy, 2 medium, 2 hard, repeat.
+  int _classicGameIndex = 1;
 
   int _headerXp = 0;
   int _lastXpDelta = 0;
+
+  /// Difficulty for classic streak: games 1–2 easy, 3–4 medium, 5–6 hard, then repeat.
+  static String _classicStreakDifficultyForGame(int gameIndex) {
+    final slot = (gameIndex - 1) % 6;
+    if (slot < 2) return 'easy';
+    if (slot < 4) return 'medium';
+    return 'hard';
+  }
 
   @override
   void initState() {
     super.initState();
     if (widget.isClassicStreakMode) {
-      aiDifficulty = 'medium';
+      aiDifficulty = _classicStreakDifficultyForGame(1);
       timeLeft = 0;
       _loadBestStreak();
       _startSessionTimer();
@@ -199,6 +209,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             classicBestStreak = classicGamesWon;
             _saveBestStreak(classicBestStreak);
           }
+          _classicGameIndex++;
+          aiDifficulty = _classicStreakDifficultyForGame(_classicGameIndex);
         });
         onClassicStreakWin(classicGamesWon).then((result) {
           if (mounted) {
@@ -372,18 +384,27 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately (but only 50% of the time)
+    // Priority 2: Block if human can win immediately (always)
+    for (final cell in availableCells) {
+      final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
+      testBoard[cell['row']!][cell['col']!] = 1;
+      if (logic.checkWinCondition(testBoard, cell['row']!, cell['col']!, 1)) {
+        return cell;
+      }
+    }
+
+    // Priority 3: Block 3-in-a-row threats (50% of the time)
     if (math.Random().nextDouble() > 0.5) {
       for (final cell in availableCells) {
         final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
         testBoard[cell['row']!][cell['col']!] = 1;
-        if (logic.checkWinCondition(testBoard, cell['row']!, cell['col']!, 1)) {
+        if (_checkThreeInARow(testBoard, cell['row']!, cell['col']!, 1)) {
           return cell;
         }
       }
     }
 
-    // Priority 3: Random move
+    // Priority 4: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }
@@ -938,6 +959,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                               classicGameOver = false;
                               classicSessionTimeLeft = _classicSessionSeconds;
                               classicGamesWon = 0;
+                              _classicGameIndex = 1;
+                              aiDifficulty = _classicStreakDifficultyForGame(1);
                               showWinModal = false;
                             });
                             _resetBoard();

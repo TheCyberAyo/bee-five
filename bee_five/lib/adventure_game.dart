@@ -623,18 +623,27 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately (but only 50% of the time)
+    // Priority 2: Block if human can win immediately (always)
+    for (final cell in availableCells) {
+      final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
+      testBoard[cell['row']!][cell['col']!] = 1;
+      if (logic.checkWinCondition(testBoard, cell['row']!, cell['col']!, 1)) {
+        return cell;
+      }
+    }
+
+    // Priority 3: Block 3-in-a-row threats (50% of the time)
     if (math.Random().nextDouble() > 0.5) {
       for (final cell in availableCells) {
         final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
         testBoard[cell['row']!][cell['col']!] = 1;
-        if (logic.checkWinCondition(testBoard, cell['row']!, cell['col']!, 1)) {
+        if (_checkThreeInARow(testBoard, cell['row']!, cell['col']!, 1)) {
           return cell;
         }
       }
     }
 
-    // Priority 3: Random move
+    // Priority 4: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }

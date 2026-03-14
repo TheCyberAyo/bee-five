@@ -106,9 +106,9 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
   // AI Move Functions - defined before getBestAIMove to avoid hoisting issues
   const getEasyAIMove = React.useCallback((availableCells: {row: number, col: number}[]) => {
     console.log('CLASSIC EASY AI: Called with', availableCells.length, 'available cells');
-    // Easy AI: Very passive and random
+    // Easy AI: Takes wins, always blocks wins, sometimes blocks 3-in-a-row
     
-    // Priority 1: Take winning move if available (only if obvious)
+    // Priority 1: Take winning move if available
     for (let cell of availableCells) {
       const testBoard = gameState.board.map(row => [...row]);
       testBoard[cell.row][cell.col] = 2;
@@ -118,19 +118,29 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
       }
     }
 
-    // Priority 2: Block if human can win immediately (but only 50% of the time)
+    // Priority 2: Block if human can win immediately (always)
+    for (let cell of availableCells) {
+      const testBoard = gameState.board.map(row => [...row]);
+      testBoard[cell.row][cell.col] = 1;
+      if (checkWinCondition(testBoard, cell.row, cell.col, 1)) {
+        console.log('CLASSIC EASY AI: Blocking immediate win at', cell.row, cell.col);
+        return cell;
+      }
+    }
+
+    // Priority 3: Block 3-in-a-row threats (50% of the time)
     if (Math.random() > 0.5) {
       for (let cell of availableCells) {
         const testBoard = gameState.board.map(row => [...row]);
         testBoard[cell.row][cell.col] = 1;
-        if (checkWinCondition(testBoard, cell.row, cell.col, 1)) {
-          console.log('CLASSIC EASY AI: Blocking immediate win at', cell.row, cell.col);
+        if (checkThreeInARow(testBoard, cell.row, cell.col, 1)) {
+          console.log('CLASSIC EASY AI: Blocking 3-in-a-row at', cell.row, cell.col);
           return cell;
         }
       }
     }
 
-    // Priority 3: Random move (most of the time)
+    // Priority 4: Random move
     console.log('CLASSIC EASY AI: Making random move');
     return availableCells[Math.floor(Math.random() * availableCells.length)];
   }, [gameState.board]);

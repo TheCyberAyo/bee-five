@@ -666,18 +666,27 @@ export default function ClassicAIGame({
       }
     }
 
-    // Priority 2: Block if human can win immediately (but only 50% of the time)
+    // Priority 2: Block if human can win immediately (always)
+    for (let cell of availableCells) {
+      const testBoard = currentBoard.map(r => [...r]);
+      testBoard[cell.row][cell.col] = 1;
+      if (checkWinCondition(testBoard, cell.row, cell.col, 1)) {
+        return cell;
+      }
+    }
+
+    // Priority 3: Block 3-in-a-row threats (50% of the time)
     if (Math.random() > 0.5) {
       for (let cell of availableCells) {
         const testBoard = currentBoard.map(r => [...r]);
         testBoard[cell.row][cell.col] = 1;
-        if (checkWinCondition(testBoard, cell.row, cell.col, 1)) {
+        if (checkThreeInARow(testBoard, cell.row, cell.col, 1)) {
           return cell;
         }
       }
     }
 
-    // Priority 3: Random move
+    // Priority 4: Random move
     return availableCells[Math.floor(Math.random() * availableCells.length)];
   }, []);
 
