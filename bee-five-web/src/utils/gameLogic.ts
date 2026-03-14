@@ -1083,3 +1083,25 @@ export const getTimeLimitForLevel = (gameNumber: number): number => {
   }
 };
 
+// Calculate AI difficulty based on game number (adventure mode)
+export const getAIDifficulty = (gameNumber: number): 'easy' | 'medium' | 'hard' => {
+  const lastDigit = gameNumber % 10;
+  // First 100 games: easy by default, levels ending in 8 are medium
+  if (gameNumber <= 100) {
+    if (lastDigit === 8) return 'medium';
+    return 'easy';
+  }
+  // Games 601-2000: ending in 1-4 = medium, ending in 9 = easy, else hard
+  if (gameNumber >= 601 && gameNumber <= 2000) {
+    if (lastDigit >= 1 && lastDigit <= 4) return 'medium';
+    if (lastDigit === 9) return 'easy';
+    return 'hard';
+  }
+  // Games 2001+ use Hard AI
+  if (gameNumber >= 2001) return 'hard';
+  // Games 101-600: medium by default, ending in 2 or 5 = easy, ending in 9 = hard
+  if (lastDigit === 2 || lastDigit === 5) return 'easy';
+  if (lastDigit === 9) return 'hard';
+  return 'medium';
+};
+

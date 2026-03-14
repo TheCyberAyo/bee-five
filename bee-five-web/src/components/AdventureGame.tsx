@@ -5,7 +5,7 @@ import { useGameLogic } from '../hooks/useGameLogic';
 import GameCanvas from './GameCanvas';
 import BeeAdventureMap from './BeeAdventureMap';
 import { soundManager } from '../utils/sounds';
-import { getTimeLimitForLevel, isInMudZone, checkWinCondition, getAdventureStartingPlayer } from '../utils/gameLogic';
+import { getTimeLimitForLevel, isInMudZone, checkWinCondition, getAdventureStartingPlayer, getAIDifficulty } from '../utils/gameLogic';
 import { useTheme } from '../hooks/useTheme';
 import BeeLifeStageEffects from './BeeLifeStageEffects';
 import { getBeeFactForGame } from '../data/beeFacts';
@@ -858,6 +858,18 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   ]);
 
 
+  // Easy AI for first 100 games: random move (occasionally blocks wins)
+  const getEasyAIMove = (availableCells: {row: number, col: number}[]) => {
+    for (let cell of availableCells) {
+      const testBoard = gameState.board.map(row => [...row]);
+      testBoard[cell.row][cell.col] = 1;
+      if (checkWinCondition(testBoard, cell.row, cell.col, 1)) {
+        return cell; // Block immediate win
+      }
+    }
+    return availableCells[Math.floor(Math.random() * availableCells.length)];
+  };
+
   const getMediumAIMove = (availableCells: {row: number, col: number}[]) => {
     for (let cell of availableCells) {
       const testBoard = gameState.board.map(row => [...row]);
@@ -1095,8 +1107,10 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
     return availableCells[Math.floor(Math.random() * availableCells.length)];
   };
 
+  const getEasyAIMoveRef = React.useRef(getEasyAIMove);
   const getMediumAIMoveRef = React.useRef(getMediumAIMove);
   const getHardAIMoveRef = React.useRef(getHardAIMove);
+  getEasyAIMoveRef.current = getEasyAIMove;
   getMediumAIMoveRef.current = getMediumAIMove;
   getHardAIMoveRef.current = getHardAIMove;
 
@@ -1466,14 +1480,16 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
           return;
         }
 
+        const easyMove = getEasyAIMoveRef.current;
         const hardMove = getHardAIMoveRef.current;
         const mediumMove = getMediumAIMoveRef.current;
-        if (!hardMove || !mediumMove) {
+        if (!easyMove || !hardMove || !mediumMove) {
           return;
         }
+        const difficulty = getAIDifficulty(currentGame);
         const selectedCell = gameState.isBlindPlay
           ? availableCells[Math.floor(Math.random() * availableCells.length)]
-          : (currentGame >= 601 ? hardMove(availableCells) : mediumMove(availableCells));
+          : (difficulty === 'easy' ? easyMove(availableCells) : difficulty === 'hard' ? hardMove(availableCells) : mediumMove(availableCells));
         handleCellClick(selectedCell.row, selectedCell.col);
       }, aiDelay);
       return () => clearTimeout(timer);
