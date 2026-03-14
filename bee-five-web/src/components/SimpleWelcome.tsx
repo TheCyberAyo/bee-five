@@ -280,7 +280,7 @@ export default function SimpleWelcome() {
                 }
               }}
               style={{
-                background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+                background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
                 color: 'white',
                 border: '3px solid #FFC30B',
                 borderRadius: isMobile ? '16px' : '20px',
@@ -327,7 +327,7 @@ export default function SimpleWelcome() {
                 }
               }}
               style={{
-                background: 'linear-gradient(135deg, #FF6B35 0%, #e55a2b 100%)',
+                background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
                 color: 'white',
                 border: '3px solid #FFC30B',
                 borderRadius: isMobile ? '16px' : '20px',
@@ -446,7 +446,7 @@ export default function SimpleWelcome() {
                     style={{
                       padding: isMobile ? '0.75rem 1rem' : '0.5rem 1rem',
                       fontSize: isMobile ? '1rem' : '1rem',
-                      backgroundColor: competitionLength === 5 ? '#4CAF50' : '#f0f0f0',
+                      backgroundColor: competitionLength === 5 ? '#6b7280' : '#f0f0f0',
                       color: competitionLength === 5 ? 'white' : '#333',
                       border: '2px solid #333',
                       borderRadius: '8px',
@@ -462,7 +462,7 @@ export default function SimpleWelcome() {
                     style={{
                       padding: isMobile ? '0.75rem 1rem' : '0.5rem 1rem',
                       fontSize: isMobile ? '1rem' : '1rem',
-                      backgroundColor: competitionLength === 7 ? '#4CAF50' : '#f0f0f0',
+                      backgroundColor: competitionLength === 7 ? '#6b7280' : '#f0f0f0',
                       color: competitionLength === 7 ? 'white' : '#333',
                       border: '2px solid #333',
                       borderRadius: '8px',
@@ -577,7 +577,7 @@ export default function SimpleWelcome() {
                       minWidth: '60px',
                       padding: isMobile ? '0.6rem 0.5rem' : '0.5rem 0.75rem',
                       fontSize: isMobile ? '0.85rem' : '0.95rem',
-                      backgroundColor: timerOption === 3 ? '#4CAF50' : '#f0f0f0',
+                      backgroundColor: timerOption === 3 ? '#6b7280' : '#f0f0f0',
                       color: timerOption === 3 ? 'white' : '#333',
                       border: '2px solid #333',
                       borderRadius: '8px',
@@ -595,7 +595,7 @@ export default function SimpleWelcome() {
                       minWidth: '60px',
                       padding: isMobile ? '0.6rem 0.5rem' : '0.5rem 0.75rem',
                       fontSize: isMobile ? '0.85rem' : '0.95rem',
-                      backgroundColor: timerOption === 15 ? '#4CAF50' : '#f0f0f0',
+                      backgroundColor: timerOption === 15 ? '#6b7280' : '#f0f0f0',
                       color: timerOption === 15 ? 'white' : '#333',
                       border: '2px solid #333',
                       borderRadius: '8px',
@@ -613,7 +613,7 @@ export default function SimpleWelcome() {
                       minWidth: '60px',
                       padding: isMobile ? '0.6rem 0.5rem' : '0.5rem 0.75rem',
                       fontSize: isMobile ? '0.85rem' : '0.95rem',
-                      backgroundColor: timerOption === 30 ? '#4CAF50' : '#f0f0f0',
+                      backgroundColor: timerOption === 30 ? '#6b7280' : '#f0f0f0',
                       color: timerOption === 30 ? 'white' : '#333',
                       border: '2px solid #333',
                       borderRadius: '8px',
@@ -631,7 +631,7 @@ export default function SimpleWelcome() {
                       minWidth: '60px',
                       padding: isMobile ? '0.6rem 0.5rem' : '0.5rem 0.75rem',
                       fontSize: isMobile ? '0.85rem' : '0.95rem',
-                      backgroundColor: timerOption === 0 ? '#4CAF50' : '#f0f0f0',
+                      backgroundColor: timerOption === 0 ? '#6b7280' : '#f0f0f0',
                       color: timerOption === 0 ? 'white' : '#333',
                       border: '2px solid #333',
                       borderRadius: '8px',
@@ -666,7 +666,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '1rem 1.25rem' : '0.75rem 1.5rem',
                     fontSize: isMobile ? '1.05rem' : '1rem',
-                    backgroundColor: '#4CAF50',
+                    backgroundColor: '#6b7280',
                     color: 'white',
                     border: '2px solid black',
                     borderRadius: '8px',
@@ -830,7 +830,7 @@ export default function SimpleWelcome() {
                 }
               }}
               style={{
-                background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
+                background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
                 color: 'white',
                 border: '3px solid #FFC30B',
                 borderRadius: isMobile ? '16px' : '20px',
@@ -873,7 +873,7 @@ export default function SimpleWelcome() {
                 }
               }}
               style={{
-                background: 'linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%)',
+                background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
                 color: 'white',
                 border: '3px solid #FFC30B',
                 borderRadius: isMobile ? '16px' : '20px',
@@ -996,7 +996,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '0.75rem 0.5rem' : '0.6rem 0.5rem',
                     fontSize: isMobile ? '0.95rem' : '0.9em',
-                    backgroundColor: '#4CAF50',
+                    backgroundColor: '#6b7280',
                     color: 'white',
                     border: '2px solid black',
                     borderRadius: '8px',
@@ -1024,7 +1024,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '0.75rem 0.5rem' : '0.6rem 0.5rem',
                     fontSize: isMobile ? '0.95rem' : '0.9em',
-                    backgroundColor: '#FF9800',
+                    backgroundColor: '#6b7280',
                     color: 'white',
                     border: '2px solid black',
                     borderRadius: '8px',
@@ -1052,7 +1052,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '0.75rem 0.5rem' : '0.6rem 0.5rem',
                     fontSize: isMobile ? '0.95rem' : '0.9em',
-                    backgroundColor: '#F44336',
+                    backgroundColor: '#6b7280',
                     color: 'white',
                     border: '2px solid black',
                     borderRadius: '8px',
@@ -1161,7 +1161,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '0.75rem 0.5rem' : '0.6rem 0.5rem',
                     fontSize: isMobile ? '0.95rem' : '0.9em',
-                    backgroundColor: '#2196F3',
+                    backgroundColor: '#6b7280',
                     color: 'white',
                     border: '2px solid black',
                     borderRadius: '8px',
@@ -1190,7 +1190,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '0.75rem 0.5rem' : '0.6rem 0.5rem',
                     fontSize: isMobile ? '0.95rem' : '0.9em',
-                    backgroundColor: '#9C27B0',
+                    backgroundColor: '#6b7280',
                     color: 'white',
                     border: '2px solid black',
                     borderRadius: '8px',
@@ -1347,7 +1347,7 @@ export default function SimpleWelcome() {
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
             onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
-              background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
               color: 'white',
               border: '3px solid #FFC30B',
               borderRadius: isMobile ? '16px' : '20px',
@@ -1377,7 +1377,7 @@ export default function SimpleWelcome() {
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
             onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
-              background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
+              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
               color: 'white',
               border: '3px solid #FFC30B',
               borderRadius: isMobile ? '16px' : '20px',
@@ -1407,7 +1407,7 @@ export default function SimpleWelcome() {
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
             onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
-              background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
               color: 'white',
               border: '3px solid #FFC30B',
               borderRadius: isMobile ? '16px' : '20px',
@@ -1446,8 +1446,8 @@ export default function SimpleWelcome() {
               <button
                 onClick={() => { setShowAuthModal(true); soundManager.playClickSound(); }}
                 style={{
-                  background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 100%)',
-                  color: '#000',
+                  background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+                  color: '#fff',
                   border: '2px solid #000',
                   borderRadius: isMobile ? '12px' : '16px',
                   padding: isMobile ? '0.75rem 1rem' : '0.75rem 1.5rem',
@@ -1541,7 +1541,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '0.75rem 1rem' : '0.5rem 1rem',
                     fontSize: isMobile ? '1rem' : '1rem',
-                    backgroundColor: competitionLength === 5 ? '#4CAF50' : '#f0f0f0',
+                    backgroundColor: competitionLength === 5 ? '#6b7280' : '#f0f0f0',
                     color: competitionLength === 5 ? 'white' : '#333',
                     border: '2px solid #333',
                     borderRadius: '8px',
@@ -1557,7 +1557,7 @@ export default function SimpleWelcome() {
                   style={{
                     padding: isMobile ? '0.75rem 1rem' : '0.5rem 1rem',
                     fontSize: isMobile ? '1rem' : '1rem',
-                    backgroundColor: competitionLength === 7 ? '#4CAF50' : '#f0f0f0',
+                    backgroundColor: competitionLength === 7 ? '#6b7280' : '#f0f0f0',
                     color: competitionLength === 7 ? 'white' : '#333',
                     border: '2px solid #333',
                     borderRadius: '8px',
@@ -1651,7 +1651,7 @@ export default function SimpleWelcome() {
                 style={{
                   padding: isMobile ? '1rem 1.25rem' : '0.75rem 1.5rem',
                   fontSize: isMobile ? '1.05rem' : '1rem',
-                  backgroundColor: '#4CAF50',
+                  backgroundColor: '#6b7280',
                   color: 'white',
                   border: '2px solid black',
                   borderRadius: '8px',
@@ -1755,7 +1755,7 @@ export default function SimpleWelcome() {
                 style={{
                   padding: isMobile ? '0.75rem 1rem' : '0.6rem 1.25rem',
                   fontSize: isMobile ? '0.95rem' : '0.9em',
-                  backgroundColor: '#4CAF50',
+                  backgroundColor: '#6b7280',
                   color: 'white',
                   border: '2px solid black',
                   borderRadius: '8px',
@@ -1781,7 +1781,7 @@ export default function SimpleWelcome() {
                 style={{
                   padding: isMobile ? '0.75rem 1rem' : '0.6rem 1.25rem',
                   fontSize: isMobile ? '0.95rem' : '0.9em',
-                  backgroundColor: '#FF9800',
+                  backgroundColor: '#6b7280',
                   color: 'white',
                   border: '2px solid black',
                   borderRadius: '8px',
@@ -1807,7 +1807,7 @@ export default function SimpleWelcome() {
                 style={{
                   padding: isMobile ? '0.75rem 1rem' : '0.6rem 1.25rem',
                   fontSize: isMobile ? '0.95rem' : '0.9em',
-                  backgroundColor: '#F44336',
+                  backgroundColor: '#6b7280',
                   color: 'white',
                   border: '2px solid black',
                   borderRadius: '8px',

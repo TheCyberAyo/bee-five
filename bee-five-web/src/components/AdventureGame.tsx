@@ -858,15 +858,35 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
   ]);
 
 
-  // Easy AI for first 100 games: random move (occasionally blocks wins)
+  // Easy AI: take wins, always block wins, block 3-in-a-row 50% of the time, else random
   const getEasyAIMove = (availableCells: {row: number, col: number}[]) => {
+    // Priority 1: Take winning move if available
+    for (let cell of availableCells) {
+      const testBoard = gameState.board.map(row => [...row]);
+      testBoard[cell.row][cell.col] = 2;
+      if (checkWinCondition(testBoard, cell.row, cell.col, 2)) {
+        return cell;
+      }
+    }
+    // Priority 2: Block if human can win immediately (always)
     for (let cell of availableCells) {
       const testBoard = gameState.board.map(row => [...row]);
       testBoard[cell.row][cell.col] = 1;
       if (checkWinCondition(testBoard, cell.row, cell.col, 1)) {
-        return cell; // Block immediate win
+        return cell;
       }
     }
+    // Priority 3: Block 3-in-a-row threats (50% of the time)
+    if (Math.random() > 0.5) {
+      for (let cell of availableCells) {
+        const testBoard = gameState.board.map(row => [...row]);
+        testBoard[cell.row][cell.col] = 1;
+        if (checkThreeInARow(testBoard, cell.row, cell.col, 1)) {
+          return cell;
+        }
+      }
+    }
+    // Priority 4: Random move
     return availableCells[Math.floor(Math.random() * availableCells.length)];
   };
 

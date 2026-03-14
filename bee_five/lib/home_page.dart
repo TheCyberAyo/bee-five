@@ -1143,7 +1143,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Play with a Friend',
                   iconImagePath: 'assets/homeImagery/play-with-friend.png',
-                  color: Colors.green,
+                  color: const Color(0xFF6b7280),
                   onPressed: () {
                     setState(() => gameMode = GameMode.localMultiplayer);
                   },
@@ -1153,7 +1153,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Classic Mode',
                   iconImagePath: 'assets/homeImagery/classic-mode.png',
-                  color: Colors.blue,
+                  color: const Color(0xFF6b7280),
                   onPressed: () {
                     setState(() {
                       isClassicStreakMode = true;
@@ -1170,7 +1170,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
                       : 'Daily Challenge',
                   icon: '🎯',
-                  color: const Color(0xFF6A1B9A),
+                  color: const Color(0xFF6b7280),
                   onPressed: _onDailyChallengePressed,
                 ),
                 const SizedBox(height: 12),
@@ -1178,7 +1178,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Gain XPs',
                   iconImagePath: 'assets/homeImagery/buy_icon.png',
-                  color: Colors.orange,
+                  color: const Color(0xFF6b7280),
                   onPressed: _showGainXPsModal,
                 ),
                 const SizedBox(height: 12),
@@ -1186,7 +1186,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Bee-Five Tour',
                   icon: '📖',
-                  color: const Color(0xFF1976D2),
+                  color: const Color(0xFF6b7280),
                   onPressed: _showBeeFiveTourModal,
                 ),
               ],
@@ -1213,7 +1213,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     gradient: const LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
+                      colors: [Color(0xFF6b7280), Color(0xFF4b5563)],
                     ),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
