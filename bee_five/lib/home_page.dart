@@ -1157,7 +1157,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   onPressed: () {
                     setState(() {
                       isClassicStreakMode = true;
-                      aiDifficulty = 'hard';
+                      aiDifficulty = 'medium';
                       aiTimer = 0;
                       gameMode = GameMode.aiGame;
                     });

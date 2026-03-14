@@ -56,7 +56,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   void initState() {
     super.initState();
     if (widget.isClassicStreakMode) {
-      aiDifficulty = 'hard';
+      aiDifficulty = 'medium';
       timeLeft = 0;
       _loadBestStreak();
       _startSessionTimer();
