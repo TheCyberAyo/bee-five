@@ -363,6 +363,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   double mapScrollY = 0;
   final ScrollController mapScrollController = ScrollController();
   final TextEditingController _talkToUsController = TextEditingController();
+  final GlobalKey _connectTalkToUsKey = GlobalKey();
+  final FocusNode _connectTalkToUsFocus = FocusNode();
   int? _headerXp;
   bool _dailyChallengePlayedToday = false;
   bool? _dailyChallengeWon;
@@ -410,6 +412,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _scheduleScrollToCurrentLevel();
     });
+    _connectTalkToUsFocus.addListener(_onConnectTalkToUsFocusChange);
     // Initialize bee animations
     bee1Controller = AnimationController(
       duration: const Duration(seconds: 12),
@@ -440,8 +443,32 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
   }
 
+  void _onConnectTalkToUsFocusChange() {
+    if (!_connectTalkToUsFocus.hasFocus) return;
+    void scrollFieldIntoView() {
+      if (!mounted) return;
+      final ctx = _connectTalkToUsKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.1,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      scrollFieldIntoView();
+      // Keyboard often resizes after the first frame; scroll again so the field stays visible.
+      Future.delayed(const Duration(milliseconds: 350), scrollFieldIntoView);
+    });
+  }
+
   @override
   void dispose() {
+    _connectTalkToUsFocus.removeListener(_onConnectTalkToUsFocusChange);
+    _connectTalkToUsFocus.dispose();
     _talkToUsController.dispose();
     bee1Controller.dispose();
     bee2Controller.dispose();
@@ -2555,7 +2582,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
 
     if (gameMode == GameMode.connect) {
+      final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
       return Scaffold(
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(
           title: Image.asset(
             'assets/BEE-FIVE.png',
@@ -2579,118 +2608,128 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 12, bottom: 8),
-                child: Text(
-                  'Connect with us',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _connectTile(imagePath: 'assets/BEE-FIVE.png', link: 'https://www.beefiveweb.com')),
-                        const SizedBox(width: 16),
-                        Expanded(child: _connectTile(imagePath: 'assets/socials/instagram.png', link: 'https://www.instagram.com/beefive1.01?igsh=ZjhnbjV4ZW1sYTlx&utm_source=qr')),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Spacer(flex: 1),
-                        Expanded(
-                          flex: 2,
-                          child: _connectTile(imagePath: 'assets/socials/tiktok.png', link: 'https://www.tiktok.com/@beefive1.1?_r=1&_t=ZS-94N1ujIm1AH'),
-                        ),
-                        const Spacer(flex: 1),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(bottom: keyboardInset + 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Talk To Us!',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Give us a compliment, suggest improvements... We value your input.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
-                          height: 1.3,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(color: Colors.black, width: 2),
-                            borderRadius: BorderRadius.circular(8),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12, bottom: 8),
+                        child: Text(
+                          'Connect with us',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          alignment: Alignment.topLeft,
-                          child: TextField(
-                            controller: _talkToUsController,
-                            expands: true,
-                            maxLines: null,
-                            minLines: null,
-                            textAlignVertical: TextAlignVertical.top,
-                            keyboardType: TextInputType.multiline,
-                            inputFormatters: [_WordLimitInputFormatter(100)],
-                            decoration: const InputDecoration(
-                              hintText: 'Your message (max 100 words)',
-                              border: InputBorder.none,
-                              isCollapsed: true,
-                              contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: _connectTile(imagePath: 'assets/BEE-FIVE.png', link: 'https://www.beefiveweb.com')),
+                                const SizedBox(width: 16),
+                                Expanded(child: _connectTile(imagePath: 'assets/socials/instagram.png', link: 'https://www.instagram.com/beefive1.01?igsh=ZjhnbjV4ZW1sYTlx&utm_source=qr')),
+                              ],
                             ),
-                            style: const TextStyle(fontSize: 15, color: Colors.black87),
-                          ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Spacer(flex: 1),
+                                Expanded(
+                                  flex: 2,
+                                  child: _connectTile(imagePath: 'assets/socials/tiktok.png', link: 'https://www.tiktok.com/@beefive1.1?_r=1&_t=ZS-94N1ujIm1AH'),
+                                ),
+                                const Spacer(flex: 1),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            final body = _talkToUsController.text.trim();
-                            if (body.isEmpty) return;
-                            final uri = Uri.parse(
-                              'mailto:admin@mindgrind.co.za?body=${Uri.encodeComponent(body)}',
-                            );
-                            try {
-                              await launchUrl(uri, mode: LaunchMode.externalApplication);
-                            } catch (_) {}
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Talk To Us!',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
                             ),
-                          ),
-                          child: const Text('Send to admin@mindgrind.co.za'),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Give us a compliment, suggest improvements... We value your input.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.black87,
+                                height: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Container(
+                              key: _connectTalkToUsKey,
+                              height: math.max(200.0, MediaQuery.sizeOf(context).height * 0.22),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: Colors.black, width: 2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              alignment: Alignment.topLeft,
+                              child: TextField(
+                                controller: _talkToUsController,
+                                focusNode: _connectTalkToUsFocus,
+                                expands: true,
+                                maxLines: null,
+                                minLines: null,
+                                textAlignVertical: TextAlignVertical.top,
+                                keyboardType: TextInputType.multiline,
+                                inputFormatters: [_WordLimitInputFormatter(100)],
+                                decoration: const InputDecoration(
+                                  hintText: 'Your message (max 100 words)',
+                                  border: InputBorder.none,
+                                  isCollapsed: true,
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                                style: const TextStyle(fontSize: 15, color: Colors.black87),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  final body = _talkToUsController.text.trim();
+                                  if (body.isEmpty) return;
+                                  final uri = Uri.parse(
+                                    'mailto:admin@mindgrind.co.za?body=${Uri.encodeComponent(body)}',
+                                  );
+                                  try {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  } catch (_) {}
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text('Send to admin@mindgrind.co.za'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
