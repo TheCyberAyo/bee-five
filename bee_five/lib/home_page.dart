@@ -1229,7 +1229,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   label: _dailyChallengePlayedToday
                       ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
                       : 'Daily Challenge',
-                  iconImagePath: 'assets/homeImagery/home.png',
+                  iconImagePath: 'assets/homeImagery/daily_challenge_icon.png',
                   color: primaryYellow,
                   onPressed: _onDailyChallengePressed,
                 ),
@@ -1245,7 +1245,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 // Bee-Five Tour
                 _sideMenuButton(
                   label: 'Bee-Five Tour',
-                  icon: '📖',
+                  iconImagePath: 'assets/homeImagery/tour_icon.png',
                   color: primaryYellow,
                   onPressed: _showBeeFiveTourModal,
                 ),
