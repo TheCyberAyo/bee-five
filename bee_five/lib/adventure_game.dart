@@ -18,6 +18,8 @@ class _NoScrollbarBehavior extends ScrollBehavior {
 }
 
 const Color primaryYellow = Color(0xFFFFC30B);
+/// Orange for whose turn it is (human vs AI).
+const Color _turnAnnouncementOrange = Color(0xFFFF9800);
 /// Classic board style (matches reference): sky blue grid, white lines, black border
 const Color classicBoardGridColor = Color(0xFF87CEEB);
 const Color classicBoardBackground = Color(0xFF424242);
@@ -1009,12 +1011,16 @@ class _AdventureGameState extends State<AdventureGame> {
   
   void _showGameOverPopup() {
     String title;
+    Color titleColor;
     if (winner == 1) {
       title = 'You Won!';
+      titleColor = Colors.green;
     } else if (winner == 2) {
       title = 'You Lost';
+      titleColor = Colors.black;
     } else {
       title = 'Draw!';
+      titleColor = Colors.black;
     }
     
     showDialog(
@@ -1044,10 +1050,10 @@ class _AdventureGameState extends State<AdventureGame> {
                 // Title
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                    color: titleColor,
                     decoration: TextDecoration.none,
                   ),
                   textAlign: TextAlign.center,
@@ -1086,7 +1092,7 @@ class _AdventureGameState extends State<AdventureGame> {
                         if (isMatchComplete) ...[
                           const SizedBox(height: 8),
                           Text(
-                            playerWins > aiWins ? 'Match Won! 🎉' : 'Match Lost',
+                            playerWins > aiWins ? 'Match won!' : 'Match lost',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -1236,66 +1242,126 @@ class _AdventureGameState extends State<AdventureGame> {
       (screenSize.height - 300) / boardSize,
     );
 
+    void showExitDialog() {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Exit Game?'),
+          content: const Text('Are you sure you want to exit? Your progress will be saved.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _saveAndBackToMenu();
+              },
+              child: const Text('Exit'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: classicBoardBackground,
       appBar: AppBar(
-        title: Text('Adventure Game - Level $currentGame'),
+        automaticallyImplyLeading: false,
+        toolbarHeight: 56,
+        titleSpacing: 0,
         backgroundColor: Colors.black,
         foregroundColor: primaryYellow,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(2),
           child: Container(color: primaryYellow),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  'assets/homeImagery/xp_gem.png',
-                  width: 28,
-                  height: 28,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '$_headerXp',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: primaryYellow,
+        title: Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: showExitDialog,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.asset(
+                            'assets/BEE-FIVE.png',
+                            height: 32,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const SizedBox(width: 32, height: 32),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Adventure',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: primaryYellow,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ],
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Exit Game?'),
-                content: const Text('Are you sure you want to exit? Your progress will be saved.'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _saveAndBackToMenu();
-                    },
-                    child: const Text('Exit'),
-                  ),
-                ],
               ),
-            );
-          },
+            ),
+            Expanded(
+              flex: 3,
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Level $currentGame',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 5,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/homeImagery/xp_gem.png',
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_headerXp',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: primaryYellow,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       body: ScrollConfiguration(
@@ -1325,8 +1391,15 @@ class _AdventureGameState extends State<AdventureGame> {
                   else ...[
                     Text(
                       gameStatus,
-                      style: const TextStyle(
-                        color: primaryYellow,
+                      style: TextStyle(
+                        color: (gameStatus == 'Your turn' ||
+                                gameStatus == 'AI thinking...')
+                            ? _turnAnnouncementOrange
+                            : (winner == 1 &&
+                                    (gameStatus == 'You won!' ||
+                                        gameStatus.startsWith('Match won')))
+                                ? Colors.green
+                                : primaryYellow,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1339,17 +1412,6 @@ class _AdventureGameState extends State<AdventureGame> {
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    if (gameRules != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '${gameRules!.icon} ${gameRules!.description}',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
                           ),
                         ),
                       ),
@@ -1538,7 +1600,21 @@ class _AdventureGameState extends State<AdventureGame> {
                             side: const BorderSide(color: Colors.black, width: 2),
                           ),
                         ),
-                        child: const Text('Home'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Image.asset(
+                              'assets/homeImagery/home.png',
+                              width: 22,
+                              height: 22,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) => const Icon(Icons.home, size: 22),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('Home'),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -1565,7 +1641,7 @@ class _AdventureGameState extends State<AdventureGame> {
                               width: 22,
                               height: 22,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                              errorBuilder: (_, _, _) => const Icon(Icons.refresh, size: 22),
                             ),
                             const SizedBox(width: 8),
                             const Text('Restart'),

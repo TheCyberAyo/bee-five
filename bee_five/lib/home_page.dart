@@ -982,7 +982,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             width: flowerSize,
                             height: flowerSize,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
                           ),
                         );
                       }).whereType<Widget>(),
@@ -1010,7 +1010,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             width: flowerSize,
                             height: flowerSize,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
                           ),
                         );
                       }).whereType<Widget>(),
@@ -1254,7 +1254,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
         
-        // Continue Level button (orange) — underneath the map, above footer
+        // Continue Level button (green) — underneath the map, above footer
         Positioned(
           bottom: 140,
           left: 0,
@@ -1273,7 +1273,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     gradient: const LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xFF6b7280), Color(0xFF4b5563)],
+                      colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
                     ),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
