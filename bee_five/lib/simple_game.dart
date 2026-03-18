@@ -292,13 +292,27 @@ class _SimpleGameState extends State<SimpleGame> {
                             side: const BorderSide(color: Colors.black, width: 2),
                           ),
                         ),
-                        child: const Text(
-                          '🔄 Restart',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image.asset(
+                              'assets/homeImagery/restart_icon.png',
+                              width: 22,
+                              height: 22,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Restart',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -333,19 +347,7 @@ class _SimpleGameState extends State<SimpleGame> {
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    winMessage.contains('Black')
-                        ? 'Sweet victory! 🍯'
-                        : winMessage.contains('Yellow')
-                            ? 'The hive strikes back! 🍯'
-                            : 'Great game! 🍯',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF333333),
+                      decoration: TextDecoration.none,
                     ),
                     textAlign: TextAlign.center,
                   ),

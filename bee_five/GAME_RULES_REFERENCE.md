@@ -25,7 +25,7 @@ This document lists which games have which special rules applied. All games are 
 - Examples: 404, 414, 424, 434, 444, 454, 464, 474, 484, 494, 504, 514, etc.
 - Effect: Every 3 human moves, 2 blocked cells are removed
 
-### 5. Shifting Blocks 🔄
+### 5. Shifting Blocks
 **Games:**
 - Ending in 7, from game 250+: 257, 267, 277, 287, 297, 307, 317, 327, 337, 347, 357, 367, 377, 387, 397, 407, etc.
   - Effect: Blocks shift every 2 moves
@@ -62,14 +62,14 @@ This document lists which games have which special rules applied. All games are 
 - Examples: 50 (match 3), 100 (match 3), 150 (match 3), 200 (match 3), 250 (match 3), etc.
 - Effect: Every 5 total moves, board pieces are rearranged randomly
 
-### 11. Piece Swapping (Opponent Pairs) 🔄
+### 11. Piece Swapping (Opponent Pairs)
 **Games:**
 - Multiples of 50, Match 4: 50 (match 4), 100 (match 4), 150 (match 4), 200 (match 4), 250 (match 4), etc.
   - Effect: Every 5 total moves, swap opponent piece pairs
 - Multiples of 10 (excluding 50), Match 2/3, from game 30+: 30 (match 2/3), 40 (match 2/3), 60 (match 2/3), 70 (match 2/3), 80 (match 2/3), 90 (match 2/3), 110 (match 2/3), 120 (match 2/3), 130 (match 2/3), 140 (match 2/3), 160 (match 2/3), 170 (match 2/3), 180 (match 2/3), 190 (match 2/3), etc.
   - Effect: Every 9 moves (from 30), every 7 moves (from 330), every 5 moves (from 730)
 
-### 12. Piece Swapping (All Pieces) 🔄
+### 12. Piece Swapping (All Pieces)
 **Games:**
 - Multiples of 10 (excluding 50), Match 1, from game 60+: 60 (match 1), 70 (match 1), 80 (match 1), 90 (match 1), 110 (match 1), 120 (match 1), 130 (match 1), 140 (match 1), 160 (match 1), 170 (match 1), 180 (match 1), 190 (match 1), 210 (match 1), 220 (match 1), 230 (match 1), 240 (match 1), 260 (match 1), 270 (match 1), 280 (match 1), 290 (match 1), 310 (match 1), 320 (match 1), 330 (match 1), 340 (match 1), 360 (match 1), 370 (match 1), 380 (match 1), 390 (match 1), 410 (match 1), 420 (match 1), 430 (match 1), 440 (match 1), 460 (match 1), 470 (match 1), 480 (match 1), 490 (match 1), 510 (match 1), 520 (match 1), 530 (match 1), 540 (match 1), 560 (match 1), 570 (match 1), 580 (match 1), 590 (match 1), 610 (match 1), 620 (match 1), 630 (match 1), 640 (match 1), 660 (match 1), 670 (match 1), 680 (match 1), 690 (match 1), 710 (match 1), 720 (match 1), 730 (match 1), 740 (match 1), 760 (match 1), 770 (match 1), 780 (match 1), 790 (match 1), 810 (match 1), 820 (match 1), 830 (match 1), 840 (match 1), 860 (match 1), 870 (match 1), 880 (match 1), 890 (match 1), 910 (match 1), 920 (match 1), 930 (match 1), 940 (match 1), 960 (match 1), 970 (match 1), 980 (match 1), 990 (match 1), 1010 (match 1), 1020 (match 1), 1030 (match 1), 1040 (match 1), 1060 (match 1), 1070 (match 1), 1080 (match 1), 1090 (match 1), 1110 (match 1), 1120 (match 1), 1130 (match 1), 1140 (match 1), 1160 (match 1), 1170 (match 1), 1180 (match 1), 1190 (match 1), 1210 (match 1), 1220 (match 1), 1230 (match 1), 1240 (match 1), 1260 (match 1), 1270 (match 1), 1280 (match 1), 1290 (match 1), 1310 (match 1), 1320 (match 1), 1330 (match 1), 1340 (match 1), 1360 (match 1), 1370 (match 1), 1380 (match 1), 1390 (match 1), 1410 (match 1), 1420 (match 1), 1430 (match 1), 1440 (match 1), 1460 (match 1), 1470 (match 1), 1480 (match 1), 1490 (match 1), 1510 (match 1), 1520 (match 1), 1530 (match 1), 1540 (match 1), 1560 (match 1), 1570 (match 1), 1580 (match 1), 1590 (match 1), 1610 (match 1), 1620 (match 1), 1630 (match 1), 1640 (match 1), 1660 (match 1), 1670 (match 1), 1680 (match 1), 1690 (match 1), 1710 (match 1), 1720 (match 1), 1730 (match 1), 1740 (match 1), 1760 (match 1), 1770 (match 1), 1780 (match 1), 1790 (match 1), 1810 (match 1), 1820 (match 1), 1830 (match 1), 1840 (match 1), 1860 (match 1), 1870 (match 1), 1880 (match 1), 1890 (match 1), 1910 (match 1), 1920 (match 1), 1930 (match 1), 1940 (match 1), 1960 (match 1), 1970 (match 1), 1980 (match 1), 1990 (match 1)
   - Effect: Every 11 moves, swap all pieces

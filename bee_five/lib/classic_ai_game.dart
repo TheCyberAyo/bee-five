@@ -879,13 +879,27 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                               side: const BorderSide(color: Colors.black, width: 2),
                             ),
                           ),
-                          child: const Text(
-                            '🔄 Restart',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/homeImagery/restart_icon.png',
+                                width: 22,
+                                height: 22,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Restart',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -920,6 +934,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
+                      decoration: TextDecoration.none,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -934,20 +949,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  if (!classicGameOver)
-                    Text(
-                      winMessage.contains('You win')
-                          ? 'Sweet victory! 🍯'
-                          : winMessage.contains('AI wins')
-                              ? 'The AI strikes back! 🍯'
-                              : 'Great game! 🍯',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Color(0xFF333333),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
                   const SizedBox(height: 30),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

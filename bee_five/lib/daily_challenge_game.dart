@@ -647,10 +647,8 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
                     color: Colors.black,
                     border: Border(top: BorderSide(color: primaryYellow, width: 2)),
                   ),
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     onPressed: () => widget.onBackToMenu(),
-                    icon: const Icon(Icons.home, color: Colors.black, size: 20),
-                    label: const Text('Home', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryYellow,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -658,6 +656,20 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
                         borderRadius: BorderRadius.circular(8),
                         side: const BorderSide(color: Colors.black, width: 2),
                       ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'assets/homeImagery/home.png',
+                          width: 20,
+                          height: 20,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Icon(Icons.home, color: Colors.black, size: 20),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Home', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+                      ],
                     ),
                   ),
                 ),
@@ -682,7 +694,12 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
                   children: [
                     Text(
                       winMessage,
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                        decoration: TextDecoration.none,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     if (_xpEarned > 0) ...[

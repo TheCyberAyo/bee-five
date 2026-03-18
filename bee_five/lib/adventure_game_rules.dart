@@ -333,7 +333,7 @@ GameRules getGameRules(int gameNumber, [int? currentMatch]) {
   } else if (hasDisappearingBlocks) {
     icon = '💨';
   } else if (hasShiftingBlocks) {
-    icon = '🔄';
+    icon = '↔️';
   } else if (hasDisappearingPieces) {
     icon = '✨';
   } else if (blockedCells) {

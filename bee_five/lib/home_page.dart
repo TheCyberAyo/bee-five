@@ -49,7 +49,7 @@ final List<AdventureStage> adventureStages = [
   AdventureStage(
     name: "Chamber of Royal Nectar",
     games: 401,
-    emoji: '🍯',
+    emoji: '🍬',
     color: const Color(0xFFFFD700),
     description: "A mystical hall where power and destiny are forged.",
   ),
@@ -364,7 +364,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final ScrollController mapScrollController = ScrollController();
   final TextEditingController _talkToUsController = TextEditingController();
   int? _headerXp;
-  int _appRating = 0;
   bool _dailyChallengePlayedToday = false;
   bool? _dailyChallengeWon;
 
@@ -380,8 +379,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (!mounted) return;
       final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
       if (saved != soundEnabled) setState(() => soundEnabled = saved);
-      final savedRating = prefs.getInt('bee_five_app_rating');
-      if (savedRating != null && savedRating != _appRating) setState(() => _appRating = savedRating);
       final savedLevel = prefs.getInt('adventure_current_level');
       if (savedLevel != null && savedLevel != currentGame) {
         setState(() {
@@ -961,7 +958,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           errorBuilder: (_, _, _) => const SizedBox.shrink(),
                         ),
                       ),
-                      // 6) Images on the LEFT side of the hexagonal path
+                      // 6) Flower images on the LEFT side of the hexagonal path
                       ...List.generate(40, (i) {
                         final gameIndex = visibleRange['startGame']! + (i * 2);
                         if (gameIndex > visibleRange['endGame']!) return null;
@@ -969,17 +966,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         final pathX = screenSize.width * (position['left']! / 100);
                         final leftX = pathX - 42 - (i % 3) * 8;
                         if (leftX < -20) return null;
-                        final leftDecor = ['🌾', '🌸', '🌺', '🌼', '🌻', '🌷'];
+                        const leftFlowerPaths = [
+                          'assets/mapImagery/borage.png',
+                          'assets/mapImagery/clover.png',
+                          'assets/mapImagery/echinacea.png',
+                          'assets/mapImagery/lavender.png',
+                          'assets/mapImagery/sunflower.png',
+                        ];
+                        const flowerSize = 60.0; // ~3x emoji size (18–22)
                         return Positioned(
                           left: leftX,
                           top: position['top']! - 12 + (i % 5) * 4,
-                          child: Text(
-                            leftDecor[i % leftDecor.length],
-                            style: TextStyle(fontSize: 18 + (i % 3) * 2, color: Colors.black.withValues(alpha: 0.75)),
+                          child: Image.asset(
+                            leftFlowerPaths[i % leftFlowerPaths.length],
+                            width: flowerSize,
+                            height: flowerSize,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                           ),
                         );
                       }).whereType<Widget>(),
-                      // 7) Images on the RIGHT side of the hexagonal path
+                      // 7) Flower images on the RIGHT side of the hexagonal path
                       ...List.generate(40, (i) {
                         final gameIndex = visibleRange['startGame']! + (i * 2);
                         if (gameIndex > visibleRange['endGame']!) return null;
@@ -987,13 +994,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         final pathX = screenSize.width * (position['left']! / 100);
                         final rightX = pathX + 42 + (i % 3) * 8;
                         if (rightX > screenSize.width - 10) return null;
-                        final rightDecor = ['🌾', '🌼', '🌷', '🌻', '🌸', '🌺', '🪷'];
+                        const rightFlowerPaths = [
+                          'assets/mapImagery/borage.png',
+                          'assets/mapImagery/clover.png',
+                          'assets/mapImagery/echinacea.png',
+                          'assets/mapImagery/lavender.png',
+                          'assets/mapImagery/sunflower.png',
+                        ];
+                        const flowerSize = 60.0; // ~3x emoji size (18–22)
                         return Positioned(
                           left: rightX,
                           top: position['top']! - 18 - (i % 4) * 3,
-                          child: Text(
-                            rightDecor[i % rightDecor.length],
-                            style: TextStyle(fontSize: 18 + (i % 3) * 2, color: Colors.black.withValues(alpha: 0.75)),
+                          child: Image.asset(
+                            rightFlowerPaths[i % rightFlowerPaths.length],
+                            width: flowerSize,
+                            height: flowerSize,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                           ),
                         );
                       }).whereType<Widget>(),
@@ -1212,7 +1229,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   label: _dailyChallengePlayedToday
                       ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
                       : 'Daily Challenge',
-                  icon: '🎯',
+                  iconImagePath: 'assets/homeImagery/home.png',
                   color: primaryYellow,
                   onPressed: _onDailyChallengePressed,
                 ),
@@ -1426,7 +1443,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: Text(
               label,
               style: const TextStyle(
-                color: Colors.white,
+                color: Colors.black,
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
@@ -2560,94 +2577,61 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         body: Container(
           color: primaryYellow,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Padding(
-                padding: EdgeInsets.only(top: 24, bottom: 12),
+                padding: EdgeInsets.only(top: 12, bottom: 8),
                 child: Text(
                   'Connect with us',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
-                    const Text(
-                      'Rate the App',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (index) {
-                        final star = index + 1;
-                        final filled = _appRating >= star;
-                        return GestureDetector(
-                          onTap: () async {
-                            setState(() => _appRating = star);
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setInt('bee_five_app_rating', star);
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Icon(
-                              filled ? Icons.star : Icons.star_border,
-                              size: 40,
-                              color: filled ? primaryYellow : Colors.black54,
-                            ),
-                          ),
-                        );
-                      }),
+                      children: [
+                        Expanded(child: _connectTile(imagePath: 'assets/BEE-FIVE.png', link: 'https://www.beefiveweb.com')),
+                        const SizedBox(width: 16),
+                        Expanded(child: _connectTile(imagePath: 'assets/socials/instagram.png', link: 'https://www.instagram.com/beefive1.01?igsh=ZjhnbjV4ZW1sYTlx&utm_source=qr')),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Spacer(flex: 1),
+                        Expanded(
+                          flex: 2,
+                          child: _connectTile(imagePath: 'assets/socials/tiktok.png', link: 'https://www.tiktok.com/@beefive1.1?_r=1&_t=ZS-94N1ujIm1AH'),
+                        ),
+                        const Spacer(flex: 1),
+                      ],
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(child: _connectTile(imagePath: 'assets/BEE-FIVE.png', link: 'https://www.beefiveweb.com')),
-                          const SizedBox(width: 20),
-                          Expanded(child: _connectTile(imagePath: 'assets/socials/instagram.png', link: 'https://www.instagram.com/beefive1.01?igsh=ZjhnbjV4ZW1sYTlx&utm_source=qr')),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(child: _connectTile(imagePath: 'assets/socials/tiktok.png', link: 'https://www.tiktok.com/@beefive1.1?_r=1&_t=ZS-94N1ujIm1AH')),
-                          const SizedBox(width: 20),
-                          Expanded(child: _connectTile(imagePath: 'assets/socials/linkedIn.png', link: null)),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(child: _connectTile(imagePath: 'assets/socials/youtube.png', link: null)),
-                          const SizedBox(width: 20),
-                          Expanded(child: _connectTile(imagePath: 'assets/socials/facebook.png', link: null)),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
                       const Text(
                         'Talk To Us!',
                         style: TextStyle(
-                          fontSize: 22,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Colors.black,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       const Text(
                         'Give us a compliment, suggest improvements... We value your input.',
                         style: TextStyle(
@@ -2655,30 +2639,36 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           color: Colors.black87,
                           height: 1.3,
                         ),
-                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(color: Colors.black, width: 2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        child: TextField(
-                          controller: _talkToUsController,
-                          maxLines: 4,
-                          inputFormatters: [_WordLimitInputFormatter(100)],
-                          decoration: const InputDecoration(
-                            hintText: 'Your message (max 100 words)',
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.black, width: 2),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          style: const TextStyle(fontSize: 15, color: Colors.black87),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          alignment: Alignment.topLeft,
+                          child: TextField(
+                            controller: _talkToUsController,
+                            expands: true,
+                            maxLines: null,
+                            minLines: null,
+                            textAlignVertical: TextAlignVertical.top,
+                            keyboardType: TextInputType.multiline,
+                            inputFormatters: [_WordLimitInputFormatter(100)],
+                            decoration: const InputDecoration(
+                              hintText: 'Your message (max 100 words)',
+                              border: InputBorder.none,
+                              isCollapsed: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            style: const TextStyle(fontSize: 15, color: Colors.black87),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -2695,7 +2685,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.black,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -2703,7 +2693,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           child: const Text('Send to admin@mindgrind.co.za'),
                         ),
                       ),
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
