@@ -218,9 +218,11 @@ class HexagonLevelMarker extends StatelessWidget {
     } else {
       fillColor = const Color(0xFFE53935); // red (levels ahead / locked)
     }
-    return GestureDetector(
-      onTap: isLocked ? null : onTap,
-      child: Stack(
+    return IgnorePointer(
+      ignoring: isLocked,
+      child: GestureDetector(
+        onTap: isLocked ? null : onTap,
+        child: Stack(
         clipBehavior: Clip.none,
         children: [
           CustomPaint(
@@ -233,17 +235,15 @@ class HexagonLevelMarker extends StatelessWidget {
           ),
           Positioned.fill(
             child: Center(
-              child: isLocked
-                  ? const Text('🔒', style: TextStyle(fontSize: 18))
-                  : Text(
-                      '$levelNumber',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        shadows: [Shadow(color: Colors.black45, offset: Offset(1, 1), blurRadius: 1)],
-                      ),
-                    ),
+              child: Text(
+                '$levelNumber',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  shadows: [Shadow(color: Colors.black45, offset: Offset(1, 1), blurRadius: 1)],
+                ),
+              ),
             ),
           ),
           if (isCurrent && !isLocked)
@@ -257,6 +257,7 @@ class HexagonLevelMarker extends StatelessWidget {
             ),
         ],
       ),
+    ),
     );
   }
 }
@@ -357,7 +358,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   int aiTimer = 15;
   bool isClassicStreakMode = false;
   int currentGame = 1;
-  int highestUnlockedGame = totalGames; // All games unlocked for testing
+  int highestUnlockedGame = 1; // Only levels up to current can be tapped
   List<int> gamesCompleted = [];
   double mapScrollY = 0;
   final ScrollController mapScrollController = ScrollController();
@@ -385,10 +386,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (savedLevel != null && savedLevel != currentGame) {
         setState(() {
           currentGame = savedLevel;
+          highestUnlockedGame = savedLevel;
           gamesCompleted = savedLevel > 1 ? List.generate(savedLevel - 1, (i) => i + 1) : [];
         });
-      } else if (savedLevel != null && gamesCompleted.isEmpty && savedLevel > 1) {
-        setState(() => gamesCompleted = List.generate(savedLevel - 1, (i) => i + 1));
+      } else if (savedLevel != null) {
+        if (savedLevel > highestUnlockedGame) {
+          setState(() => highestUnlockedGame = savedLevel);
+        }
+        if (gamesCompleted.isEmpty && savedLevel > 1) {
+          setState(() => gamesCompleted = List.generate(savedLevel - 1, (i) => i + 1));
+        }
       }
     });
     getDailyChallengeStatus().then((status) {
@@ -404,16 +411,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      void scrollToLevel1() {
-        if (!mounted || !mapScrollController.hasClients) return;
-        final pos = mapScrollController.position;
-        if (pos.hasContentDimensions && pos.maxScrollExtent > 0) {
-          mapScrollController.jumpTo(pos.maxScrollExtent);
-        }
-      }
-      scrollToLevel1();
-      Future.delayed(const Duration(milliseconds: 100), scrollToLevel1);
+      if (mounted) _scheduleScrollToCurrentLevel();
     });
     // Initialize bee animations
     bee1Controller = AnimationController(
@@ -616,6 +614,40 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     };
   }
 
+  /// Scrolls the map so the current level is visible (centered when possible).
+  void _scrollMapToCurrentLevel() {
+    if (!mounted || !mapScrollController.hasClients) return;
+    final position = mapScrollController.position;
+    if (!position.hasContentDimensions) return;
+    final screenSize = MediaQuery.sizeOf(context);
+    final isMobile = screenSize.width <= 768;
+    final spacing = isMobile ? 60.0 : 80.0;
+    final totalHeight = totalGames * spacing;
+    final levelY = totalHeight - (currentGame - 1) * spacing;
+    final viewportHeight = position.viewportDimension;
+    final minOffset = _minMapScrollOffset(screenSize, totalHeight, spacing, viewportHeight).clamp(0.0, position.maxScrollExtent);
+    final targetOffset = (levelY - viewportHeight * 0.4).clamp(minOffset, position.maxScrollExtent);
+    mapScrollController.jumpTo(targetOffset);
+  }
+
+  /// Minimum scroll offset so the user cannot scroll past (beyond) their current level.
+  double _minMapScrollOffset(Size screenSize, double totalHeight, double spacing, double viewportHeight) {
+    final levelY = totalHeight - (currentGame - 1) * spacing;
+    return levelY.clamp(0.0, double.infinity);
+  }
+
+  /// Schedules scroll to current level with retries so the map is visible after returning to menu.
+  void _scheduleScrollToCurrentLevel() {
+    void tryScroll() {
+      if (!mounted) return;
+      _scrollMapToCurrentLevel();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
+    Future.delayed(const Duration(milliseconds: 100), tryScroll);
+    Future.delayed(const Duration(milliseconds: 300), tryScroll);
+    Future.delayed(const Duration(milliseconds: 600), tryScroll);
+  }
+
   /// Vertical margin used to center the map between the two yellow bands.
   (double, double) _mapVerticalMargins(Size screenSize) {
     const topOfSpace = 166.0;   // below header + yellow band (74 + 92)
@@ -795,9 +827,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 NotificationListener<ScrollNotification>(
               onNotification: (notification) {
                 if (notification is ScrollUpdateNotification) {
-                  setState(() {
-                    mapScrollY = mapScrollController.offset;
-                  });
+                  setState(() => mapScrollY = mapScrollController.offset);
+                }
+                if (notification is ScrollEndNotification || notification is ScrollUpdateNotification) {
+                  final pos = mapScrollController.position;
+                  if (pos.hasContentDimensions && pos.viewportDimension > 0) {
+                    final screenSize = MediaQuery.sizeOf(context);
+                    final isMobile = screenSize.width <= 768;
+                    final spacing = isMobile ? 60.0 : 80.0;
+                    final totalHeight = totalGames * spacing;
+                    final minOffset = _minMapScrollOffset(screenSize, totalHeight, spacing, pos.viewportDimension).clamp(0.0, pos.maxScrollExtent);
+                    if (pos.pixels < minOffset) {
+                      mapScrollController.jumpTo(minOffset);
+                    }
+                  }
                 }
                 return false;
               },
@@ -1143,7 +1186,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Play with a Friend',
                   iconImagePath: 'assets/homeImagery/play-with-friend.png',
-                  color: const Color(0xFF6b7280),
+                  color: primaryYellow,
                   onPressed: () {
                     setState(() => gameMode = GameMode.localMultiplayer);
                   },
@@ -1153,7 +1196,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Classic Mode',
                   iconImagePath: 'assets/homeImagery/classic-mode.png',
-                  color: const Color(0xFF6b7280),
+                  color: primaryYellow,
                   onPressed: () {
                     setState(() {
                       isClassicStreakMode = true;
@@ -1170,7 +1213,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
                       : 'Daily Challenge',
                   icon: '🎯',
-                  color: const Color(0xFF6b7280),
+                  color: primaryYellow,
                   onPressed: _onDailyChallengePressed,
                 ),
                 const SizedBox(height: 12),
@@ -1178,7 +1221,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Gain XPs',
                   iconImagePath: 'assets/homeImagery/buy_icon.png',
-                  color: const Color(0xFF6b7280),
+                  color: primaryYellow,
                   onPressed: _showGainXPsModal,
                 ),
                 const SizedBox(height: 12),
@@ -1186,7 +1229,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _sideMenuButton(
                   label: 'Bee-Five Tour',
                   icon: '📖',
-                  color: const Color(0xFF6b7280),
+                  color: primaryYellow,
                   onPressed: _showBeeFiveTourModal,
                 ),
               ],
@@ -2275,6 +2318,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             gameMode = GameMode.menu;
             isClassicStreakMode = false;
           });
+          _scheduleScrollToCurrentLevel();
           getXp().then((xp) {
             if (mounted) {
               setState(() => _headerXp = xp);
@@ -2291,9 +2335,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (gameMode == GameMode.localMultiplayer) {
       return SimpleGame(
         onBackToMenu: () {
-          setState(() {
-            gameMode = GameMode.menu;
-          });
+          setState(() => gameMode = GameMode.menu);
+          _scheduleScrollToCurrentLevel();
         },
         backgroundColor: 'yellow',
       );
@@ -2303,13 +2346,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return AdventureGame(
         onBackToMenu: () {
           setState(() => gameMode = GameMode.menu);
+          _scheduleScrollToCurrentLevel();
           SharedPreferences.getInstance().then((prefs) {
             final level = prefs.getInt('adventure_current_level');
             if (mounted && level != null) {
               setState(() {
                 currentGame = level;
+                highestUnlockedGame = level;
                 gamesCompleted = level > 1 ? List.generate(level - 1, (i) => i + 1) : [];
               });
+              _scheduleScrollToCurrentLevel();
             }
           });
           getXp().then((xp) {
@@ -2326,6 +2372,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return DailyChallengeGame(
         onBackToMenu: () {
           setState(() => gameMode = GameMode.menu);
+          _scheduleScrollToCurrentLevel();
           getXp().then((xp) {
             if (mounted) {
               setState(() => _headerXp = xp);
@@ -2345,7 +2392,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     
     if (gameMode == GameMode.profile) {
       return DashboardPage(
-        onBack: () => setState(() => gameMode = GameMode.menu),
+        onBack: () {
+          setState(() => gameMode = GameMode.menu);
+          _scheduleScrollToCurrentLevel();
+        },
       );
     }
     
@@ -2473,7 +2523,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () => setState(() => gameMode = GameMode.menu)),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', active: true, onTap: () {}),
                     _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
@@ -2676,7 +2726,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () => setState(() => gameMode = GameMode.menu)),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
                     _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', active: true, onTap: () {}),
