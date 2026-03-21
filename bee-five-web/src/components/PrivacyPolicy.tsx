@@ -116,7 +116,7 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
           marginBottom: '2rem',
           textAlign: 'center'
         }}>
-          Last updated: October 2025
+          Last Updated: January 2026
         </p>
 
         {/* Content */}
@@ -126,7 +126,7 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
           lineHeight: '1.8'
         }}>
           <p style={{ marginBottom: '1.5rem' }}>
-            Bee-Five ("we", "our", or "us") operates the Bee-Five game website (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.
+            Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.
           </p>
 
           <h3 style={{
@@ -138,27 +138,20 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
           }}>
             Information We Collect
           </h3>
-          <p style={{ marginBottom: '1.5rem' }}>
-            We may collect non-personal data such as browser type, device, and general usage statistics. If you sign up for multiplayer or an account, we may collect an email address for login purposes.
+          <p style={{ marginBottom: '0.75rem' }}>
+            We may collect the following types of information:
           </p>
-
-          <h3 style={{
-            fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
-            color: '#FFC30B',
-            marginTop: '2rem',
-            marginBottom: '1rem',
-            fontWeight: 'bold'
-          }}>
-            Cookies and Advertising
-          </h3>
-          <p style={{ marginBottom: '1rem' }}>
-            Bee-Five uses cookies to improve gameplay and support advertising through third-party providers such as Google AdSense. Google may use cookies to serve personalized ads based on your prior visits to this or other websites.
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Non-personal data: Device information, operating system, app version, and general usage statistics
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Account information: If you sign up for an account or multiplayer features, we may collect an email address for login and account management purposes
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Game progress: Local game progress and statistics stored on your device
           </p>
           <p style={{ marginBottom: '1.5rem' }}>
-            You can opt out of personalized advertising by visiting{' '}
-            <a href="https://adssettings.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#FFC30B', textDecoration: 'underline' }}>
-              adssettings.google.com
-            </a>.
+            We do not collect sensitive personal information such as payment details, location data, or contact lists.
           </p>
 
           <h3 style={{
@@ -171,7 +164,13 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             Third-Party Services
           </h3>
           <p style={{ marginBottom: '1.5rem' }}>
-            We may use services like Google Analytics or AdSense to measure site usage and display ads. These services may collect and process data under their own privacy policies.
+            Our app may use the following third-party services:
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Supabase: For backend services and data storage (if applicable). See Supabase&apos;s Privacy Policy for details.
+          </p>
+          <p style={{ marginBottom: '1.5rem' }}>
+            These services have their own privacy policies governing the collection and use of your information. We encourage you to review their privacy policies.
           </p>
 
           <h3 style={{
@@ -181,10 +180,73 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             marginBottom: '1rem',
             fontWeight: 'bold'
           }}>
-            Your Rights
+            Your Rights (GDPR & CCPA)
+          </h3>
+          <p style={{ marginBottom: '0.75rem' }}>
+            If you are located in the European Economic Area (EEA) or California, you have the following rights:
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Right to Access: You can request a copy of the personal data we hold about you
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Right to Rectification: You can request correction of inaccurate personal data
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Right to Erasure: You can request deletion of your personal data
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Right to Data Portability: You can request your data in a portable format
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Right to Object: You can object to processing of your personal data
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Right to Withdraw Consent: You can withdraw consent for data processing at any time
+          </p>
+          <p style={{ marginBottom: '1.5rem' }}>
+            To exercise these rights, please contact us using the information in the &quot;Contact Us&quot; section below.
+          </p>
+
+          <h3 style={{
+            fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+            color: '#FFC30B',
+            marginTop: '2rem',
+            marginBottom: '1rem',
+            fontWeight: 'bold'
+          }}>
+            Children&apos;s Privacy
+          </h3>
+          <p style={{ marginBottom: '0.75rem' }}>
+            Our Service is suitable for children ages 3 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
+          </p>
+          <p style={{ marginBottom: '1.5rem' }}>
+            If we discover that we have collected personal information from a child under 13, we will delete that information promptly.
+          </p>
+
+          <h3 style={{
+            fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+            color: '#FFC30B',
+            marginTop: '2rem',
+            marginBottom: '1rem',
+            fontWeight: 'bold'
+          }}>
+            Data Security
           </h3>
           <p style={{ marginBottom: '1.5rem' }}>
-            You can request that we delete your data or remove your email by contacting us at <strong style={{ color: '#FFC30B' }}>contact@mindgrind.games</strong>.
+            We implement appropriate technical and organizational measures to protect your personal information. However, no method of transmission over the internet or electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your data, we cannot guarantee absolute security.
+          </p>
+
+          <h3 style={{
+            fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+            color: '#FFC30B',
+            marginTop: '2rem',
+            marginBottom: '1rem',
+            fontWeight: 'bold'
+          }}>
+            Data Retention
+          </h3>
+          <p style={{ marginBottom: '1.5rem' }}>
+            We retain your personal information only for as long as necessary to provide our Service and fulfill the purposes outlined in this Privacy Policy. When you request deletion of your data, we will delete it within 30 days, except where we are required to retain it by law.
           </p>
 
           <h3 style={{
@@ -197,7 +259,32 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             Changes to This Policy
           </h3>
           <p style={{ marginBottom: '2rem' }}>
-            We may update this policy from time to time. Changes will be reflected on this page with a new "Last Updated" date.
+            We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date. You are advised to review this Privacy Policy periodically for any changes.
+          </p>
+
+          <h3 style={{
+            fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+            color: '#FFC30B',
+            marginTop: '2rem',
+            marginBottom: '1rem',
+            fontWeight: 'bold'
+          }}>
+            Contact Us
+          </h3>
+          <p style={{ marginBottom: '0.75rem' }}>
+            If you have any questions about this Privacy Policy, wish to exercise your rights, or need to contact us regarding your personal data, please reach out to us:
+          </p>
+          <p style={{ marginBottom: '0.5rem', marginLeft: '1rem' }}>
+            <strong style={{ color: '#FFC30B' }}>Email:</strong> admin@mindgrind.co.za
+          </p>
+          <p style={{ marginBottom: '0.5rem', marginLeft: '1rem' }}>
+            <strong style={{ color: '#FFC30B' }}>Developer:</strong> MindGrind
+          </p>
+          <p style={{ marginBottom: '0.5rem', marginLeft: '1rem' }}>
+            <strong style={{ color: '#FFC30B' }}>App:</strong> Bee Five
+          </p>
+          <p style={{ marginBottom: '2rem' }}>
+            We will respond to your inquiry within 30 days.
           </p>
 
           <div style={{
@@ -208,7 +295,7 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             color: 'rgba(255,255,255,0.7)',
             fontSize: isMobile ? '0.85rem' : '0.9rem'
           }}>
-            © 2025 Bee-Five. Product of MindGrind.
+            © 2026 Bee Five. Product of MindGrind.
           </div>
         </div>
       </div>

@@ -1,12 +1,26 @@
+import java.util.Properties
+
+val keyProperties = Properties()
+val keyPropertiesFile = rootProject.file("key.properties")
+val hasReleaseKeystore: Boolean =
+    keyPropertiesFile.exists().also { exists ->
+        if (exists) {
+            keyPropertiesFile.inputStream().use { keyProperties.load(it) }
+        }
+    } &&
+        keyProperties.getProperty("storeFile")?.isNotBlank() == true &&
+        keyProperties.getProperty("keyAlias")?.isNotBlank() == true &&
+        keyProperties.getProperty("storePassword")?.isNotBlank() == true &&
+        keyProperties.getProperty("keyPassword")?.isNotBlank() == true
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.example.bee_five"
+    namespace = "com.beefive.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,21 +34,29 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.bee_five"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.beefive.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keyProperties.getProperty("keyAlias")
+                keyPassword = keyProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(keyProperties.getProperty("storeFile"))
+                storePassword = keyProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Play uploads need a release keystore; use debug signing only for local testing.
+            signingConfig =
+                signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 }

@@ -12,6 +12,7 @@ import 'background_sound.dart';
 import 'dashboard_page.dart';
 import 'daily_challenge_game.dart';
 import 'game_mode.dart';
+import 'adventure_progress_service.dart';
 import 'xp_service.dart';
 
 // Adventure stages for map background
@@ -377,18 +378,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     // Load saved sound preference and start looping background sound when player enters the game
-      SharedPreferences.getInstance().then((prefs) {
+      SharedPreferences.getInstance().then((prefs) async {
       if (!mounted) return;
       final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
       if (saved != soundEnabled) setState(() => soundEnabled = saved);
-      final savedLevel = prefs.getInt('adventure_current_level');
-      if (savedLevel != null && savedLevel != currentGame) {
+      final savedLevel = await syncAdventureProgress();
+      if (savedLevel != currentGame) {
         setState(() {
           currentGame = savedLevel;
           highestUnlockedGame = savedLevel;
           gamesCompleted = savedLevel > 1 ? List.generate(savedLevel - 1, (i) => i + 1) : [];
         });
-      } else if (savedLevel != null) {
+      } else {
         if (savedLevel > highestUnlockedGame) {
           setState(() => highestUnlockedGame = savedLevel);
         }
@@ -965,7 +966,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       // 4) Volcano (bottom right)
                       Positioned(
                         right: screenSize.width * 0.05,
-                        top: totalHeight * 0.78,
+          top: totalHeight * 0.78,
                         child: CustomPaint(
                           size: Size(50, 70),
                           painter: _VolcanoPainter(),
@@ -2233,8 +2234,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             return;
                           }
                           if (!context.mounted) return;
+                          await resetAdventureProgress();
                           final prefs = await SharedPreferences.getInstance();
-                          await prefs.setInt('adventure_current_level', 1);
                           await prefs.setInt('adventure_consecutive_losses', 0);
                           await prefs.setInt('adventure_consecutive_wins', 0);
                           if (!context.mounted) return;
@@ -2391,9 +2392,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         onBackToMenu: () {
           setState(() => gameMode = GameMode.menu);
           _scheduleScrollToCurrentLevel();
-          SharedPreferences.getInstance().then((prefs) {
-            final level = prefs.getInt('adventure_current_level');
-            if (mounted && level != null) {
+          syncAdventureProgress().then((level) {
+            if (mounted) {
               setState(() {
                 currentGame = level;
                 highestUnlockedGame = level;
@@ -2468,7 +2468,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Bee-Five ("we", "our", or "us") operates the Bee-Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.',
+                        'Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.',
                         style: TextStyle(
                           fontSize: 16,
                           height: 1.6,
@@ -2512,7 +2512,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         'To exercise these rights, please contact us using the information in the "Contact Us" section below.',
                       ]),
                       _policySection('Children\'s Privacy', [
-                        'Our Service is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.',
+                        'Our Service is suitable for children ages 3 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.',
                         'If we discover that we have collected personal information from a child under 13, we will delete that information promptly.',
                       ]),
                       _policySection('Data Security', [
@@ -2528,14 +2528,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         'If you have any questions about this Privacy Policy, wish to exercise your rights, or need to contact us regarding your personal data, please reach out to us:',
                         'Email: admin@mindgrind.co.za',
                         'Developer: MindGrind',
-                        'App: Bee-Five',
+                        'App: Bee Five',
                         'We will respond to your inquiry within 30 days.',
                       ]),
                       const Padding(
                         padding: EdgeInsets.only(top: 24, bottom: 16),
                         child: Center(
                           child: Text(
-                            '© 2026 Bee-Five. Product of MindGrind.',
+                            '© 2026 Bee Five. Product of MindGrind.',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.black54,

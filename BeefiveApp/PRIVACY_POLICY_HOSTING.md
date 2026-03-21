@@ -68,7 +68,7 @@ Here's a simple HTML template you can use:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bee-Five Privacy Policy</title>
+    <title>Bee Five Privacy Policy</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -111,9 +111,9 @@ Here's a simple HTML template you can use:
 <body>
     <h1>Privacy Policy</h1>
     
-    <p><strong>Last Updated:</strong> January 2025</p>
+    <p><strong>Last Updated:</strong> January 2026</p>
     
-    <p>Bee-Five ("we", "our", or "us") operates the Bee-Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.</p>
+    <p>Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.</p>
     
     <h2>Information We Collect</h2>
     <p>We may collect the following types of information:</p>
@@ -160,7 +160,7 @@ Here's a simple HTML template you can use:
     <p>To exercise these rights, please contact us using the information provided in the "Contact Us" section below.</p>
     
     <h2>Children's Privacy</h2>
-    <p>Our Service is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.</p>
+    <p>Our Service is suitable for children ages 3 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.</p>
     
     <h2>Data Security</h2>
     <p>We implement appropriate technical and organizational measures to protect your personal information. However, no method of transmission over the internet or electronic storage is 100% secure.</p>
@@ -175,15 +175,15 @@ Here's a simple HTML template you can use:
     <p>If you have any questions about this Privacy Policy, wish to exercise your rights, or need to contact us regarding your personal data, please reach out to us:</p>
     
     <div class="contact-box">
-        <p><strong>Email:</strong> contact@mindgrind.games</p>
+        <p><strong>Email:</strong> admin@mindgrind.co.za</p>
         <p><strong>Developer:</strong> MindGrind</p>
-        <p><strong>App:</strong> Bee-Five</p>
+        <p><strong>App:</strong> Bee Five</p>
     </div>
     
     <p>We will respond to your inquiry within 30 days.</p>
     
     <div class="footer">
-        <p>© 2025 Bee-Five. Product of MindGrind.</p>
+        <p>© 2026 Bee Five. Product of MindGrind.</p>
     </div>
 </body>
 </html>

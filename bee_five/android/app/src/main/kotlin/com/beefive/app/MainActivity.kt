@@ -1,4 +1,4 @@
-package com.example.bee_five
+package com.beefive.app
 
 import io.flutter.embedding.android.FlutterActivity
 

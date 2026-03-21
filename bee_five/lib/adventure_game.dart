@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'adventure_game_rules.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
+import 'adventure_progress_service.dart';
 import 'xp_service.dart';
-
-const String _prefAdventureLevel = 'adventure_current_level';
+import 'bee_facts.dart';
 
 /// Hides scrollbar completely (no vertical bar on the side).
 class _NoScrollbarBehavior extends ScrollBehavior {
@@ -87,6 +86,8 @@ class _AdventureGameState extends State<AdventureGame> {
 
   int _headerXp = 0;
   int _lastXpDelta = 0;
+  String? _currentBeeFact;
+  bool _showBeeFactScreen = false;
 
   @override
   void initState() {
@@ -155,7 +156,24 @@ class _AdventureGameState extends State<AdventureGame> {
       gameStatus = currentPlayer == 1 ? 'Your turn' : 'AI thinking...';
     }
 
-    // Start countdown
+    _currentBeeFact = getBeeFactForGame(currentGame);
+
+    // Show fact before qualifying levels, then start countdown.
+    if (_currentBeeFact != null) {
+      showStartCountdown = false;
+      _showBeeFactScreen = true;
+    } else {
+      _showBeeFactScreen = false;
+      _startCountdown();
+    }
+  }
+
+  void _startFromBeeFactScreen() {
+    if (!mounted) return;
+    setState(() {
+      _showBeeFactScreen = false;
+      showStartCountdown = true;
+    });
     _startCountdown();
   }
 
@@ -1223,8 +1241,7 @@ class _AdventureGameState extends State<AdventureGame> {
   }
 
   Future<void> _saveAdventureLevel() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_prefAdventureLevel, currentGame);
+    await saveAdventureLevel(currentGame);
   }
 
   Future<void> _saveAndBackToMenu() async {
@@ -1367,7 +1384,62 @@ class _AdventureGameState extends State<AdventureGame> {
       body: ScrollConfiguration(
         behavior: _NoScrollbarBehavior(),
         child: SafeArea(
-          child: Column(
+          child: (_showBeeFactScreen && _currentBeeFact != null)
+              ? Center(
+                  child: Container(
+                    margin: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: primaryYellow, width: 2),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Bee Fact',
+                          style: TextStyle(
+                            color: primaryYellow,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          _currentBeeFact!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        ElevatedButton(
+                          onPressed: _startFromBeeFactScreen,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryYellow,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: const BorderSide(color: Colors.black, width: 2),
+                            ),
+                          ),
+                          child: const Text(
+                            'Start',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Column(
             children: [
             // Game status (black bar with yellow bottom border, like reference)
             Container(

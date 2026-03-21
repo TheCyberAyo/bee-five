@@ -1,6 +1,6 @@
 /**
  * Privacy Policy Component
- * Displays the privacy policy for Bee-Five app
+ * Displays the privacy policy for Bee Five app
  * Required for app store approval
  */
 
@@ -57,7 +57,7 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
           <View style={styles.content}>
             {/* Introduction */}
             <Text style={styles.introText}>
-              Bee-Five ("we", "our", or "us") operates the Bee-Five mobile
+              Bee Five ("we", "our", or "us") operates the Bee Five mobile
               application (the "Service"), developed by MindGrind. This page
               informs you of our policies regarding the collection, use, and
               disclosure of personal information when you use our Service.
@@ -65,7 +65,7 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
 
             {/* Last Updated */}
             <Text style={styles.lastUpdated}>
-              Last Updated: January 2025
+              Last Updated: January 2026
             </Text>
 
             {/* Information We Collect */}
@@ -148,11 +148,10 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
             {/* Children's Privacy */}
             <Text style={styles.sectionTitle}>Children's Privacy</Text>
             <Text style={styles.sectionText}>
-              Our Service is not intended for children under the age of 13. We
-              do not knowingly collect personal information from children under
-              13. If you are a parent or guardian and believe your child has
-              provided us with personal information, please contact us
-              immediately.
+              Our Service is suitable for children ages 3 and above. We do not
+              knowingly collect personal information from children under 13. If
+              you are a parent or guardian and believe your child has provided
+              us with personal information, please contact us immediately.
             </Text>
             <Text style={styles.sectionText}>
               If we discover that we have collected personal information from a
@@ -203,7 +202,7 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
                 <Text style={styles.bold}>Developer:</Text> MindGrind
               </Text>
               <Text style={styles.contactText}>
-                <Text style={styles.bold}>App:</Text> Bee-Five
+                <Text style={styles.bold}>App:</Text> Bee Five
               </Text>
             </View>
             <Text style={styles.sectionText}>
@@ -213,7 +212,7 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                © 2025 Bee-Five. Product of MindGrind.
+                © 2026 Bee Five. Product of MindGrind.
               </Text>
             </View>
           </View>
