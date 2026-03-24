@@ -27,7 +27,7 @@ Bee-Five is an engaging strategic board game where you control bees in tactical 
 • Adventure mode with progressive challenges
 • Local game progress tracking
 • Intuitive touch controls
-• Family-friendly gameplay suitable for all ages
+• Family-friendly gameplay suitable for ages 13+
 
 🎯 PERFECT FOR:
 • Strategy game lovers
@@ -43,10 +43,10 @@ Download Bee-Five now and start your strategic bee adventure!
 - **Secondary** (optional): Games > Strategy
 
 ### Content Rating
-Complete the questionnaire. Expected rating: **Everyone**
+Complete the questionnaire. Based on typical answers for a non-violent puzzle game, the **content** rating is often **Everyone** or similar (depends on the IARC questionnaire). That rating describes **content**, not your privacy policy age.
 
 ### Target Audience
-- **Age**: All ages
+- **Age**: **13+** (align with your privacy policy and Play Console “App content” → target audience; do **not** list the app as primarily child-directed if your policy is 13+)
 - **Content**: Family-friendly, no violence, no inappropriate content
 
 ---
@@ -161,7 +161,7 @@ When completing the content rating, answer:
 5. **Does your app contain drugs/alcohol?** ❌ No
 6. **Does your app contain scary content?** ❌ No
 
-**Expected Rating**: **Everyone** (suitable for all ages)
+**Expected content rating**: Often **Everyone** (or equivalent) for mild puzzle content—confirm in the questionnaire. **Intended audience** for listings and privacy: **ages 13+**.
 
 ---
 
@@ -289,7 +289,7 @@ After submitting your listing:
 **App Name**: Bee-Five
 **Package**: com.beefive
 **Category**: Games > Board
-**Rating**: Everyone
+**Content rating (typical)**: Everyone | **Target audience / policy**: 13+
 **Price**: Free
 **Privacy Policy**: [Your hosted URL]
 **Contact**: admin@mindgrind.co.za

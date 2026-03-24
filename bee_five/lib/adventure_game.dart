@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // ADDED: AdMob import
 import 'adventure_game_rules.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
@@ -89,6 +90,14 @@ class _AdventureGameState extends State<AdventureGame> {
   String? _currentBeeFact;
   bool _showBeeFactScreen = false;
 
+  // ADDED: Banner ad variables
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
+  // ADDED: Interstitial ad variables
+  InterstitialAd? _interstitialAd;
+  int _gamesCompletedCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -98,11 +107,70 @@ class _AdventureGameState extends State<AdventureGame> {
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
+    // ADDED: Load ads
+    _loadBannerAd();
+    _loadInterstitialAd();
+  }
+
+  // ADDED: Banner ad loader
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  // ADDED: Interstitial ad loader
+  void _loadInterstitialAd() {
+    InterstitialAd.load(
+      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitialAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _interstitialAd = null;
+        },
+      ),
+    );
+  }
+
+  // ADDED: Show interstitial after every 7 completed games
+  void _showInterstitialAdIfReady() {
+    _gamesCompletedCount++;
+    if (_gamesCompletedCount % 7 == 0 && _interstitialAd != null) {
+      _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          _interstitialAd = null;
+          _loadInterstitialAd();
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          _interstitialAd = null;
+          _loadInterstitialAd();
+        },
+      );
+      _interstitialAd!.show();
+    }
   }
 
   @override
   void dispose() {
     timer?.cancel();
+    // ADDED: Dispose ads
+    _bannerAd?.dispose();
+    _interstitialAd?.dispose();
     super.dispose();
   }
 
@@ -1018,6 +1086,9 @@ class _AdventureGameState extends State<AdventureGame> {
         return;
       }
     }
+
+    // ADDED: Show interstitial ad every 7 completed games
+    _showInterstitialAdIfReady();
     
     // Show popup after a short delay
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -1626,6 +1697,15 @@ class _AdventureGameState extends State<AdventureGame> {
                     ],
                   ),
                 ),
+              ),
+            // ADDED: Banner ad above footer
+            if (_isBannerAdLoaded && _bannerAd != null)
+              Container(
+                alignment: Alignment.center,
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                color: Colors.black,
+                child: AdWidget(ad: _bannerAd!),
               ),
             // Footer (black bar with yellow top border, Home & Restart - like reference)
             Container(

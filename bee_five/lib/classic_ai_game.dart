@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // ADDED: AdMob import
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
 import 'xp_service.dart';
@@ -35,6 +36,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   List<List<int>> board = [];
   int currentPlayer = 2; // 1 = human (yellow), 2 = AI (black)
   int winner = 0; // 0 = no winner/draw, 1 = human, 2 = AI
+  List<List<int>> winningPieces = [];
   bool showWinModal = false;
   String winMessage = '';
   String aiDifficulty = 'medium';
@@ -62,6 +64,14 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     return 'hard';
   }
 
+  // ADDED: Banner ad variables
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
+  // ADDED: Interstitial ad variables
+  InterstitialAd? _interstitialAd;
+  int _gamesCompletedCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +89,62 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
+    // ADDED: Load ads
+    _loadBannerAd();
+    _loadInterstitialAd();
+  }
+
+  // ADDED: Banner ad loader
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  // ADDED: Interstitial ad loader
+  void _loadInterstitialAd() {
+    InterstitialAd.load(
+      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitialAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _interstitialAd = null;
+        },
+      ),
+    );
+  }
+
+  // ADDED: Show interstitial after every 3 completed games
+  void _showInterstitialAdIfReady() {
+    _gamesCompletedCount++;
+    if (_gamesCompletedCount % 3 == 0 && _interstitialAd != null) {
+      _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          _interstitialAd = null;
+          _loadInterstitialAd();
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          _interstitialAd = null;
+          _loadInterstitialAd();
+        },
+      );
+      _interstitialAd!.show();
+    }
   }
 
   Future<void> _loadBestStreak() async {
@@ -108,7 +174,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     });
   }
 
-  void _classicSessionEnd({required bool timeUp}) {
+  void _classicSessionEnd({required bool timeUp, bool delayModal = true}) {
     if (classicGameOver) return;
     sessionTimer?.cancel();
     classicGameOver = true;
@@ -116,19 +182,46 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       classicBestStreak = classicGamesWon;
       _saveBestStreak(classicBestStreak);
     }
-    setState(() {
-      _lastXpDelta = 0;
-      winMessage = timeUp
-          ? 'Time\'s up!\nScore: $classicGamesWon\nBest: $classicBestStreak'
-          : 'Game Over\nScore: $classicGamesWon\nBest: $classicBestStreak';
-      showWinModal = true;
+    void showModal() {
+      if (!mounted) return;
+      setState(() {
+        _lastXpDelta = 0;
+        winMessage = timeUp
+            ? 'Time\'s up!\nScore: $classicGamesWon\nBest: $classicBestStreak'
+            : 'Game Over\nScore: $classicGamesWon\nBest: $classicBestStreak';
+        showWinModal = true;
+      });
+    }
+
+    if (delayModal) {
+      Future.delayed(const Duration(seconds: 2), showModal);
+    } else {
+      showModal();
+    }
+  }
+
+  void _scheduleEndGameModal() {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => showWinModal = true);
     });
+  }
+
+  Color? _winningCellBackground(int row, int col) {
+    if (winner == 0 || winningPieces.isEmpty) return null;
+    if (!winningPieces.any((p) => p[0] == row && p[1] == col)) return null;
+    if (winner == 1) return Colors.black;
+    if (winner == 2) return primaryYellow;
+    return null;
   }
 
   @override
   void dispose() {
     timer?.cancel();
     sessionTimer?.cancel();
+    // ADDED: Dispose ads
+    _bannerAd?.dispose();
+    _interstitialAd?.dispose();
     super.dispose();
   }
 
@@ -137,6 +230,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       board = List.generate(boardSize, (_) => List.filled(boardSize, 0));
       currentPlayer = 1;
       winner = 0;
+      winningPieces = [];
       showWinModal = false;
       winMessage = '';
       _lastXpDelta = 0;
@@ -181,9 +275,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     setState(() {
       _lastXpDelta = 0;
       winner = 2;
+      winningPieces = [];
       winMessage = 'Time\'s up! AI wins!';
-      showWinModal = true;
     });
+    _scheduleEndGameModal();
   }
 
   bool _checkWinner(int row, int col, int player) {
@@ -211,6 +306,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           }
           _classicGameIndex++;
           aiDifficulty = _classicStreakDifficultyForGame(_classicGameIndex);
+          winner = 1;
+          winningPieces = logic.getWinningPieces(board, row, col, 1);
         });
         onClassicStreakWin(classicGamesWon).then((result) {
           if (mounted) {
@@ -220,7 +317,12 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             });
           }
         });
-        _resetBoard();
+        // ADDED: Trigger interstitial on game end (streak mode)
+        _showInterstitialAdIfReady();
+        timer?.cancel();
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) _resetBoard();
+        });
         return;
       }
       if (widget.initialDifficulty == 'hard') {
@@ -235,12 +337,15 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       } else {
         setState(() => _lastXpDelta = 0);
       }
+      // ADDED: Trigger interstitial on game end
+      _showInterstitialAdIfReady();
       setState(() {
         winner = currentPlayer;
         winMessage = 'You win!';
-        showWinModal = true;
+        winningPieces = logic.getWinningPieces(board, row, col, currentPlayer);
       });
       timer?.cancel();
+      _scheduleEndGameModal();
     } else {
       // Check for draw
       bool isDraw = true;
@@ -259,13 +364,16 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           _classicSessionEnd(timeUp: false);
           return;
         }
+        // ADDED: Trigger interstitial on draw
+        _showInterstitialAdIfReady();
         setState(() {
           _lastXpDelta = 0;
           winner = 0;
+          winningPieces = [];
           winMessage = 'Game Over - Draw!';
-          showWinModal = true;
         });
         timer?.cancel();
+        _scheduleEndGameModal();
       } else {
         // Switch to AI turn
         setState(() {
@@ -289,13 +397,16 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     }
 
     if (availableCells.isEmpty) {
+      // ADDED: Trigger interstitial on draw
+      _showInterstitialAdIfReady();
       setState(() {
         _lastXpDelta = 0;
         winner = 0;
+        winningPieces = [];
         winMessage = 'Game Over - Draw!';
-        showWinModal = true;
       });
       timer?.cancel();
+      _scheduleEndGameModal();
       return;
     }
 
@@ -315,16 +426,30 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       // Check for winner
       if (_checkWinner(row, col, 2)) {
         if (widget.isClassicStreakMode) {
-          _classicSessionEnd(timeUp: false);
+          _showInterstitialAdIfReady();
+          setState(() {
+            _lastXpDelta = 0;
+            winner = 2;
+            winningPieces = logic.getWinningPieces(board, row, col, 2);
+            winMessage = 'AI wins!';
+          });
+          timer?.cancel();
+          Future.delayed(const Duration(seconds: 2), () {
+            if (!mounted) return;
+            _classicSessionEnd(timeUp: false, delayModal: false);
+          });
           return;
         }
+        // ADDED: Trigger interstitial when AI wins
+        _showInterstitialAdIfReady();
         setState(() {
           _lastXpDelta = 0;
           winner = 2;
           winMessage = 'AI wins!';
-          showWinModal = true;
+          winningPieces = logic.getWinningPieces(board, row, col, 2);
         });
         timer?.cancel();
+        _scheduleEndGameModal();
       } else {
         // Check for draw
         bool isDraw = true;
@@ -343,13 +468,16 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             _classicSessionEnd(timeUp: false);
             return;
           }
+          // ADDED: Trigger interstitial on draw
+          _showInterstitialAdIfReady();
           setState(() {
             _lastXpDelta = 0;
             winner = 0;
+            winningPieces = [];
             winMessage = 'Game Over - Draw!';
-            showWinModal = true;
           });
           timer?.cancel();
+          _scheduleEndGameModal();
         } else {
           // Switch back to human
           setState(() {
@@ -783,7 +911,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                                   width: cellSize,
                                   height: cellSize,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF87CEEB),
+                                    color: _winningCellBackground(row, col) ??
+                                        const Color(0xFF87CEEB),
                                     border: Border.all(
                                       color: Colors.white,
                                       width: borderWidth,
@@ -814,6 +943,16 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                 },
               ),
             ),
+
+            // ADDED: Banner ad above footer
+            if (_isBannerAdLoaded && _bannerAd != null)
+              Container(
+                alignment: Alignment.center,
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                color: Colors.black,
+                child: AdWidget(ad: _bannerAd!),
+              ),
 
             // Footer (Classic: Home only; Practice: Home + Restart)
             Container(
@@ -1054,4 +1193,3 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     );
   }
 }
-

@@ -19,6 +19,7 @@ Bee-Five collects minimal data and is designed with privacy in mind. This guide 
 **Reason**: The app collects:
 - Account information (email) - if user creates account
 - App activity (game progress) - for local functionality
+- Device or advertising identifiers - **via Google AdMob** for advertising and measurement (see Section 2.3)
 
 ---
 
@@ -81,16 +82,39 @@ Bee-Five collects minimal data and is designed with privacy in mind. This guide 
 
 ---
 
+### 2.3 Device or other IDs (Advertising via Google AdMob)
+
+**Is this data type collected?** ✅ **Yes**
+
+**Data collected / processed**:
+- Advertising ID (where available), or similar identifiers used to serve and measure ads
+
+**Purpose**:
+- ✅ Advertising or marketing
+- ✅ Analytics (ad performance)
+
+**Is this data required for your app to function?** ❌ **No** (core gameplay does not require ads)
+
+**Is this data shared with third parties?** ✅ **Yes**
+
+**Third parties**:
+- **Google (AdMob)**: Serves ads and may use identifiers for personalization and fraud prevention. See [Google's Privacy Policy](https://policies.google.com/privacy).
+
+**Is this data encrypted in transit?** ✅ **Yes** (HTTPS/TLS to Google services)
+
+**Data retention**: Governed by Google's policies; users can limit ad personalization via device and Google account settings where available.
+
+---
+
 ## Section 3: Data NOT Collected
 
-The following data types are **NOT** collected by Bee-Five:
+The following data types are **NOT** collected **directly by Bee-Five** (outside of what third-party SDKs process as described in Section 2.3):
 
 - ❌ Location
 - ❌ Personal identifiers (except optional email)
 - ❌ Financial information
 - ❌ Contacts
 - ❌ Photos or media files
-- ❌ Device or other IDs (no advertising SDKs)
 - ❌ Health information
 - ❌ Messages
 - ❌ Files and docs
@@ -106,6 +130,7 @@ The following data types are **NOT** collected by Bee-Five:
 **Does your app encrypt data in transit?** ✅ **Yes**
 - All network communication uses HTTPS/TLS encryption
 - Supabase connection is encrypted
+- Connections to Google (AdMob) use HTTPS
 
 **Does your app encrypt data at rest?** ✅ **Yes**
 - Local data: Device encryption
@@ -147,15 +172,22 @@ The following data types are **NOT** collected by Bee-Five:
 - **Security**: Encrypted in transit and at rest
 - **Privacy policy**: https://supabase.com/privacy
 
+**Google AdMob**:
+- **Purpose**: Displaying advertisements; ad measurement
+- **Data shared / processed**: Advertising identifiers, device/app interaction data related to ads (as described in Google's policies)
+- **Data type**: Device or other IDs; app activity related to ads
+- **Security**: Encrypted in transit (HTTPS)
+- **Privacy policy**: https://policies.google.com/privacy
+
 ---
 
 ## Section 7: Age Restrictions
 
 **Does your app collect data from children?** ❌ **No**
 
-**Age restriction**: App is suitable for all ages, but does not knowingly collect data from children under 13.
+**Age restriction**: The Service is intended for **users aged 13 and older**, consistent with the privacy policy. The app does not knowingly collect personal information from children under 13.
 
-**COPPA compliance**: ✅ **Yes** - App does not collect personal information from children under 13.
+**COPPA compliance**: ✅ **Yes** — The app does not knowingly collect personal information from children under 13. In Play Console, set **target audience** to **13+** (not children) if you are not targeting users under 13.
 
 ---
 
@@ -164,7 +196,7 @@ The following data types are **NOT** collected by Bee-Five:
 **Does your app use sensitive permissions?** ❌ **No**
 
 The app only requests:
-- `INTERNET` permission (for Supabase connection)
+- `INTERNET` permission (for Supabase, ads, and related services)
 - No location, camera, microphone, or other sensitive permissions
 
 ---
@@ -176,6 +208,7 @@ When filling out the form, ensure you select:
 ### Data Collected:
 - [x] Account information (Email) - Optional, Shared with Supabase
 - [x] App activity (Game progress) - Required, Not shared, Local only
+- [x] Device or other IDs (Advertising) - Via Google AdMob, Shared with Google
 
 ### Data NOT Collected:
 - [x] Location
@@ -183,7 +216,6 @@ When filling out the form, ensure you select:
 - [x] Financial information
 - [x] Contacts
 - [x] Photos or media
-- [x] Device IDs
 - [x] Health information
 
 ### Security:
@@ -194,13 +226,14 @@ When filling out the form, ensure you select:
 
 ### Third Parties:
 - [x] Supabase (Account management only)
+- [x] Google AdMob (Advertising and ad measurement)
 
 ---
 
 ## Common Questions
 
 ### Q: Do we collect device IDs?
-**A**: No. The app does not use advertising SDKs or collect device IDs.
+**A**: The app integrates **Google AdMob**, which may process **advertising identifiers** for ads and measurement. Declare this in Data Safety and disclose AdMob in your privacy policy (see Section 2.3).
 
 ### Q: Do we collect location data?
 **A**: No. The app does not request location permissions.

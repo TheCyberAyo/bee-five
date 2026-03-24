@@ -167,7 +167,13 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             Our app may use the following third-party services:
           </p>
           <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
+            • Google AdMob: For displaying advertisements. AdMob may collect device identifiers, IP address, and app interaction data to serve and measure ads. See Google&apos;s Privacy Policy for details.
+          </p>
+          <p style={{ marginBottom: '0.75rem', marginLeft: '1rem' }}>
             • Supabase: For backend services and data storage (if applicable). See Supabase&apos;s Privacy Policy for details.
+          </p>
+          <p style={{ marginBottom: '1.5rem' }}>
+            AdMob and other third-party providers process data under their own privacy terms.
           </p>
           <p style={{ marginBottom: '1.5rem' }}>
             These services have their own privacy policies governing the collection and use of your information. We encourage you to review their privacy policies.
@@ -217,7 +223,7 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             Children&apos;s Privacy
           </h3>
           <p style={{ marginBottom: '0.75rem' }}>
-            Our Service is suitable for children ages 3 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
+            Our Service is suitable for users ages 13 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
           </p>
           <p style={{ marginBottom: '1.5rem' }}>
             If we discover that we have collected personal information from a child under 13, we will delete that information promptly.

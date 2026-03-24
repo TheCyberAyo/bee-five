@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'supabase_client.dart';
 import 'contexts/auth_context.dart';
@@ -21,11 +22,14 @@ class _NoScrollbarScrollBehavior extends ScrollBehavior {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load .env (same format as BeefiveApp: SUPABASE_URL, SUPABASE_ANON_KEY)
+  // Load .env
   await dotenv.load(fileName: '.env');
 
   // Initialize Supabase
   await initSupabase();
+
+  // Initialize AdMob
+  await MobileAds.instance.initialize();
 
   // Lock to portrait only
   await SystemChrome.setPreferredOrientations([

@@ -102,6 +102,7 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
   late List<List<int>> board;
   int currentPlayer = 1;
   int winner = 0;
+  List<List<int>> winningPieces = [];
   int timeLeft = 0;
   int moveTimeLeft = 0;
   Timer? timer;
@@ -143,6 +144,7 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
 
   void _initBoard() {
     board = List.generate(boardSize, (_) => List.filled(boardSize, 0));
+    winningPieces = [];
     final now = DateTime.now();
     final seed = now.year * 10000 + now.month * 100 + now.day;
     for (final cell in generateBlockedForSeed(seed, config.numObstacles)) {
@@ -191,10 +193,11 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     moveTimer?.cancel();
     setState(() {
       winner = 2;
+      winningPieces = [];
       winMessage = 'Move time\'s up! AI wins!';
-      showWinModal = true;
     });
     _recordResult(false);
+    _scheduleWinModal();
   }
 
   void _onTimeUp() {
@@ -202,10 +205,26 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     moveTimer?.cancel();
     setState(() {
       winner = 2;
+      winningPieces = [];
       winMessage = 'Time\'s up! AI wins!';
-      showWinModal = true;
     });
     _recordResult(false);
+    _scheduleWinModal();
+  }
+
+  void _scheduleWinModal() {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => showWinModal = true);
+    });
+  }
+
+  Color? _winningCellBackground(int row, int col) {
+    if (winner == 0 || winningPieces.isEmpty) return null;
+    if (!winningPieces.any((p) => p[0] == row && p[1] == col)) return null;
+    if (winner == 1) return Colors.black;
+    if (winner == 2) return primaryYellow;
+    return null;
   }
 
   void _recordResult(bool won) {
@@ -235,9 +254,10 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
       setState(() {
         winner = 1;
         winMessage = 'You win!';
-        showWinModal = true;
+        winningPieces = logic.getWinningPieces(board, row, col, 1);
       });
       _recordResult(true);
+      _scheduleWinModal();
       return;
     }
 
@@ -254,11 +274,12 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     if (isDraw) {
       setState(() {
         winner = 0;
+        winningPieces = [];
         winMessage = 'Draw!';
-        showWinModal = true;
       });
       _recordResult(false);
       timer?.cancel();
+      _scheduleWinModal();
       return;
     }
 
@@ -284,12 +305,13 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     if (available.isEmpty) {
       setState(() {
         winner = 0;
+        winningPieces = [];
         winMessage = 'Draw!';
-        showWinModal = true;
         isAITurn = false;
       });
       _recordResult(false);
       timer?.cancel();
+      _scheduleWinModal();
       return;
     }
 
@@ -311,9 +333,10 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
         setState(() {
           winner = 2;
           winMessage = 'AI wins!';
-          showWinModal = true;
+          winningPieces = logic.getWinningPieces(board, r, c, 2);
         });
         _recordResult(false);
+        _scheduleWinModal();
         return;
       }
 
@@ -330,11 +353,12 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
       if (isDraw) {
         setState(() {
           winner = 0;
+          winningPieces = [];
           winMessage = 'Draw!';
-          showWinModal = true;
         });
         _recordResult(false);
         timer?.cancel();
+        _scheduleWinModal();
       }
     });
   }
@@ -615,7 +639,10 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
                                       width: cellSize,
                                       height: cellSize,
                                       decoration: BoxDecoration(
-                                        color: cell == blockedCell ? const Color(0xFF555555) : const Color(0xFF87CEEB),
+                                        color: cell == blockedCell
+                                            ? const Color(0xFF555555)
+                                            : (_winningCellBackground(row, col) ??
+                                                const Color(0xFF87CEEB)),
                                         border: Border.all(color: Colors.white, width: borderWidth),
                                       ),
                                       child: cell == 1 || cell == 2

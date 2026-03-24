@@ -9,8 +9,8 @@ This guide tells you exactly what to do right now, after the recent changes.
 The following has already been configured:
 - ✅ AAB build configuration in `build.gradle`
 - ✅ Release signing setup (ready to use once you create keystore)
-- ✅ All ad-related code removed
-- ✅ Privacy policy updated (AdMob references removed)
+- ✅ Google **AdMob** integrated for ads (see Flutter app and `AndroidManifest`)
+- ✅ Privacy policy includes **AdMob** and **13+** age wording (hosted + in-app)
 - ✅ Documentation created (guides for Play Store)
 
 ---
@@ -314,9 +314,10 @@ Follow these steps in order:
    - No gambling
    - No drugs/alcohol
    - No scary content
-3. Expected rating: **Everyone**
+3. Expected **content** rating: often **Everyone** (or equivalent) for mild puzzle content—your exact result depends on answers
+4. In **App content** → **Target audience**, set the app for **users 13+** / not primarily child-directed so it matches your privacy policy
 
-**Expected Result**: Content rating completed.
+**Expected Result**: Content rating completed; target audience aligned with policy.
 
 ---
 

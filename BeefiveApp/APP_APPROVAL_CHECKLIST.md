@@ -100,7 +100,8 @@ AdMob **requires** a publicly accessible privacy policy URL. You need:
 
 #### 3. Content Rating
 - [ ] Complete content rating questionnaire
-- [ ] Get rating (likely "Everyone" for a puzzle game)
+- [ ] Get rating (often "Everyone" or similar for mild puzzle **content**—confirm in the questionnaire)
+- [ ] Set **target audience** to **13+** / not child-directed to match your privacy policy (if applicable)
 
 #### 4. Privacy & Security
 - [ ] **Privacy Policy URL** (same as AdMob)
@@ -314,7 +315,7 @@ You need a privacy policy. Here's what to include:
    - How to request data deletion
 
 6. **Children's Privacy**
-   - COPPA compliance if targeting children
+   - Intended for **users 13+**; no knowing collection from under 13 (COPPA)—avoid “child-directed” positioning if your policy is 13+
 
 7. **Changes to Policy**
    - How users will be notified

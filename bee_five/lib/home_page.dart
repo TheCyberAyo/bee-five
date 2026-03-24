@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // ADDED: AdMob import
 import 'adventure_game.dart';
 import 'contexts/auth_context.dart';
 import 'simple_game.dart';
@@ -374,6 +375,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late AnimationController bee2Controller;
   late AnimationController bee3Controller;
 
+  // ADDED: Rewarded ad variables
+  RewardedAd? _rewardedAd;
+
   @override
   void initState() {
     super.initState();
@@ -442,6 +446,66 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         setState(() => _headerXp = xp);
       }
     });
+    // ADDED: Load rewarded ad
+    _loadRewardedAd();
+  }
+
+  // ADDED: Rewarded ad loader
+  void _loadRewardedAd() {
+    RewardedAd.load(
+      adUnitId: 'ca-app-pub-6740638137327567/2005976804',
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          _rewardedAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _rewardedAd = null;
+        },
+      ),
+    );
+  }
+
+  // ADDED: Show rewarded ad and grant XP bonus on completion
+  void _showRewardedAd() {
+    if (_rewardedAd == null) {
+      // Ad not ready yet — show a message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ad not ready yet, please try again in a moment.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _rewardedAd = null;
+        _loadRewardedAd(); // Preload next ad
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _rewardedAd = null;
+        _loadRewardedAd();
+      },
+    );
+    _rewardedAd!.show(
+      onUserEarnedReward: (ad, reward) async {
+        // ADDED: Grant +2 XP bonus when ad is fully watched
+        await addXp(2);
+        final newXp = await getXp();
+        if (mounted) {
+          setState(() => _headerXp = newXp);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 +2 XP earned! Well done!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      },
+    );
   }
 
   void _onConnectTalkToUsFocusChange() {
@@ -475,6 +539,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     bee2Controller.dispose();
     bee3Controller.dispose();
     mapScrollController.dispose();
+    // ADDED: Dispose rewarded ad
+    _rewardedAd?.dispose();
     super.dispose();
   }
 
@@ -1277,6 +1343,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   color: primaryYellow,
                   onPressed: _showBeeFiveTourModal,
                 ),
+                const SizedBox(height: 12),
+                // ADDED: Watch Ad for XP button
+                _sideMenuButton(
+                  label: 'Watch Ad +2 XP',
+                  icon: '🎬',
+                  color: primaryYellow,
+                  onPressed: _showRewardedAd,
+                ),
               ],
             ),
           ),
@@ -1938,7 +2012,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
             '• Adventure: +1 XP for every 2 consecutive level wins; −1 XP per loss. '
             'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
-            '• Daily Challenge: Win today’s challenge → +3 XP (once per day).',
+            '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
+            '• Watch Ad: Watch a short ad → +2 XP (tap "Watch Ad +2 XP" on the home screen).', // ADDED: Watch Ad entry
             style: TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
           ),
@@ -2498,7 +2573,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ]),
                       _policySection('Third-Party Services', [
                         'Our app may use the following third-party services:',
+                        '• Google AdMob: For displaying advertisements. AdMob may collect device identifiers, IP address, and app interaction data to serve and measure ads. See Google\'s Privacy Policy for details.',
                         '• Supabase: For backend services and data storage (if applicable). See Supabase\'s Privacy Policy for details.',
+                        'AdMob and other third-party providers process data under their own privacy terms.',
                         'These services have their own privacy policies governing the collection and use of your information. We encourage you to review their privacy policies.',
                       ]),
                       _policySection('Your Rights (GDPR & CCPA)', [
@@ -2512,7 +2589,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         'To exercise these rights, please contact us using the information in the "Contact Us" section below.',
                       ]),
                       _policySection('Children\'s Privacy', [
-                        'Our Service is suitable for children ages 3 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.',
+                        'Our Service is suitable for users ages 13 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.',
                         'If we discover that we have collected personal information from a child under 13, we will delete that information promptly.',
                       ]),
                       _policySection('Data Security', [
@@ -2786,4 +2863,3 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 }
-

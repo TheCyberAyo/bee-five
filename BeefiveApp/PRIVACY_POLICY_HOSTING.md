@@ -160,7 +160,7 @@ Here's a simple HTML template you can use:
     <p>To exercise these rights, please contact us using the information provided in the "Contact Us" section below.</p>
     
     <h2>Children's Privacy</h2>
-    <p>Our Service is suitable for children ages 3 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.</p>
+    <p>Our Service is suitable for users ages 13 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.</p>
     
     <h2>Data Security</h2>
     <p>We implement appropriate technical and organizational measures to protect your personal information. However, no method of transmission over the internet or electronic storage is 100% secure.</p>

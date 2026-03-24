@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // ADDED: AdMob import
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
 import 'xp_service.dart';
@@ -24,9 +25,18 @@ class _SimpleGameState extends State<SimpleGame> {
   List<List<int>> board = [];
   int currentPlayer = 1; // 1 = black, 2 = yellow
   int winner = 0; // 0 = no winner/draw, 1 = black, 2 = yellow
+  List<List<int>> winningPieces = [];
   bool showWinModal = false;
   String winMessage = '';
   int _headerXp = 0;
+
+  // ADDED: Banner ad variables
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
+  // ADDED: Interstitial ad variables
+  InterstitialAd? _interstitialAd;
+  int _gamesCompletedCount = 0;
 
   @override
   void initState() {
@@ -36,6 +46,70 @@ class _SimpleGameState extends State<SimpleGame> {
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
+    // ADDED: Load ads
+    _loadBannerAd();
+    _loadInterstitialAd();
+  }
+
+  // ADDED: Banner ad loader
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  // ADDED: Interstitial ad loader
+  void _loadInterstitialAd() {
+    InterstitialAd.load(
+      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitialAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _interstitialAd = null;
+        },
+      ),
+    );
+  }
+
+  // ADDED: Show interstitial after every 3 completed games
+  void _showInterstitialAdIfReady() {
+    _gamesCompletedCount++;
+    if (_gamesCompletedCount % 3 == 0 && _interstitialAd != null) {
+      _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          _interstitialAd = null;
+          _loadInterstitialAd();
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          _interstitialAd = null;
+          _loadInterstitialAd();
+        },
+      );
+      _interstitialAd!.show();
+    }
+  }
+
+  @override
+  void dispose() {
+    // ADDED: Dispose ads
+    _bannerAd?.dispose();
+    _interstitialAd?.dispose();
+    super.dispose();
   }
 
   void _resetGame() {
@@ -43,8 +117,16 @@ class _SimpleGameState extends State<SimpleGame> {
       board = List.generate(boardSize, (_) => List.filled(boardSize, 0));
       currentPlayer = 1;
       winner = 0;
+      winningPieces = [];
       showWinModal = false;
       winMessage = '';
+    });
+  }
+
+  void _scheduleWinModal() {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => showWinModal = true);
     });
   }
 
@@ -63,11 +145,14 @@ class _SimpleGameState extends State<SimpleGame> {
 
     // Check for winner
     if (_checkWinner(row, col, currentPlayer)) {
+      // ADDED: Trigger interstitial on game end
+      _showInterstitialAdIfReady();
       setState(() {
         winner = currentPlayer;
+        winningPieces = logic.getWinningPieces(board, row, col, currentPlayer);
         winMessage = '${currentPlayer == 1 ? 'Black' : 'Yellow'} wins!';
-        showWinModal = true;
       });
+      _scheduleWinModal();
     } else {
       // Check for draw
       bool isDraw = true;
@@ -82,11 +167,14 @@ class _SimpleGameState extends State<SimpleGame> {
       }
 
       if (isDraw) {
+        // ADDED: Trigger interstitial on draw
+        _showInterstitialAdIfReady();
         setState(() {
           winner = 0;
+          winningPieces = [];
           winMessage = 'Game Over - Draw!';
-          showWinModal = true;
         });
+        _scheduleWinModal();
       } else {
         // Switch player
         setState(() {
@@ -191,13 +279,20 @@ class _SimpleGameState extends State<SimpleGame> {
                           return Row(
                             mainAxisSize: MainAxisSize.min,
                             children: List.generate(boardSize, (col) {
+                              final isWinning = winningPieces.any(
+                                (p) => p[0] == row && p[1] == col,
+                              );
                               return GestureDetector(
                                 onTap: () => _handleCellClick(row, col),
                                 child: Container(
                                   width: cellSize,
                                   height: cellSize,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF87CEEB),
+                                    color: isWinning && winner != 0
+                                        ? (winner == 1
+                                            ? primaryYellow
+                                            : Colors.black)
+                                        : const Color(0xFF87CEEB),
                                     border: Border.all(
                                       color: Colors.white,
                                       width: borderWidth,
@@ -228,6 +323,16 @@ class _SimpleGameState extends State<SimpleGame> {
                 },
               ),
             ),
+
+            // ADDED: Banner ad above footer
+            if (_isBannerAdLoaded && _bannerAd != null)
+              Container(
+                alignment: Alignment.center,
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                color: Colors.black,
+                child: AdWidget(ad: _bannerAd!),
+              ),
 
             // Footer
             Container(
@@ -421,4 +526,3 @@ class _SimpleGameState extends State<SimpleGame> {
     );
   }
 }
-

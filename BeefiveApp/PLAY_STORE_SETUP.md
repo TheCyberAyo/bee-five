@@ -269,10 +269,10 @@ Perfect for strategy game lovers!
 
 #### Content Rating
 - Complete the content rating questionnaire
-- Likely rating: **Everyone** (no violence, no inappropriate content)
+- Likely **content** rating: **Everyone** (no violence, no inappropriate content)—confirm in the questionnaire
 
 #### Target Audience
-- **Age**: All ages
+- **Age**: **13+** (match your privacy policy and Play Console target audience settings)
 - **Content**: Family-friendly
 
 ---
