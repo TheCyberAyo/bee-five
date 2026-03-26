@@ -630,7 +630,7 @@ export default function AIGame({ onBackToMenu, initialDifficulty = 'medium', ini
         }}>
           <img 
             src="/BEE-FIVE.png" 
-            alt="Bee-Five Logo"
+            alt="Bee Five Logo"
             style={{
               width: '100%',
               height: '100%',

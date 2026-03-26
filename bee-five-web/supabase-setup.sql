@@ -1,5 +1,5 @@
 -- ========================================
--- Bee-Five Multiplayer Database Setup
+-- Bee Five Multiplayer Database Setup
 -- ========================================
 -- Copy and paste this entire file into Supabase SQL Editor and run it
 -- ========================================

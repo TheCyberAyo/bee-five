@@ -11,7 +11,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onGameModeSelect }) => {
         <div className="inner-container">
           <div className="content-screen">
             <h1 className="game-title">
-              Welcome <br /> to <br /> Bee-<span>Five</span>
+              Welcome <br /> to <br /> Bee <span>Five</span>
             </h1>
             <p className="subtitle">Select the game mode to get started!</p>
             <div className="mode-selection">
@@ -38,7 +38,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onGameModeSelect }) => {
         </div>
       </div>
       <footer className="welcome-footer">
-        <p>&copy; 2025 Bee-Five. All rights reserved.</p>
+        <p>&copy; 2025 Bee Five. All rights reserved.</p>
       </footer>
     </div>
   );

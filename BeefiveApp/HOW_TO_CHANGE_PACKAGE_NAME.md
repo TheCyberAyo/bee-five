@@ -2,7 +2,7 @@
 
 ## ⚠️ Important Note
 
-You cannot use "Bee-Five" as a package name because:
+You cannot use "Bee Five" as a package name because:
 - ❌ Package names cannot contain spaces
 - ❌ Package names cannot contain hyphens
 - ❌ Package names must be lowercase
@@ -10,7 +10,7 @@ You cannot use "Bee-Five" as a package name because:
 
 ## Valid Alternatives
 
-If you want something close to "Bee-Five", here are valid options:
+If you want something close to "Bee Five", here are valid options:
 
 1. **`com.beefive`** ⭐ (Recommended - clean and simple)
 2. **`com.bee.five`** (Separates words with dots)

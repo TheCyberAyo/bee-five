@@ -1,6 +1,6 @@
-# Bee-Five Scalability Analysis
+# Bee Five Scalability Analysis
 
-This document outlines the scalability limits of the Bee-Five project based on the current Supabase setup and multiplayer architecture.
+This document outlines the scalability limits of the Bee Five project based on the current Supabase setup and multiplayer architecture.
 
 ## 📊 Supabase Free Tier Limits
 

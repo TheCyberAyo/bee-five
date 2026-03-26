@@ -659,7 +659,7 @@ export function MultiplayerGame({ roomInfo, playerNumber, onBackToLobby }: Multi
             textShadow: '2px 2px 0px black',
             fontWeight: 'bold'
           }}>
-            🐝 Bee-Five
+            🐝 Bee Five
           </h1>
         </div>
 

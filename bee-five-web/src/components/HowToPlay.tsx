@@ -45,7 +45,7 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
           lineHeight: '1.2',
           fontWeight: 'bold'
         }}>
-          How to Play Bee-Five
+          How to Play Bee Five
         </h1>
         <button
           onClick={() => {
@@ -117,7 +117,7 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
           lineHeight: '1.8'
         }}>
           <p style={{ marginBottom: '1.5rem' }}>
-            Bee-Five follows a simple rule: <strong style={{ color: '#FFC30B' }}>get five of your pieces in a row before your opponent!</strong>
+            Bee Five follows a simple rule: <strong style={{ color: '#FFC30B' }}>get five of your pieces in a row before your opponent!</strong>
           </p>
 
           <h3 style={{
@@ -138,7 +138,7 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
               <strong style={{ color: '#FFC30B' }}>Take Turns:</strong> Play locally with a friend on the same device. Alternate turns and see who reaches five first!
             </li>
             <li style={{ marginBottom: '0.75rem' }}>
-              <strong style={{ color: '#FFC30B' }}>AI Game:</strong> Challenge the Bee-Five bot. It learns from your moves and gets smarter with every match.
+              <strong style={{ color: '#FFC30B' }}>AI Game:</strong> Challenge the Bee Five bot. It learns from your moves and gets smarter with every match.
             </li>
             <li style={{ marginBottom: '0.75rem' }}>
               <strong style={{ color: '#FFC30B' }}>Online Multiplayer:</strong> Play in real time with players around the world (coming soon).
@@ -182,7 +182,7 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
             color: 'rgba(255,255,255,0.7)',
             fontSize: isMobile ? '0.85rem' : '0.9rem'
           }}>
-            © 2025 Bee-Five. Product of MindGrind.
+            © 2025 Bee Five. Product of MindGrind.
           </div>
         </div>
       </div>

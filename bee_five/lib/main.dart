@@ -80,7 +80,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return ChangeNotifierProvider(
       create: (_) => AuthContext(),
       child: MaterialApp(
-        title: 'Bee-Five',
+        title: 'Bee Five',
         debugShowCheckedModeBanner: false,
         scrollBehavior: _NoScrollbarScrollBehavior(),
         theme: ThemeData(

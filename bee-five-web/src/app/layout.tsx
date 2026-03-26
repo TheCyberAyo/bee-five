@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bee-Five - Connect Five Game",
+  title: "Bee Five - Connect Five Game",
   description: "A fun Connect Five game with bee-themed adventure mode and multiplayer features",
   icons: {
     icon: [

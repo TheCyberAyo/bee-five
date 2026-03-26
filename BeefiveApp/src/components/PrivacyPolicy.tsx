@@ -4,20 +4,18 @@
  * Required for app store approval
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  Linking,
-  useColorScheme,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isMobile = SCREEN_WIDTH <= 768;
 
 interface PrivacyPolicyProps {
@@ -25,15 +23,6 @@ interface PrivacyPolicyProps {
 }
 
 export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
-  const openURL = (url: string) => {
-    Linking.openURL(url).catch((err) =>
-      console.error('Failed to open URL:', err)
-    );
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -58,7 +47,7 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
             {/* Introduction */}
             <Text style={styles.introText}>
               Bee Five ("we", "our", or "us") operates the Bee Five mobile
-              application (the "Service"), developed by MindGrind. This page
+              application (the "Service"), developed by ayongezwa. This page
               informs you of our policies regarding the collection, use, and
               disclosure of personal information when you use our Service.
             </Text>
@@ -209,7 +198,7 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
                 <Text style={styles.bold}>Email:</Text> admin@mindgrind.co.za
               </Text>
               <Text style={styles.contactText}>
-                <Text style={styles.bold}>Developer:</Text> MindGrind
+                <Text style={styles.bold}>Developer:</Text> ayongezwa
               </Text>
               <Text style={styles.contactText}>
                 <Text style={styles.bold}>App:</Text> Bee Five
@@ -222,7 +211,7 @@ export default function PrivacyPolicy({ onBackToMenu }: PrivacyPolicyProps) {
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                © 2026 Bee Five. Product of MindGrind.
+                © 2026 Bee Five. Product of ayongezwa.
               </Text>
             </View>
           </View>

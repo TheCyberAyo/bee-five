@@ -6,7 +6,8 @@ import 'xp_service.dart';
 const Color _dashboardPrimaryYellow = Color(0xFFFFC30B);
 
 /// Preference keys for dashboard stats (shared with other screens).
-const String prefAdventureLevel = 'adventure_current_level';
+const String prefAdventureHighestLevel = 'adventure_highest_unlocked_level';
+const String prefAdventureCurrentLevel = 'adventure_current_level';
 const String prefClassicBestStreak = 'classic_best_streak';
 const String prefLoginStreak = 'login_streak';
 const String prefUserXp = 'user_xp';
@@ -46,7 +47,8 @@ class _DashboardPageState extends State<DashboardPage> {
     if (!mounted) return;
     setState(() {
       _username = prefs.getString(prefUsername) ?? 'Guest';
-      _adventureLevel = prefs.getInt(prefAdventureLevel) ?? 1;
+      _adventureLevel =
+          prefs.getInt(prefAdventureHighestLevel) ?? prefs.getInt(prefAdventureCurrentLevel) ?? 1;
       _classicBestScore = prefs.getInt(prefClassicBestStreak) ?? 0;
       _loginStreak = prefs.getInt(prefLoginStreak) ?? 0;
       _xp = prefs.getInt(prefUserXp) ?? 0;

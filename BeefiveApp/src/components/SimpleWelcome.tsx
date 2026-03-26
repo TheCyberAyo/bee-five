@@ -1396,7 +1396,7 @@ export default function SimpleWelcome() {
         <View style={styles.mobileMenuOverlay} pointerEvents="box-none">
           {/* Title */}
           <View style={styles.mapTitleContainer}>
-            <Text style={styles.mapTitle}>BEE-FIVE</Text>
+            <Text style={styles.mapTitle}>BEE FIVE</Text>
             <Text style={styles.mapSubtitle}>
               Connect 5 • Outthink • Win
             </Text>

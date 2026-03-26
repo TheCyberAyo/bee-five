@@ -6,7 +6,7 @@
 set -e
 
 echo "=========================================="
-echo "Building Bee-Five AAB for Play Store"
+echo "Building Bee Five AAB for Play Store"
 echo "=========================================="
 echo ""
 

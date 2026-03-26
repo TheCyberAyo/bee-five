@@ -74,7 +74,7 @@ class _DeepLinkHandlerState extends State<DeepLinkHandler> {
             context,
             'Reset link invalid',
             err.message.contains('code_verifier') || err.message.contains('verifier')
-                ? 'Open BEE-FIVE, use Forgot password again, then tap the new link from the same device.'
+                ? 'Open BEE FIVE, use Forgot password again, then tap the new link from the same device.'
                 : 'This password reset link is invalid or has expired. Please request a new one from the app.',
           );
           return;

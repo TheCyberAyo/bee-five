@@ -58,7 +58,7 @@ export default function SidebarMenu({ onMenuItemClick, isMobile }: SidebarMenuPr
         <div style={{ position: 'relative', width: '100%', maxWidth: '160px', height: '48px' }}>
           <Image 
             src="/BEE-FIVE.png" 
-            alt="BEE-FIVE logo" 
+            alt="BEE FIVE logo" 
             fill
             sizes="160px"
             style={{ objectFit: 'contain' }}

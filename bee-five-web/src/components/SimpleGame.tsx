@@ -101,7 +101,7 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
         }}>
           <img 
             src="/BEE-FIVE.png" 
-            alt="Bee-Five Logo"
+            alt="Bee Five Logo"
             style={{
               width: '100%',
               height: '100%',

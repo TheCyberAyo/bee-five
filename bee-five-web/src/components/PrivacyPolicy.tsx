@@ -126,7 +126,7 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
           lineHeight: '1.8'
         }}>
           <p style={{ marginBottom: '1.5rem' }}>
-            Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.
+            Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by ayongezwa. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.
           </p>
 
           <h3 style={{
@@ -284,7 +284,7 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             <strong style={{ color: '#FFC30B' }}>Email:</strong> admin@mindgrind.co.za
           </p>
           <p style={{ marginBottom: '0.5rem', marginLeft: '1rem' }}>
-            <strong style={{ color: '#FFC30B' }}>Developer:</strong> MindGrind
+            <strong style={{ color: '#FFC30B' }}>Developer:</strong> ayongezwa
           </p>
           <p style={{ marginBottom: '0.5rem', marginLeft: '1rem' }}>
             <strong style={{ color: '#FFC30B' }}>App:</strong> Bee Five
@@ -301,7 +301,7 @@ export default function PrivacyPolicy({ onBackToMenu, isMobile }: PrivacyPolicyP
             color: 'rgba(255,255,255,0.7)',
             fontSize: isMobile ? '0.85rem' : '0.9rem'
           }}>
-            © 2026 Bee Five. Product of MindGrind.
+            © 2026 Bee Five. Product of ayongezwa.
           </div>
         </div>
       </div>

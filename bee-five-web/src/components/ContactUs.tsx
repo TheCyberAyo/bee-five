@@ -172,7 +172,7 @@ export default function ContactUs({ onBackToMenu, isMobile }: ContactUsProps) {
           </p>
 
           <p style={{ marginBottom: '2rem', fontStyle: 'italic', color: 'rgba(255,255,255,0.8)' }}>
-            We typically respond within 24-48 hours. Thank you for being part of the Bee-Five community!
+            We typically respond within 24-48 hours. Thank you for being part of the Bee Five community!
           </p>
           
           <div style={{
@@ -183,7 +183,7 @@ export default function ContactUs({ onBackToMenu, isMobile }: ContactUsProps) {
             color: 'rgba(255,255,255,0.7)',
             fontSize: isMobile ? '0.85rem' : '0.9rem'
           }}>
-            © 2025 Bee-Five. Product of MindGrind.
+            © 2025 Bee Five. Product of MindGrind.
           </div>
         </div>
 

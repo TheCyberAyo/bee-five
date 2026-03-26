@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Script to generate a release keystore for Bee-Five app
+# Script to generate a release keystore for Bee Five app
 # Run this from the android/app directory
 
 echo "=========================================="
-echo "Bee-Five Release Keystore Generator"
+echo "Bee Five Release Keystore Generator"
 echo "=========================================="
 echo ""
 echo "This script will help you generate a keystore for signing your release builds."

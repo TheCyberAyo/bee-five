@@ -588,7 +588,7 @@ export default function Settings({
             color: 'rgba(255,255,255,0.7)',
             fontSize: isMobile ? '0.85rem' : '0.9rem'
           }}>
-            © 2025 Bee-Five. Product of MindGrind.
+            © 2025 Bee Five. Product of MindGrind.
           </div>
         </div>
       </div>

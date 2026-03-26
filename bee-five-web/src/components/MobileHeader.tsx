@@ -69,7 +69,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
           <div style={{ position: 'relative', width: '120px', height: '32px' }}>
             <Image 
               src="/BEE-FIVE.png" 
-              alt="BEE-FIVE logo" 
+              alt="BEE FIVE logo" 
               fill
               style={{ objectFit: 'contain' }}
               sizes="120px"

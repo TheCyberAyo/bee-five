@@ -39,7 +39,7 @@ function section(title) {
 }
 
 async function main() {
-  console.log(`\n${colors.cyan}🐝 Bee-Five Supabase Setup Verification 🐝${colors.reset}\n`);
+  console.log(`\n${colors.cyan}🐝 Bee Five Supabase Setup Verification 🐝${colors.reset}\n`);
 
   let allTestsPassed = true;
 

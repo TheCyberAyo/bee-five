@@ -3,7 +3,7 @@ REM Build script for generating Android App Bundle (AAB) for Google Play Store
 REM Usage: build-aab.bat
 
 echo ==========================================
-echo Building Bee-Five AAB for Play Store
+echo Building Bee Five AAB for Play Store
 echo ==========================================
 echo.
 

@@ -353,7 +353,7 @@ export default function BattleGame({
             textShadow: '2px 2px 0px black',
             fontWeight: 'bold'
           }}>
-            🐝 Bee-Five Battle
+            🐝 Bee Five Battle
           </h1>
         </div>
 

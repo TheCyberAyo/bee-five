@@ -1,6 +1,6 @@
 # Google Play Store Setup Guide
 
-This guide covers all the steps needed to prepare your Bee-Five app for Google Play Store submission.
+This guide covers all the steps needed to prepare your Bee Five app for Google Play Store submission.
 
 ## Table of Contents
 1. [Release Signing](#release-signing)
@@ -104,7 +104,7 @@ cd android
 
 ## Data Safety Form
 
-Google Play requires you to complete a Data Safety form. Here's what you need to know about Bee-Five:
+Google Play requires you to complete a Data Safety form. Here's what you need to know about Bee Five:
 
 ### Data Collection and Sharing
 
@@ -247,7 +247,7 @@ Prepare these assets for your Play Store listing:
 
 **Example Template:**
 ```
-Bee-Five is a strategic board game where you control bees in an exciting tactical challenge.
+Bee Five is a strategic board game where you control bees in an exciting tactical challenge.
 
 🎮 GAME MODES:
 • AI Game - Challenge intelligent opponents

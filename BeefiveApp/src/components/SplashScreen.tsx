@@ -22,7 +22,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
   // Scale animation for MindG image (starts small, expands to full width)
   const mindgScaleAnim = useRef(new Animated.Value(0.1)).current;
   
-  // Spin and scale animation for Bee-Five logo
+  // Spin and scale animation for Bee Five logo
   const logoSpinAnim = useRef(new Animated.Value(0)).current;
   const logoScaleAnim = useRef(new Animated.Value(0.1)).current;
   
@@ -153,7 +153,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
                 resizeMode="contain"
               />
             </Animated.View>
-            <Text style={styles.beeFiveText}>Bee-Five</Text>
+            <Text style={styles.beeFiveText}>Bee Five</Text>
           </View>
         )}
 

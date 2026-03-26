@@ -1,6 +1,6 @@
 # App Approval Checklist
 
-This guide covers everything you need to do to get your Bee-Five app approved for:
+This guide covers everything you need to do to get your Bee Five app approved for:
 1. **AdMob** (for ad monetization)
 2. **Google Play Store** (Android)
 3. **Apple App Store** (iOS)
@@ -18,10 +18,10 @@ This guide covers everything you need to do to get your Bee-Five app approved fo
 #### 2. Create Your App in AdMob
 - [ ] Add Android app to AdMob console
   - Package name: `com.beefive` (verify in `android/app/build.gradle`)
-  - App name: "Bee-Five"
+  - App name: "Bee Five"
 - [ ] Add iOS app to AdMob console
   - Bundle ID: Check your Xcode project settings
-  - App name: "Bee-Five"
+  - App name: "Bee Five"
 - [ ] Get App IDs for both platforms
 - [ ] Add App IDs to your app (see `HOW_TO_GET_ADMOB_IDS.md`)
 
@@ -88,7 +88,7 @@ AdMob **requires** a publicly accessible privacy policy URL. You need:
 - [ ] Accept Developer Distribution Agreement
 
 #### 2. App Information
-- [ ] App name: "Bee-Five"
+- [ ] App name: "Bee Five"
 - [ ] Short description (80 characters max)
 - [ ] Full description (4000 characters max)
 - [ ] App icon (512x512 PNG, no transparency)
@@ -163,7 +163,7 @@ Review your `AndroidManifest.xml`:
 - [ ] Wait for approval (can take 24-48 hours)
 
 #### 2. App Information
-- [ ] App name: "Bee-Five"
+- [ ] App name: "Bee Five"
 - [ ] Subtitle (30 characters)
 - [ ] Description (4000 characters)
 - [ ] Keywords (100 characters, comma-separated)
@@ -248,7 +248,7 @@ Check `ios/BeefiveApp/Info.plist`:
   ```json
   {
     "name": "BeefiveApp",
-    "displayName": "Bee-Five",
+    "displayName": "Bee Five",
     "version": "1.0.0"
   }
   ```

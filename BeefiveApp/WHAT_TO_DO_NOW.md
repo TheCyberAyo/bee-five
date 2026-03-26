@@ -198,7 +198,7 @@ Follow these steps in order:
    - Size: 1024 x 500 pixels
    - Format: PNG or JPG
    - What to include:
-     - App name "Bee-Five"
+     - App name "Bee Five"
      - Bee theme (yellow/black colors)
      - Key features or gameplay visuals
    - Tools: Canva, Photoshop, GIMP, or any image editor
@@ -288,7 +288,7 @@ Follow these steps in order:
 
 1. In Play Console, go to **Store presence** → **Main store listing**
 2. Fill in:
-   - App name: "Bee-Five"
+   - App name: "Bee Five"
    - Short description (80 chars)
    - Full description (4000 chars)
    - Upload feature graphic

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 
-/// Splash flow: "Product of" + MindGrind (7s), then Connect 5 demo (6s), then BEE-FIVE logo (2s), then home.
+/// Splash flow: Connect 5 demo (6s), then BEE FIVE logo (2s), then home.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -11,16 +11,14 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  static const Duration _productOfDuration = Duration(seconds: 7);
   static const Duration _connectFiveDuration = Duration(seconds: 6);
   static const Duration _beeFiveDuration = Duration(seconds: 2);
 
-  int _step = 0; // 0: Product of + MindGrind, 1: Connect 5 demo, 2: BEE-FIVE image
+  int _step = 0; // 0: Connect 5 demo, 1: BEE FIVE image
   Timer? _timer;
 
   Duration get _currentDuration {
-    if (_step == 0) return _productOfDuration;
-    if (_step == 1) return _connectFiveDuration;
+    if (_step == 0) return _connectFiveDuration;
     return _beeFiveDuration;
   }
 
@@ -36,9 +34,6 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
       if (_step == 0) {
         setState(() => _step = 1);
-        _startTimer();
-      } else if (_step == 1) {
-        setState(() => _step = 2);
         _startTimer();
       } else {
         _goToHome();
@@ -63,58 +58,14 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     if (_step == 0) {
-      return _ProductOfScreen();
-    }
-    if (_step == 1) {
       return _ConnectFiveDemoScreen();
     }
     return _BeeFiveLogoScreen();
   }
 }
 
-/// Shared logo size for MindGrind (first splash).
-const _splashLogoSize = 220.0;
-
-/// BEE-FIVE logo on third splash is larger.
+/// BEE FIVE logo on third splash is larger.
 const _beeFiveLogoSize = 300.0;
-
-/// First splash: yellow background, "Product of" and MindGrind logo image (same size as BEE-FIVE logo, central).
-class _ProductOfScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFC30B),
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Product of',
-                style: TextStyle(
-                  fontSize: 22,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: _splashLogoSize,
-                height: _splashLogoSize,
-                child: Image.asset(
-                  'assets/MindGrind.jpg',
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Yellow background, horizontal row of 5 squares at top; Connect 5 played in order: black(3rd), yellow(5th), black(2nd), yellow(1st), black(4th).
 class _ConnectFiveDemoScreen extends StatefulWidget {
@@ -226,7 +177,7 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
   }
 }
 
-/// Third splash: black background, centered BEE-FIVE.png (larger) and "BEE-FIVE" text.
+/// Third splash: black background, centered BEE-FIVE.png (larger) and "BEE FIVE" text.
 class _BeeFiveLogoScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -250,7 +201,7 @@ class _BeeFiveLogoScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'BEE-FIVE',
+                'BEE FIVE',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,

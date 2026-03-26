@@ -1,6 +1,6 @@
 # Supabase Multiplayer Setup Guide
 
-Follow these steps to enable multiplayer functionality in Bee-Five.
+Follow these steps to enable multiplayer functionality in Bee Five.
 
 ## Step 1: Create a Supabase Account and Project
 

@@ -1,10 +1,10 @@
 # Google Play Data Safety Form - Complete Guide
 
-This document provides detailed answers for completing the Google Play Data Safety form for Bee-Five.
+This document provides detailed answers for completing the Google Play Data Safety form for Bee Five.
 
 ## Overview
 
-Bee-Five collects minimal data and is designed with privacy in mind. This guide will help you accurately complete the Data Safety form in Google Play Console.
+Bee Five collects minimal data and is designed with privacy in mind. This guide will help you accurately complete the Data Safety form in Google Play Console.
 
 ---
 
@@ -108,7 +108,7 @@ Bee-Five collects minimal data and is designed with privacy in mind. This guide 
 
 ## Section 3: Data NOT Collected
 
-The following data types are **NOT** collected **directly by Bee-Five** (outside of what third-party SDKs process as described in Section 2.3):
+The following data types are **NOT** collected **directly by Bee Five** (outside of what third-party SDKs process as described in Section 2.3):
 
 - ❌ Location
 - ❌ Personal identifiers (except optional email)

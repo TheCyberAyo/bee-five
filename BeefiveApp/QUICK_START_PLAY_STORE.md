@@ -1,6 +1,6 @@
 # Quick Start: Google Play Store Submission
 
-This is a quick reference guide for submitting Bee-Five to the Google Play Store.
+This is a quick reference guide for submitting Bee Five to the Google Play Store.
 
 ## 🚀 Quick Steps
 

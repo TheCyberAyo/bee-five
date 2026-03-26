@@ -153,7 +153,7 @@ export default function NewsUpdates({ onBackToMenu, isMobile }: NewsUpdatesProps
               flex: '1 1 auto'
             }}>
               <p style={{ marginBottom: '0.75rem' }}>
-                We're thrilled to announce that Bee-Five officially launches on <strong style={{ color: '#FFC30B' }}>October 31, 2025</strong>!
+                We're thrilled to announce that Bee Five officially launches on <strong style={{ color: '#FFC30B' }}>October 31, 2025</strong>!
               </p>
               <p style={{ marginBottom: '0.75rem' }}>
                 On launch day, enjoy:
@@ -169,7 +169,7 @@ export default function NewsUpdates({ onBackToMenu, isMobile }: NewsUpdatesProps
                 <li>Responsive design</li>
               </ul>
               <p style={{ marginBottom: '0', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                Get ready to experience the buzz of Bee-Five!
+                Get ready to experience the buzz of Bee Five!
               </p>
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function NewsUpdates({ onBackToMenu, isMobile }: NewsUpdatesProps
               flex: '1 1 auto'
             }}>
               <p style={{ marginBottom: '0.75rem' }}>
-                The Bee-Five mobile app launches on <strong style={{ color: '#FFC30B' }}>September 14, 2025</strong> - take the game with you!
+                The Bee Five mobile app launches on <strong style={{ color: '#FFC30B' }}>September 14, 2025</strong> - take the game with you!
               </p>
               <p style={{ marginBottom: '0.75rem' }}>
                 Features include:
@@ -240,7 +240,7 @@ export default function NewsUpdates({ onBackToMenu, isMobile }: NewsUpdatesProps
           color: 'rgba(255,255,255,0.7)',
           fontSize: '0.85rem'
         }}>
-          © 2025 Bee-Five. Product of MindGrind.
+          © 2025 Bee Five. Product of MindGrind.
         </div>
 
       </div>

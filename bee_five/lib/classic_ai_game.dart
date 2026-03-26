@@ -97,7 +97,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   // ADDED: Banner ad loader
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -114,7 +114,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   // ADDED: Interstitial ad loader
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      adUnitId: 'ca-app-pub-3940256099942544/1033173712',
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {

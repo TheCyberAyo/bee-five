@@ -387,7 +387,7 @@ export default function SimpleWelcome() {
           padding: isMobile ? '0 1rem 0.5rem' : '0'
         }}>
           <p style={{ margin: 0 }}>
-            🐝 &copy; 2025 Bee-Five. Product of MindGrind 🐝
+            🐝 &copy; 2025 Bee Five. Product of MindGrind 🐝
           </p>
         </footer>
 
@@ -933,7 +933,7 @@ export default function SimpleWelcome() {
           padding: isMobile ? '0 1rem 0.5rem' : '0'
         }}>
           <p style={{ margin: 0 }}>
-            🐝 &copy; 2025 Bee-Five. Product of MindGrind 🐝
+            🐝 &copy; 2025 Bee Five. Product of MindGrind 🐝
           </p>
         </footer>
 
@@ -1319,7 +1319,7 @@ export default function SimpleWelcome() {
             fontWeight: 'bold',
             WebkitTextStroke: isMobile ? '0.5px black' : 'initial'
           }}>
-            🐝 Bee-Five 🐝
+            🐝 Bee Five 🐝
           </h1>
           <p style={{
             fontSize: isMobile ? '1rem' : 'clamp(1rem, 3vw, 1.2rem)',
@@ -1475,7 +1475,7 @@ export default function SimpleWelcome() {
           zIndex: 1,
           padding: isMobile ? '0 1rem 0.5rem' : '0'
         }}>
-          <p style={{ margin: 0 }}>🐝 &copy; 2025 Bee-Five. Product of MindGrind 🐝</p>
+          <p style={{ margin: 0 }}>🐝 &copy; 2025 Bee Five. Product of MindGrind 🐝</p>
         </footer>
       </div>
 

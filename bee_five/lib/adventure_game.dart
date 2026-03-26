@@ -115,7 +115,7 @@ class _AdventureGameState extends State<AdventureGame> {
   // ADDED: Banner ad loader
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -132,7 +132,7 @@ class _AdventureGameState extends State<AdventureGame> {
   // ADDED: Interstitial ad loader
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      adUnitId: 'ca-app-pub-3940256099942544/1033173712',
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
@@ -1043,7 +1043,7 @@ class _AdventureGameState extends State<AdventureGame> {
     if (winner == 1) {
       playerWins++;
       gameStatus = 'You won!';
-      onAdventureGameWon().then((result) {
+      onAdventureGameWon(levelJustPlayed: currentGame).then((result) {
         if (mounted) {
           setState(() {
             _headerXp = result.$1;
@@ -1054,7 +1054,7 @@ class _AdventureGameState extends State<AdventureGame> {
     } else if (winner == 2) {
       aiWins++;
       gameStatus = 'AI won!';
-      onAdventureMatchLost().then((result) {
+      onAdventureMatchLost(levelJustPlayed: currentGame).then((result) {
         if (mounted) {
           setState(() {
             _headerXp = result.$1;

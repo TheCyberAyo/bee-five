@@ -16,8 +16,8 @@ const int xpClassicThreeWins = 2;
 /// XP for winning a hard practice game.
 const int xpHardPracticeWin = 1;
 
-/// XP lost per adventure game loss (each loss = -1 XP).
-const int xpAdventureOneLoss = 1;
+/// XP lost per adventure game loss (each loss = -3 XP).
+const int xpAdventureOneLoss = 3;
 
 /// XP for 2 consecutive adventure game wins.
 const int xpAdventureTwoWins = 1;
@@ -33,6 +33,17 @@ const String _prefDailyChallengeDate = 'daily_challenge_date';
 const String _prefDailyChallengeWon = 'daily_challenge_won';
 const String _prefAdventureConsecutiveLosses = 'adventure_consecutive_losses';
 const String _prefAdventureConsecutiveWins = 'adventure_consecutive_wins';
+const String _prefAdventureHighestUnlockedLevel = 'adventure_highest_unlocked_level';
+const String _prefAdventureCurrentLevel = 'adventure_current_level';
+
+Future<bool> _isAdventureFrontierLevel(int levelJustPlayedOrCompleted) async {
+  final prefs = await SharedPreferences.getInstance();
+  final highest = prefs.getInt(_prefAdventureHighestUnlockedLevel) ??
+      prefs.getInt(_prefAdventureCurrentLevel) ??
+      1;
+  // XP should only be earned when the player is progressing at their highest unlocked level.
+  return levelJustPlayedOrCompleted == highest;
+}
 
 /// Ensures XP is initialized to [defaultXp] if never set.
 Future<void> ensureXpInitialized() async {
@@ -106,17 +117,34 @@ Future<int> removeXp(int delta) async {
   return next;
 }
 
-/// Adventure: call when player loses a game. Returns (new XP, delta). Applies -1 XP per loss.
+/// Adventure: call when player loses a game. Returns (new XP, delta). Applies -3 XP per loss.
 /// Also resets consecutive wins.
-Future<(int, int)> onAdventureMatchLost() async {
+Future<(int, int)> onAdventureMatchLost({int? levelJustPlayed}) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setInt(_prefAdventureConsecutiveWins, 0); // reset win streak on loss
+
+  if (levelJustPlayed != null) {
+    final eligible = await _isAdventureFrontierLevel(levelJustPlayed);
+    if (!eligible) {
+      final xp = await getXp();
+      return (xp, 0);
+    }
+  }
+
   final newXp = await removeXp(xpAdventureOneLoss);
   return (newXp, -xpAdventureOneLoss);
 }
 
 /// Adventure: call when player wins a game. Returns (new XP, delta). +1 if 2 consecutive wins.
-Future<(int, int)> onAdventureGameWon() async {
+Future<(int, int)> onAdventureGameWon({int? levelJustPlayed}) async {
+  if (levelJustPlayed != null) {
+    final eligible = await _isAdventureFrontierLevel(levelJustPlayed);
+    if (!eligible) {
+      final xp = await getXp();
+      return (xp, 0);
+    }
+  }
+
   final prefs = await SharedPreferences.getInstance();
   int wins = prefs.getInt(_prefAdventureConsecutiveWins) ?? 0;
   wins += 1;
@@ -137,6 +165,12 @@ Future<(int, int)> onAdventureLevelWon(int levelJustCompleted) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setInt(_prefAdventureConsecutiveLosses, 0);
   // consecutive wins are not reset on level win (they carry across levels)
+
+  final eligible = await _isAdventureFrontierLevel(levelJustCompleted);
+  if (!eligible) {
+    final xp = await getXp();
+    return (xp, 0);
+  }
 
   if (levelJustCompleted > 0 && levelJustCompleted % 10 == 0) {
     final newXp = await addXp(xpAdventureMultipleOf10);

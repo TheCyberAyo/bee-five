@@ -1,9 +1,9 @@
 @echo off
-REM Script to generate a release keystore for Bee-Five app
+REM Script to generate a release keystore for Bee Five app
 REM Run this from the android/app directory
 
 echo ==========================================
-echo Bee-Five Release Keystore Generator
+echo Bee Five Release Keystore Generator
 echo ==========================================
 echo.
 echo This script will help you generate a keystore for signing your release builds.

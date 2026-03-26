@@ -113,7 +113,7 @@ Here's a simple HTML template you can use:
     
     <p><strong>Last Updated:</strong> January 2026</p>
     
-    <p>Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.</p>
+    <p>Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by ayongezwa. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.</p>
     
     <h2>Information We Collect</h2>
     <p>We may collect the following types of information:</p>
@@ -176,14 +176,14 @@ Here's a simple HTML template you can use:
     
     <div class="contact-box">
         <p><strong>Email:</strong> admin@mindgrind.co.za</p>
-        <p><strong>Developer:</strong> MindGrind</p>
+        <p><strong>Developer:</strong> ayongezwa</p>
         <p><strong>App:</strong> Bee Five</p>
     </div>
     
     <p>We will respond to your inquiry within 30 days.</p>
     
     <div class="footer">
-        <p>© 2026 Bee Five. Product of MindGrind.</p>
+        <p>© 2026 Bee Five. Product of ayongezwa.</p>
     </div>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /**
- * Bee-Five React Native App
+ * Bee Five React Native App
  * https://github.com/facebook/react-native
  *
  * @format

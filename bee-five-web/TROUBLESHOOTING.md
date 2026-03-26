@@ -69,7 +69,7 @@ console.log('Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) 
 Make sure `.env.local` is in the **project root**, not in `src/` or any subfolder:
 
 ```
-Bee-Five/
+Bee Five/
   ├── .env.local          ← Should be here
   ├── package.json
   ├── next.config.ts

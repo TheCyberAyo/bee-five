@@ -1,11 +1,11 @@
 # Play Store Listing Guide
 
-Complete guide for creating your Play Store listing for Bee-Five.
+Complete guide for creating your Play Store listing for Bee Five.
 
 ## Required Information
 
 ### App Name
-**Bee-Five**
+**Bee Five**
 
 ### Short Description (80 characters max)
 **Example**: "Strategic bee-themed board game with AI opponents and adventure mode"
@@ -14,7 +14,7 @@ Complete guide for creating your Play Store listing for Bee-Five.
 
 **Template**:
 ```
-Bee-Five is an engaging strategic board game where you control bees in tactical challenges. Perfect for strategy game enthusiasts!
+Bee Five is an engaging strategic board game where you control bees in tactical challenges. Perfect for strategy game enthusiasts!
 
 🎮 GAME MODES:
 • AI Game - Challenge intelligent opponents with multiple difficulty levels
@@ -35,7 +35,7 @@ Bee-Five is an engaging strategic board game where you control bees in tactical 
 • Casual gamers looking for a challenge
 • Families looking for fun together
 
-Download Bee-Five now and start your strategic bee adventure!
+Download Bee Five now and start your strategic bee adventure!
 ```
 
 ### Category
@@ -67,7 +67,7 @@ Complete the questionnaire. Based on typical answers for a non-violent puzzle ga
 - **Format**: PNG or JPG
 - **Purpose**: Banner at top of listing
 - **Design Tips**:
-  - Include app name "Bee-Five"
+  - Include app name "Bee Five"
   - Show key features or gameplay
   - Use bee theme colors (yellow/black)
   - Keep text minimal and readable
@@ -187,7 +187,7 @@ When completing the content rating, answer:
 ```
 🎮 New Update: Enhanced AI opponents and smoother gameplay!
 
-Experience the strategic world of Bee-Five with:
+Experience the strategic world of Bee Five with:
 • Improved AI difficulty levels
 • Better performance and stability
 • Enhanced adventure mode
@@ -204,7 +204,7 @@ For each update, provide release notes:
 
 **Example for v1.0.0**:
 ```
-Initial release of Bee-Five!
+Initial release of Bee Five!
 
 Features:
 • AI game mode with multiple difficulty levels
@@ -286,7 +286,7 @@ After submitting your listing:
 
 ## Quick Reference
 
-**App Name**: Bee-Five
+**App Name**: Bee Five
 **Package**: com.beefive
 **Category**: Games > Board
 **Content rating (typical)**: Everyone | **Target audience / policy**: 13+

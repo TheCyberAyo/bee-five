@@ -1,6 +1,6 @@
 # Authentication & Progress Tracking Setup
 
-This guide will help you set up user authentication and progress tracking for Bee-Five so that player progress syncs between web and app versions.
+This guide will help you set up user authentication and progress tracking for Bee Five so that player progress syncs between web and app versions.
 
 ## Overview
 

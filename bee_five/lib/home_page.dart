@@ -386,19 +386,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (!mounted) return;
       final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
       if (saved != soundEnabled) setState(() => soundEnabled = saved);
-      final savedLevel = await syncAdventureProgress();
-      if (savedLevel != currentGame) {
+      final progress = await syncAdventureProgress();
+      if (progress.currentGame != currentGame || progress.highestUnlockedGame != highestUnlockedGame) {
         setState(() {
-          currentGame = savedLevel;
-          highestUnlockedGame = savedLevel;
-          gamesCompleted = savedLevel > 1 ? List.generate(savedLevel - 1, (i) => i + 1) : [];
+          currentGame = progress.currentGame;
+          highestUnlockedGame = progress.highestUnlockedGame;
+          gamesCompleted = progress.gamesCompleted;
         });
       } else {
-        if (savedLevel > highestUnlockedGame) {
-          setState(() => highestUnlockedGame = savedLevel);
-        }
-        if (gamesCompleted.isEmpty && savedLevel > 1) {
-          setState(() => gamesCompleted = List.generate(savedLevel - 1, (i) => i + 1));
+        if (gamesCompleted.isEmpty && progress.gamesCompleted.isNotEmpty) {
+          setState(() => gamesCompleted = progress.gamesCompleted);
         }
       }
     });
@@ -453,7 +450,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   // ADDED: Rewarded ad loader
   void _loadRewardedAd() {
     RewardedAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/2005976804',
+      adUnitId: 'ca-app-pub-3940256099942544/5224354917',
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
@@ -798,7 +795,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     height: isMobile ? 44 : 52,
                     fit: BoxFit.contain,
                     errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
-                      'BEE-FIVE',
+                      'BEE FIVE',
                       style: TextStyle(
                         fontSize: isMobile ? 18 : 22,
                         fontWeight: FontWeight.w900,
@@ -846,7 +843,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
         
-        // Yellow band between header and map: BEE-FIVE (black) + tagline
+        // Yellow band between header and map: BEE FIVE (black) + tagline
         Positioned(
           top: 74,
           left: 0,
@@ -860,7 +857,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'BEE-FIVE',
+                  'BEE FIVE',
                   style: TextStyle(
                     fontSize: isMobile ? 36 : 40,
                     fontWeight: FontWeight.w900,
@@ -1336,9 +1333,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   onPressed: _showGainXPsModal,
                 ),
                 const SizedBox(height: 12),
-                // Bee-Five Tour
+                // Bee Five Tour
                 _sideMenuButton(
-                  label: 'Bee-Five Tour',
+                  label: 'Bee Five Tour',
                   iconImagePath: 'assets/homeImagery/tour_icon.png',
                   color: primaryYellow,
                   onPressed: _showBeeFiveTourModal,
@@ -2006,11 +2003,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
         content: const SingleChildScrollView(
           child: Text(
-            'How to gain XPs in Bee-Five:\n\n'
+            'How to gain XPs in Bee Five:\n\n'
             '• Login: +2 XP per calendar day (once per day).\n\n'
             '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
             '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
-            '• Adventure: +1 XP for every 2 consecutive level wins; −1 XP per loss. '
+            '• Adventure: +1 XP for every 2 consecutive level wins; −3 XP per loss. '
             'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
             '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
             '• Watch Ad: Watch a short ad → +2 XP (tap "Watch Ad +2 XP" on the home screen).', // ADDED: Watch Ad entry
@@ -2043,7 +2040,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           children: [
             Text('📖 ', style: TextStyle(fontSize: 28)),
             Text(
-              'Bee-Five Tour',
+              'Bee Five Tour',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -2067,7 +2064,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
               SizedBox(height: 4),
               Text(
-                'Play through levels on the map. Each level is a Bee-Five game; win to advance. Time per move gets shorter as you progress: from 12 seconds early on down to 2 seconds in the highest levels. Obstacles appear as you go: blocked cells, mud zones, blind play (hidden board), progressive or disappearing blocks, shifting blocks, disappearing pieces, piece capacity limits, and match rounds (best-of-3 or best-of-5). This is the main story mode.',
+                'Play through levels on the map. Each level is a Bee Five game; win to advance. Time per move gets shorter as you progress: from 12 seconds early on down to 2 seconds in the highest levels. Obstacles appear as you go: blocked cells, mud zones, blind play (hidden board), progressive or disappearing blocks, shifting blocks, disappearing pieces, piece capacity limits, and match rounds (best-of-3 or best-of-5). This is the main story mode.',
                 style: TextStyle(fontSize: 15, color: Colors.black87),
               ),
               SizedBox(height: 16),
@@ -2095,7 +2092,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
               SizedBox(height: 4),
               Text(
-                'One challenge per day: same Bee-Five rules with a fixed daily puzzle (e.g. Beat the Clock, Obstacle Course, Blitz, Speed Round). Play once per day. Winning the Daily Challenge awards +3 XP and is the only way to earn XP from a single daily attempt — great for building your total and comparing with others.',
+                'One challenge per day: same Bee Five rules with a fixed daily puzzle (e.g. Beat the Clock, Obstacle Course, Blitz, Speed Round). Play once per day. Winning the Daily Challenge awards +3 XP and is the only way to earn XP from a single daily attempt — great for building your total and comparing with others.',
                 style: TextStyle(fontSize: 15, color: Colors.black87),
               ),
             ],
@@ -2316,6 +2313,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           if (!context.mounted) return;
                           setState(() {
                             currentGame = 1;
+                            highestUnlockedGame = 1;
                             gamesCompleted = [];
                           });
                           Navigator.pop(dialogContext);
@@ -2467,12 +2465,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         onBackToMenu: () {
           setState(() => gameMode = GameMode.menu);
           _scheduleScrollToCurrentLevel();
-          syncAdventureProgress().then((level) {
+          syncAdventureProgress().then((progress) {
             if (mounted) {
               setState(() {
-                currentGame = level;
-                highestUnlockedGame = level;
-                gamesCompleted = level > 1 ? List.generate(level - 1, (i) => i + 1) : [];
+                currentGame = progress.currentGame;
+                highestUnlockedGame = progress.highestUnlockedGame;
+                gamesCompleted = progress.gamesCompleted;
               });
               _scheduleScrollToCurrentLevel();
             }
@@ -2526,7 +2524,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               'assets/BEE-FIVE.png',
               height: 36,
               fit: BoxFit.contain,
-              errorBuilder: (_, Object error, StackTrace? stackTrace) => const Text('BEE-FIVE'),
+              errorBuilder: (_, Object error, StackTrace? stackTrace) => const Text('BEE FIVE'),
             ),
           ),
           backgroundColor: primaryYellow,
@@ -2543,7 +2541,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by MindGrind. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.',
+                        'Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by ayongezwa. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.',
                         style: TextStyle(
                           fontSize: 16,
                           height: 1.6,
@@ -2604,7 +2602,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       _policySection('Contact Us', [
                         'If you have any questions about this Privacy Policy, wish to exercise your rights, or need to contact us regarding your personal data, please reach out to us:',
                         'Email: admin@mindgrind.co.za',
-                        'Developer: MindGrind',
+                        'Developer: ayongezwa',
                         'App: Bee Five',
                         'We will respond to your inquiry within 30 days.',
                       ]),
@@ -2612,7 +2610,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         padding: EdgeInsets.only(top: 24, bottom: 16),
                         child: Center(
                           child: Text(
-                            '© 2026 Bee Five. Product of MindGrind.',
+                            '© 2026 Bee Five. Product of ayongezwa.',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.black54,
@@ -2668,7 +2666,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             height: 36,
             fit: BoxFit.contain,
             errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
-              'BEE-FIVE',
+              'BEE FIVE',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
