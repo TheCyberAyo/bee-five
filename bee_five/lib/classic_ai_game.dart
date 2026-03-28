@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // ADDED: AdMob import
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
 import 'xp_service.dart';
@@ -56,21 +56,28 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   int _headerXp = 0;
   int _lastXpDelta = 0;
 
+  // CHANGED: Track "Play Again" clicks for interstitial (show on every 4th click)
+  int _playAgainCount = 0;
+
   /// Difficulty for classic streak: games 1–2 easy, 3–4 medium, 5–6 hard, then repeat.
+  /// CHANGED: Games ending in 6 or 7 within first 100 games are forced to medium.
   static String _classicStreakDifficultyForGame(int gameIndex) {
+    // Force medium for games ending in 6 or 7 within the first 100 games
+    if (gameIndex <= 100 && (gameIndex % 10 == 6 || gameIndex % 10 == 7)) {
+      return 'medium';
+    }
     final slot = (gameIndex - 1) % 6;
     if (slot < 2) return 'easy';
     if (slot < 4) return 'medium';
     return 'hard';
   }
 
-  // ADDED: Banner ad variables
+  // Banner ad variables
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
 
-  // ADDED: Interstitial ad variables
+  // Interstitial ad variables
   InterstitialAd? _interstitialAd;
-  int _gamesCompletedCount = 0;
 
   @override
   void initState() {
@@ -82,6 +89,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       _startSessionTimer();
     } else {
       aiDifficulty = widget.initialDifficulty;
+      // CHANGED: Also apply the ending-in-6-or-7 rule for non-streak mode if applicable
       timeLeft = widget.initialTimer;
     }
     _resetBoard();
@@ -89,15 +97,13 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
-    // ADDED: Load ads
     _loadBannerAd();
     _loadInterstitialAd();
   }
 
-  // ADDED: Banner ad loader
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -111,10 +117,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     )..load();
   }
 
-  // ADDED: Interstitial ad loader
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-3940256099942544/1033173712',
+      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
@@ -127,23 +132,31 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     );
   }
 
-  // ADDED: Show interstitial after every 3 completed games
-  void _showInterstitialAdIfReady() {
-    _gamesCompletedCount++;
-    if (_gamesCompletedCount % 3 == 0 && _interstitialAd != null) {
+  // CHANGED: Show interstitial only when "Play Again" is clicked the 4th time
+  void _onPlayAgainPressed() {
+    _playAgainCount++;
+    if (_playAgainCount % 4 == 0 && _interstitialAd != null) {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
           _interstitialAd = null;
           _loadInterstitialAd();
+          // Proceed with resetting the game after ad is dismissed
+          setState(() => showWinModal = false);
+          _resetGame();
         },
         onAdFailedToShowFullScreenContent: (ad, error) {
           ad.dispose();
           _interstitialAd = null;
           _loadInterstitialAd();
+          setState(() => showWinModal = false);
+          _resetGame();
         },
       );
       _interstitialAd!.show();
+    } else {
+      setState(() => showWinModal = false);
+      _resetGame();
     }
   }
 
@@ -219,7 +232,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   void dispose() {
     timer?.cancel();
     sessionTimer?.cancel();
-    // ADDED: Dispose ads
     _bannerAd?.dispose();
     _interstitialAd?.dispose();
     super.dispose();
@@ -287,15 +299,14 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   void _handleCellClick(int row, int col) {
     if (board[row][col] != 0 || winner != 0 || currentPlayer != 1 || isAITurn) {
-      return; // Cell already occupied, game over, or not human's turn
+      return;
     }
 
     setState(() {
       board[row][col] = currentPlayer;
-      timeLeft = widget.initialTimer; // Reset timer on move
+      timeLeft = widget.initialTimer;
     });
 
-    // Check for winner
     if (_checkWinner(row, col, currentPlayer)) {
       if (widget.isClassicStreakMode) {
         setState(() {
@@ -317,8 +328,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             });
           }
         });
-        // ADDED: Trigger interstitial on game end (streak mode)
-        _showInterstitialAdIfReady();
         timer?.cancel();
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) _resetBoard();
@@ -337,8 +346,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       } else {
         setState(() => _lastXpDelta = 0);
       }
-      // ADDED: Trigger interstitial on game end
-      _showInterstitialAdIfReady();
       setState(() {
         winner = currentPlayer;
         winMessage = 'You win!';
@@ -347,7 +354,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       timer?.cancel();
       _scheduleEndGameModal();
     } else {
-      // Check for draw
       bool isDraw = true;
       for (int r = 0; r < boardSize; r++) {
         for (int c = 0; c < boardSize; c++) {
@@ -364,8 +370,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           _classicSessionEnd(timeUp: false);
           return;
         }
-        // ADDED: Trigger interstitial on draw
-        _showInterstitialAdIfReady();
         setState(() {
           _lastXpDelta = 0;
           winner = 0;
@@ -375,7 +379,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
         timer?.cancel();
         _scheduleEndGameModal();
       } else {
-        // Switch to AI turn
         setState(() {
           currentPlayer = 2;
           isAITurn = true;
@@ -386,7 +389,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   void _makeAIMove() {
-    // Get available cells
     final availableCells = <Map<String, int>>[];
     for (int row = 0; row < boardSize; row++) {
       for (int col = 0; col < boardSize; col++) {
@@ -397,8 +399,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     }
 
     if (availableCells.isEmpty) {
-      // ADDED: Trigger interstitial on draw
-      _showInterstitialAdIfReady();
       setState(() {
         _lastXpDelta = 0;
         winner = 0;
@@ -410,7 +410,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       return;
     }
 
-    // Delay AI move for better UX
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted || winner != 0) return;
 
@@ -423,10 +422,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
         isAITurn = false;
       });
 
-      // Check for winner
       if (_checkWinner(row, col, 2)) {
         if (widget.isClassicStreakMode) {
-          _showInterstitialAdIfReady();
           setState(() {
             _lastXpDelta = 0;
             winner = 2;
@@ -440,8 +437,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           });
           return;
         }
-        // ADDED: Trigger interstitial when AI wins
-        _showInterstitialAdIfReady();
         setState(() {
           _lastXpDelta = 0;
           winner = 2;
@@ -451,7 +446,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
         timer?.cancel();
         _scheduleEndGameModal();
       } else {
-        // Check for draw
         bool isDraw = true;
         for (int r = 0; r < boardSize; r++) {
           for (int c = 0; c < boardSize; c++) {
@@ -468,8 +462,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             _classicSessionEnd(timeUp: false);
             return;
           }
-          // ADDED: Trigger interstitial on draw
-          _showInterstitialAdIfReady();
           setState(() {
             _lastXpDelta = 0;
             winner = 0;
@@ -479,10 +471,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           timer?.cancel();
           _scheduleEndGameModal();
         } else {
-          // Switch back to human
           setState(() {
             currentPlayer = 1;
-            timeLeft = widget.initialTimer; // Reset timer
+            timeLeft = widget.initialTimer;
           });
           if (widget.initialTimer > 0) {
             _startTimer();
@@ -503,7 +494,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   Map<String, int> _getEasyAIMove(List<Map<String, int>> availableCells, List<List<int>> currentBoard) {
-    // Priority 1: Take winning move if available
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -512,7 +502,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately (always)
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -521,7 +510,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 3: Block 3-in-a-row threats (50% of the time)
     if (math.Random().nextDouble() > 0.5) {
       for (final cell in availableCells) {
         final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
@@ -532,13 +520,11 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 4: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }
 
   Map<String, int> _getMediumAIMove(List<Map<String, int>> availableCells, List<List<int>> currentBoard) {
-    // Priority 1: Take winning move if available
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -547,7 +533,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -556,7 +541,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 3: Block 3-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -565,7 +549,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 4: Create 3-in-a-row if it can lead to 5
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -574,13 +557,11 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 5: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }
 
   Map<String, int> _getHardAIMove(List<Map<String, int>> availableCells, List<List<int>> currentBoard) {
-    // Priority 1: Take winning move if available
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -589,7 +570,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -598,7 +578,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 3: Block 4-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -607,7 +586,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 4: Create 4-in-a-row if possible
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -616,7 +594,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 5: Block 3-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -625,7 +602,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 6: Create 3-in-a-row if it can lead to 5
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -634,27 +610,24 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       }
     }
 
-    // Priority 7: Strategic positioning near existing pieces
     for (final cell in availableCells) {
       if (_isNearHumanPiece(currentBoard, cell['row']!, cell['col']!)) {
         return cell;
       }
     }
 
-    // Priority 8: Try to control center area
     final centerCells = availableCells.where((cell) {
       final centerRow = 4.5;
       final centerCol = 4.5;
       final distance = math.sqrt(math.pow(cell['row']! - centerRow, 2) + math.pow(cell['col']! - centerCol, 2));
       return distance <= 2;
     }).toList();
-    
+
     if (centerCells.isNotEmpty) {
       final random = math.Random();
       return centerCells[random.nextInt(centerCells.length)];
     }
 
-    // Priority 9: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }
@@ -759,7 +732,33 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   void _handleExit() {
     timer?.cancel();
+    sessionTimer?.cancel();
     widget.onBackToMenu();
+  }
+
+  Future<void> _confirmExit() async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Exit Game?'),
+        content: const Text('Are you sure you want to exit?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(true),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldExit == true && mounted) {
+      _handleExit();
+    }
   }
 
   @override
@@ -770,285 +769,285 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: const Color(0xFF808080), // Gray background
+          backgroundColor: const Color(0xFF808080),
           body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
-              decoration: const BoxDecoration(
-                color: Colors.black,
-                border: Border(
-                  bottom: BorderSide(color: primaryYellow, width: 2),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox(width: 40),
-                  Image.asset(
-                    'assets/BEE-FIVE.png',
-                    height: 40,
-                    fit: BoxFit.contain,
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
+                  decoration: const BoxDecoration(
+                    color: Colors.black,
+                    border: Border(
+                      bottom: BorderSide(color: primaryYellow, width: 2),
+                    ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      const SizedBox(width: 40),
                       Image.asset(
-                        'assets/homeImagery/xp_gem.png',
-                        width: 28,
-                        height: 28,
+                        'assets/BEE-FIVE.png',
+                        height: 40,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$_headerXp',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: primaryYellow,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.asset(
+                            'assets/homeImagery/xp_gem.png',
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$_headerXp',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: primaryYellow,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-
-            // Classic mode: Best streak at top
-            if (widget.isClassicStreakMode)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                color: primaryYellow.withValues(alpha: 0.95),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Best: $classicBestStreak',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Text(
-                      'Score: $classicGamesWon',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Text(
-                      'Time: ${classicSessionTimeLeft ~/ 60}:${(classicSessionTimeLeft % 60).toString().padLeft(2, '0')}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: classicSessionTimeLeft <= 60 ? Colors.red : Colors.black,
-                      ),
-                    ),
-                  ],
                 ),
-              ),
 
-            // Game Info (non-classic or turn/timer below best bar)
-            Container(
-              padding: const EdgeInsets.all(15),
-              child: Column(
-                children: [
-                  Text(
-                    currentPlayer == 1 ? '▶ Your Turn (Yellow)' : '🤖 AI\'s Turn (Black)',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
+                // Classic mode: Best streak at top
+                if (widget.isClassicStreakMode)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    color: primaryYellow.withValues(alpha: 0.95),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Best: $classicBestStreak',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Text(
+                          'Score: $classicGamesWon',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Text(
+                          'Time: ${classicSessionTimeLeft ~/ 60}:${(classicSessionTimeLeft % 60).toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: classicSessionTimeLeft <= 60 ? Colors.red : Colors.black,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (!widget.isClassicStreakMode && widget.initialTimer > 0 && currentPlayer == 1 && winner == 0)
-                    Text(
-                      'Time: ${timeLeft}s',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: timeLeft <= 5 ? Colors.red : Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                ],
-              ),
-            ),
 
-            // Game Board - same sizing as Play with a Friend: full width of available space, centered
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final boardSide = constraints.maxWidth;
-                  final cellSize = (boardSide - totalBorders) / boardSize;
-                  return Center(
-                    child: Container(
-                      width: boardSide,
-                      height: boardSide,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF87CEEB), // Sky blue
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.black, width: 3),
+                // Game Info
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  child: Column(
+                    children: [
+                      Text(
+                        currentPlayer == 1 ? '▶ Your Turn (Yellow)' : '🤖 AI\'s Turn (Black)',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
                       ),
-                      padding: EdgeInsets.all(borderWidth),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(boardSize, (row) {
-                          return Row(
+                      if (!widget.isClassicStreakMode && widget.initialTimer > 0 && currentPlayer == 1 && winner == 0)
+                        Text(
+                          'Time: ${timeLeft}s',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: timeLeft <= 5 ? Colors.red : Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Game Board
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final boardSide = constraints.maxWidth;
+                      final cellSize = (boardSide - totalBorders) / boardSize;
+                      return Center(
+                        child: Container(
+                          width: boardSide,
+                          height: boardSide,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF87CEEB),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.black, width: 3),
+                          ),
+                          padding: EdgeInsets.all(borderWidth),
+                          child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            children: List.generate(boardSize, (col) {
-                              return GestureDetector(
-                                onTap: () => _handleCellClick(row, col),
-                                child: Container(
-                                  width: cellSize,
-                                  height: cellSize,
-                                  decoration: BoxDecoration(
-                                    color: _winningCellBackground(row, col) ??
-                                        const Color(0xFF87CEEB),
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: borderWidth,
+                            children: List.generate(boardSize, (row) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: List.generate(boardSize, (col) {
+                                  return GestureDetector(
+                                    onTap: () => _handleCellClick(row, col),
+                                    child: Container(
+                                      width: cellSize,
+                                      height: cellSize,
+                                      decoration: BoxDecoration(
+                                        color: _winningCellBackground(row, col) ??
+                                            const Color(0xFF87CEEB),
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: borderWidth,
+                                        ),
+                                      ),
+                                      child: board[row][col] != 0
+                                          ? Center(
+                                              child: Container(
+                                                width: cellSize / 1.5,
+                                                height: cellSize / 1.5,
+                                                decoration: BoxDecoration(
+                                                  color: board[row][col] == 1
+                                                      ? primaryYellow
+                                                      : Colors.black,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                            )
+                                          : null,
                                     ),
-                                  ),
-                                  child: board[row][col] != 0
-                                      ? Center(
-                                          child: Container(
-                                            width: cellSize / 1.5,
-                                            height: cellSize / 1.5,
-                                            decoration: BoxDecoration(
-                                              color: board[row][col] == 1
-                                                  ? primaryYellow
-                                                  : Colors.black,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                        )
-                                      : null,
-                                ),
+                                  );
+                                }),
                               );
                             }),
-                          );
-                        }),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // ADDED: Banner ad above footer
-            if (_isBannerAdLoaded && _bannerAd != null)
-              Container(
-                alignment: Alignment.center,
-                width: _bannerAd!.size.width.toDouble(),
-                height: _bannerAd!.size.height.toDouble(),
-                color: Colors.black,
-                child: AdWidget(ad: _bannerAd!),
-              ),
-
-            // Footer (Classic: Home only; Practice: Home + Restart)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
-              decoration: const BoxDecoration(
-                color: Colors.black,
-                border: Border(
-                  top: BorderSide(color: primaryYellow, width: 2),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: ElevatedButton(
-                        onPressed: _handleExit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryYellow,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: const BorderSide(color: Colors.black, width: 2),
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Image.asset(
-                              'assets/homeImagery/home.png',
-                              width: 20,
-                              height: 20,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                            ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'Home',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      );
+                    },
+                  ),
+                ),
+
+                // Banner ad above footer
+                if (_isBannerAdLoaded && _bannerAd != null)
+                  Container(
+                    alignment: Alignment.center,
+                    width: _bannerAd!.size.width.toDouble(),
+                    height: _bannerAd!.size.height.toDouble(),
+                    color: Colors.black,
+                    child: AdWidget(ad: _bannerAd!),
+                  ),
+
+                // Footer
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
+                  decoration: const BoxDecoration(
+                    color: Colors.black,
+                    border: Border(
+                      top: BorderSide(color: primaryYellow, width: 2),
                     ),
                   ),
-                  if (!widget.isClassicStreakMode)
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: ElevatedButton(
-                          onPressed: _resetGame,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryYellow,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: const BorderSide(color: Colors.black, width: 2),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: ElevatedButton(
+                            onPressed: _confirmExit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryYellow,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: const BorderSide(color: Colors.black, width: 2),
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image.asset(
-                                'assets/homeImagery/restart_icon.png',
-                                width: 22,
-                                height: 22,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Restart',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Image.asset(
+                                  'assets/homeImagery/home.png',
+                                  width: 20,
+                                  height: 20,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 6),
+                                const Text(
+                                  'Home',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
+                      if (!widget.isClassicStreakMode)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: ElevatedButton(
+                              onPressed: _resetGame,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryYellow,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(color: Colors.black, width: 2),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.asset(
+                                    'assets/homeImagery/restart_icon.png',
+                                    width: 22,
+                                    height: 22,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Restart',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        ),
+          ),
         ),
 
         // Win Modal
@@ -1057,136 +1056,130 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
             color: Colors.black.withValues(alpha: 0.8),
             child: Center(
               child: Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.all(30),
-              decoration: BoxDecoration(
-                color: primaryYellow,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.black, width: 4),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    winMessage,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      decoration: TextDecoration.none,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (_lastXpDelta != 0) ...[
-                    const SizedBox(height: 8),
+                margin: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(30),
+                decoration: BoxDecoration(
+                  color: primaryYellow,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.black, width: 4),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      _lastXpDelta > 0 ? '+$_lastXpDelta XP' : '$_lastXpDelta XP',
-                      style: TextStyle(
-                        fontSize: 14,
+                      winMessage,
+                      style: const TextStyle(
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: _lastXpDelta > 0 ? Colors.green : Colors.red,
+                        color: Colors.black,
+                        decoration: TextDecoration.none,
                       ),
+                      textAlign: TextAlign.center,
                     ),
-                  ],
-                  const SizedBox(height: 30),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (classicGameOver)
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              classicGameOver = false;
-                              classicSessionTimeLeft = _classicSessionSeconds;
-                              classicGamesWon = 0;
-                              _classicGameIndex = 1;
-                              aiDifficulty = _classicStreakDifficultyForGame(1);
-                              showWinModal = false;
-                            });
-                            _resetBoard();
-                            _startSessionTimer();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              side: const BorderSide(color: Colors.black, width: 2),
-                            ),
-                          ),
-                          child: const Text(
-                            'Try Again',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        )
-                      else
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              showWinModal = false;
-                            });
-                            _resetGame();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              side: const BorderSide(color: Colors.black, width: 2),
-                            ),
-                          ),
-                          child: const Text(
-                            'Play Again',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 15),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            showWinModal = false;
-                          });
-                          _handleExit();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: const BorderSide(color: Colors.black, width: 2),
-                          ),
-                        ),
-                        child: const Text(
-                          'Back to Menu',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                    if (_lastXpDelta != 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _lastXpDelta > 0 ? '+$_lastXpDelta XP' : '$_lastXpDelta XP',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: _lastXpDelta > 0 ? Colors.green : Colors.red,
                         ),
                       ),
                     ],
-                  ),
-                ],
+                    const SizedBox(height: 30),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (classicGameOver)
+                          ElevatedButton(
+                            // CHANGED: "Try Again" in classic session-end also uses _onPlayAgainPressed
+                            onPressed: () {
+                              setState(() {
+                                classicGameOver = false;
+                                classicSessionTimeLeft = _classicSessionSeconds;
+                                classicGamesWon = 0;
+                                _classicGameIndex = 1;
+                                aiDifficulty = _classicStreakDifficultyForGame(1);
+                              });
+                              _onPlayAgainPressed();
+                              _startSessionTimer();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: const BorderSide(color: Colors.black, width: 2),
+                              ),
+                            ),
+                            child: const Text(
+                              'Try Again',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          )
+                        else
+                          ElevatedButton(
+                            // CHANGED: routes through _onPlayAgainPressed instead of direct reset
+                            onPressed: _onPlayAgainPressed,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: const BorderSide(color: Colors.black, width: 2),
+                              ),
+                            ),
+                            child: const Text(
+                              'Play Again',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 15),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() => showWinModal = false);
+                            _handleExit();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: const BorderSide(color: Colors.black, width: 2),
+                            ),
+                          ),
+                          child: const Text(
+                            'Back to Menu',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
             ),
           ),
       ],

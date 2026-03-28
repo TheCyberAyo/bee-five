@@ -115,7 +115,7 @@ class _AdventureGameState extends State<AdventureGame> {
   // ADDED: Banner ad loader
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -132,7 +132,7 @@ class _AdventureGameState extends State<AdventureGame> {
   // ADDED: Interstitial ad loader
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-3940256099942544/1033173712',
+      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
@@ -1333,17 +1333,18 @@ class _AdventureGameState extends State<AdventureGame> {
     void showExitDialog() {
       showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: const Text('Exit Game?'),
           content: const Text('Are you sure you want to exit? Your progress will be saved.'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.of(context, rootNavigator: true).pop();
                 _saveAndBackToMenu();
               },
               child: const Text('Exit'),
@@ -1572,7 +1573,7 @@ class _AdventureGameState extends State<AdventureGame> {
                   ],
                 ],
               ),
-            ),  // Game status Container - comma before next child
+            ),
             // Game board
             Expanded(
               child: Container(
@@ -1613,8 +1614,9 @@ class _AdventureGameState extends State<AdventureGame> {
                                           width: cellSize,
                                           height: cellSize,
                                           decoration: BoxDecoration(
+                                            // *** ONLY CHANGE: winning cell background is now the opponent's color ***
                                             color: isWinning
-                                                ? Colors.green.withValues(alpha: 0.3)
+                                                ? (winner == 1 ? Colors.black : primaryYellow)
                                                 : isBlocked
                                                     ? Colors.grey.shade400
                                                     : isMudZone
@@ -1723,18 +1725,19 @@ class _AdventureGameState extends State<AdventureGame> {
                         onPressed: () {
                           showDialog(
                             context: context,
+                            barrierDismissible: false,
                             builder: (context) => AlertDialog(
                               title: const Text('Exit Game?'),
                               content: const Text(
                                   'Are you sure you want to exit? Your progress will be saved.'),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.pop(context),
+                                  onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
                                   child: const Text('Cancel'),
                                 ),
                                 TextButton(
                                   onPressed: () {
-                                    Navigator.pop(context);
+                                    Navigator.of(context, rootNavigator: true).pop();
                                     _saveAndBackToMenu();
                                   },
                                   child: const Text('Exit'),

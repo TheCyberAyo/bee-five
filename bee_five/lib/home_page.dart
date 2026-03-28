@@ -450,7 +450,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   // ADDED: Rewarded ad loader
   void _loadRewardedAd() {
     RewardedAd.load(
-      adUnitId: 'ca-app-pub-3940256099942544/5224354917',
+      adUnitId: 'ca-app-pub-6740638137327567/2005976804',
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
