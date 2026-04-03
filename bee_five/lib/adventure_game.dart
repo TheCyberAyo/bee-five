@@ -96,7 +96,9 @@ class _AdventureGameState extends State<AdventureGame> {
 
   // ADDED: Interstitial ad variables
   InterstitialAd? _interstitialAd;
-  int _gamesCompletedCount = 0;
+  // FIX 1: Combined counter for both "Play Again" and "Continue" clicks.
+  // Interstitial fires on every 10th combined action.
+  int _actionCount = 0;
 
   @override
   void initState() {
@@ -145,23 +147,40 @@ class _AdventureGameState extends State<AdventureGame> {
     );
   }
 
-  // ADDED: Show interstitial after every 7 completed games
-  void _showInterstitialAdIfReady() {
-    _gamesCompletedCount++;
-    if (_gamesCompletedCount % 7 == 0 && _interstitialAd != null) {
+  // FIX 1: Single method handles both Play Again and Continue.
+  // Interstitial fires on every 10th combined action across both buttons.
+  void _onActionPressed({required bool isContinue}) {
+    _actionCount++;
+    if (_actionCount % 10 == 0 && _interstitialAd != null) {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
           _interstitialAd = null;
           _loadInterstitialAd();
+          if (isContinue) {
+            _nextGame();
+          } else {
+            _resetGame();
+          }
         },
         onAdFailedToShowFullScreenContent: (ad, error) {
           ad.dispose();
           _interstitialAd = null;
           _loadInterstitialAd();
+          if (isContinue) {
+            _nextGame();
+          } else {
+            _resetGame();
+          }
         },
       );
       _interstitialAd!.show();
+    } else {
+      if (isContinue) {
+        _nextGame();
+      } else {
+        _resetGame();
+      }
     }
   }
 
@@ -175,6 +194,11 @@ class _AdventureGameState extends State<AdventureGame> {
   }
 
   void _initializeGame() {
+    // FIX 4: Cancel any running timer before reinitialising to prevent
+    // the old periodic callback from firing on the new state and freezing.
+    timer?.cancel();
+    timer = null;
+
     // Get game rules - IMPORTANT: recalculate with currentMatch for proper rule application
     gameRules = getGameRules(currentGame, currentMatch);
     aiDifficulty = gameRules!.aiDifficulty;
@@ -198,6 +222,8 @@ class _AdventureGameState extends State<AdventureGame> {
     winningPieces = [];
     isGameOver = false;
     currentPlayer = gameRules!.startingPlayer;
+    // FIX 4: Reset ALL countdown and started flags so the restart path
+    // always goes through the countdown before making anything interactive.
     gameStarted = false;
     gameInitialized = false;
     showStartCountdown = true;
@@ -248,24 +274,26 @@ class _AdventureGameState extends State<AdventureGame> {
   void _startCountdown() {
     if (startCountdown > 0) {
       Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) {
-          setState(() {
-            startCountdown--;
-            if (startCountdown > 0) {
-              _startCountdown();
-            } else {
-              showStartCountdown = false;
-              gameStarted = true;
-              gameInitialized = true;
-              _startTimer();
-              if (currentPlayer == 2) {
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  _makeAIMove();
-                });
-              }
+        if (!mounted) return;
+        // FIX 4: Guard against a stale delayed callback firing after a
+        // restart has already reset startCountdown back to 3.
+        if (!showStartCountdown) return;
+        setState(() {
+          startCountdown--;
+          if (startCountdown > 0) {
+            _startCountdown();
+          } else {
+            showStartCountdown = false;
+            gameStarted = true;
+            gameInitialized = true;
+            _startTimer();
+            if (currentPlayer == 2) {
+              Future.delayed(const Duration(milliseconds: 500), () {
+                _makeAIMove();
+              });
             }
-          });
-        }
+          }
+        });
       });
     }
   }
@@ -1087,9 +1115,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // ADDED: Show interstitial ad every 7 completed games
-    _showInterstitialAdIfReady();
-    
     // Show popup after a short delay
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -1116,7 +1141,9 @@ class _AdventureGameState extends State<AdventureGame> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.7),
-      builder: (BuildContext context) {
+      // FIX 3: Use dialogContext from builder so Navigator.pop targets
+      // only this dialog and never touches the game screen's context.
+      builder: (BuildContext dialogContext) {
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
@@ -1197,12 +1224,13 @@ class _AdventureGameState extends State<AdventureGame> {
                 // Buttons
                 Column(
                   children: [
-                    // Continue/Play Again button
+                    // FIX 1: Continue and Play Again both route through
+                    // _onActionPressed so the combined counter drives the ad.
                     if (winner == 1) ...[
                       ElevatedButton(
                         onPressed: () {
-                          Navigator.of(context).pop();
-                          _nextGame();
+                          Navigator.of(dialogContext).pop();
+                          _onActionPressed(isContinue: true);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
@@ -1226,8 +1254,8 @@ class _AdventureGameState extends State<AdventureGame> {
                     ] else ...[
                       ElevatedButton(
                         onPressed: () {
-                          Navigator.of(context).pop();
-                          _resetGame();
+                          Navigator.of(dialogContext).pop();
+                          _onActionPressed(isContinue: false);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
@@ -1250,10 +1278,12 @@ class _AdventureGameState extends State<AdventureGame> {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    // Back to Menu button
+                    // FIX 3: Use dialogContext to pop dialog, then call
+                    // _saveAndBackToMenu which guards with mounted before
+                    // using the widget context.
                     ElevatedButton(
                       onPressed: () {
-                        Navigator.of(context).pop();
+                        Navigator.of(dialogContext).pop();
                         _saveAndBackToMenu();
                       },
                       style: ElevatedButton.styleFrom(
@@ -1286,13 +1316,15 @@ class _AdventureGameState extends State<AdventureGame> {
   }
   
   void _resetGame() {
+    // FIX 4: setState wraps only the match/win counters; _initializeGame
+    // handles its own internal state and timer cancellation.
     setState(() {
       currentMatch = 1;
       playerWins = 0;
       aiWins = 0;
       isMatchComplete = false;
-      _initializeGame();
     });
+    _initializeGame();
   }
   
   void _nextGame() {
@@ -1306,18 +1338,35 @@ class _AdventureGameState extends State<AdventureGame> {
       playerWins = 0;
       aiWins = 0;
       isMatchComplete = false;
-      _initializeGame();
     });
-    _saveAdventureLevel();
+    // FIX 2: Save immediately after incrementing currentGame so the home
+    // screen always shows the highest level the player has just unlocked.
+    saveAdventureLevel(currentGame);
+    _initializeGame();
   }
 
+  // FIX 2: Save currentGame (the level just reached) so the home screen
+  // always reflects the highest level the player has passed.
   Future<void> _saveAdventureLevel() async {
-    await saveAdventureLevel(currentGame);
+    // Use a timeout so a slow or hanging save never blocks navigation.
+    try {
+      await saveAdventureLevel(currentGame)
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Save failed or timed out — continue anyway.
+    }
   }
 
+  // FIX 3 + TIMEOUT FIX: Save with timeout then navigate home.
+  // Navigation always happens within 2 seconds regardless of save outcome.
   Future<void> _saveAndBackToMenu() async {
-    await _saveAdventureLevel();
-    if (!context.mounted) return;
+    try {
+      await saveAdventureLevel(currentGame)
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Save failed or timed out — navigate home anyway.
+    }
+    if (!mounted) return;
     widget.onBackToMenu();
   }
 
@@ -1330,21 +1379,23 @@ class _AdventureGameState extends State<AdventureGame> {
       (screenSize.height - 300) / boardSize,
     );
 
+    // FIX 3: showExitDialog uses dialogContext from its own builder so
+    // Navigator.pop only dismisses the dialog and never the game screen.
     void showExitDialog() {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
           title: const Text('Exit Game?'),
           content: const Text('Are you sure you want to exit? Your progress will be saved.'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context, rootNavigator: true).pop();
+                Navigator.of(dialogContext).pop();
                 _saveAndBackToMenu();
               },
               child: const Text('Exit'),
@@ -1386,7 +1437,7 @@ class _AdventureGameState extends State<AdventureGame> {
                             'assets/BEE-FIVE.png',
                             height: 32,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => const SizedBox(width: 32, height: 32),
+                            errorBuilder: (_, __, ___) => const SizedBox(width: 32, height: 32),
                           ),
                           const SizedBox(width: 6),
                           const Text(
@@ -1434,7 +1485,7 @@ class _AdventureGameState extends State<AdventureGame> {
                         width: 28,
                         height: 28,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: 28),
+                        errorBuilder: (_, __, ___) => Icon(Icons.star, color: primaryYellow, size: 28),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -1722,30 +1773,10 @@ class _AdventureGameState extends State<AdventureGame> {
                   children: [
                     Expanded(
                       child: TextButton(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Exit Game?'),
-                              content: const Text(
-                                  'Are you sure you want to exit? Your progress will be saved.'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
-                                  child: const Text('Cancel'),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.of(context, rootNavigator: true).pop();
-                                    _saveAndBackToMenu();
-                                  },
-                                  child: const Text('Exit'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                        // FIX 3: Home button uses the same showExitDialog
+                        // which properly isolates dialog context from game
+                        // screen context, so navigation always works.
+                        onPressed: showExitDialog,
                         style: TextButton.styleFrom(
                           backgroundColor: primaryYellow,
                           foregroundColor: Colors.black,
@@ -1764,7 +1795,7 @@ class _AdventureGameState extends State<AdventureGame> {
                               width: 22,
                               height: 22,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) => const Icon(Icons.home, size: 22),
+                              errorBuilder: (_, __, ___) => const Icon(Icons.home, size: 22),
                             ),
                             const SizedBox(width: 8),
                             const Text('Home'),
@@ -1775,9 +1806,11 @@ class _AdventureGameState extends State<AdventureGame> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: TextButton(
-                        onPressed: () {
-                          _initializeGame();
-                        },
+                        // FIX 4: Restart calls _resetGame which cancels the
+                        // timer inside _initializeGame before resetting any
+                        // state, preventing the old timer callback from
+                        // freezing the screen.
+                        onPressed: _resetGame,
                         style: TextButton.styleFrom(
                           backgroundColor: primaryYellow,
                           foregroundColor: Colors.black,
@@ -1796,7 +1829,7 @@ class _AdventureGameState extends State<AdventureGame> {
                               width: 22,
                               height: 22,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) => const Icon(Icons.refresh, size: 22),
+                              errorBuilder: (_, __, ___) => const Icon(Icons.refresh, size: 22),
                             ),
                             const SizedBox(width: 8),
                             const Text('Restart'),

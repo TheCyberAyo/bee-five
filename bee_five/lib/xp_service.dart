@@ -16,8 +16,8 @@ const int xpClassicThreeWins = 2;
 /// XP for winning a hard practice game.
 const int xpHardPracticeWin = 1;
 
-/// XP lost per adventure game loss (each loss = -3 XP).
-const int xpAdventureOneLoss = 3;
+/// XP lost per adventure game loss (each loss = -2 XP).
+const int xpAdventureOneLoss = 2;
 
 /// XP for 2 consecutive adventure game wins.
 const int xpAdventureTwoWins = 1;
