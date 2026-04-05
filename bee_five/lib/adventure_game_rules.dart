@@ -167,22 +167,44 @@ String? getMatchType(int gameNumber) {
 // Calculate AI difficulty based on game number
 String getAIDifficulty(int gameNumber) {
   final lastDigit = gameNumber % 10;
-  // First 100 games: easy by default, levels ending in 8 are medium
+  
+  // SPECIAL RULE: Levels 10-200 ending with 9 = HARD
+  if (gameNumber >= 10 && gameNumber <= 200 && lastDigit == 9) {
+    return 'hard';
+  }
+  
+  // SPECIAL RULE: Levels 100-200 ending with 2 = HARD
+  if (gameNumber >= 100 && gameNumber <= 200 && lastDigit == 2) {
+    return 'hard';
+  }
+  
+  // SPECIAL RULE: Levels 200-600 ending with 2, 5, or 9 = HARD
+  if (gameNumber >= 200 && gameNumber <= 600 && (lastDigit == 2 || lastDigit == 5 || lastDigit == 9)) {
+    return 'hard';
+  }
+  
+  // First 100 games: easy by default, levels ending in 6 or 8 are medium
   if (gameNumber <= 100) {
-    if (lastDigit == 8) return 'medium';
+    if (lastDigit == 6 || lastDigit == 8) return 'medium';
     return 'easy';
   }
+  
+  // Games 101-600: medium by default, but some are already caught by hard rules above
+  if (gameNumber >= 101 && gameNumber <= 600) {
+    if (lastDigit == 5) return 'easy'; // Only ending with 5 is easy (if not caught by hard rule)
+    return 'medium';
+  }
+  
   // Games 601-2000: ending in 1-4 = medium, ending in 9 = easy, else hard
   if (gameNumber >= 601 && gameNumber <= 2000) {
     if (lastDigit >= 1 && lastDigit <= 4) return 'medium';
     if (lastDigit == 9) return 'easy';
     return 'hard';
   }
+  
   // Games 2001+ use Hard AI
   if (gameNumber >= 2001) return 'hard';
-  // Games 101-600: medium by default, ending in 2 or 5 = easy, ending in 9 = hard
-  if (lastDigit == 2 || lastDigit == 5) return 'easy';
-  if (lastDigit == 9) return 'hard';
+  
   return 'medium';
 }
 
@@ -366,4 +388,3 @@ GameRules getGameRules(int gameNumber, [int? currentMatch]) {
     icon: icon,
   );
 }
-

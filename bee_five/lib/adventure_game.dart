@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // ADDED: AdMob import
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'adventure_game_rules.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
@@ -18,15 +18,16 @@ class _NoScrollbarBehavior extends ScrollBehavior {
 }
 
 const Color primaryYellow = Color(0xFFFFC30B);
-/// Orange for whose turn it is (human vs AI).
 const Color _turnAnnouncementOrange = Color(0xFFFF9800);
-/// Classic board style (matches reference): sky blue grid, white lines, black border
 const Color classicBoardGridColor = Color(0xFF87CEEB);
 const Color classicBoardBackground = Color(0xFF424242);
-const int boardSize = 10; // Adventure games use 10x10 board
+const int boardSize = 10;
 
 class AdventureGame extends StatefulWidget {
-  final VoidCallback onBackToMenu;
+  // CHANGE 1: onBackToMenu now carries the current level back to the home page.
+  // This eliminates the SharedPreferences timing race — the home page always
+  // receives the exact level number the player was on, synchronously.
+  final void Function(int currentLevel) onBackToMenu;
   final int initialGame;
 
   const AdventureGame({
@@ -41,9 +42,9 @@ class AdventureGame extends StatefulWidget {
 
 class _AdventureGameState extends State<AdventureGame> {
   int currentGame = 1;
-  int currentPlayer = 1; // 1 = player (yellow), 2 = AI (black)
+  int currentPlayer = 1;
   List<List<int>> board = [];
-  int winner = 0; // 0 = no winner/draw, 1 = player, 2 = AI
+  int winner = 0;
   List<List<int>> winningPieces = [];
   bool isGameOver = false;
   String gameStatus = '';
@@ -53,14 +54,12 @@ class _AdventureGameState extends State<AdventureGame> {
   int startCountdown = 3;
   bool showStartCountdown = true;
 
-  // Game rules
   GameRules? gameRules;
   List<Map<String, int>> mudZones = [];
   bool isBlindPlay = false;
   bool temporaryBlindPlay = false;
   int blindPlayTriggerMove = 0;
 
-  // Match system state
   int currentMatch = 1;
   int playerWins = 0;
   int aiWins = 0;
@@ -68,21 +67,16 @@ class _AdventureGameState extends State<AdventureGame> {
   int requiredWins = 1;
   int totalGames = 1;
 
-  // Timer
   int timeLeft = 15;
   Timer? timer;
 
-  // Move tracking
   int humanMoveCount = 0;
   int player1MoveCount = 0;
   int player2MoveCount = 0;
   int totalMoveCount = 0;
   int blockShiftMoveCount = 0;
 
-  // Piece aging
   List<List<int>> pieceAges = [];
-
-  // AI difficulty
   String aiDifficulty = 'medium';
 
   int _headerXp = 0;
@@ -90,14 +84,9 @@ class _AdventureGameState extends State<AdventureGame> {
   String? _currentBeeFact;
   bool _showBeeFactScreen = false;
 
-  // ADDED: Banner ad variables
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
-
-  // ADDED: Interstitial ad variables
   InterstitialAd? _interstitialAd;
-  // FIX 1: Combined counter for both "Play Again" and "Continue" clicks.
-  // Interstitial fires on every 10th combined action.
   int _actionCount = 0;
 
   @override
@@ -109,12 +98,10 @@ class _AdventureGameState extends State<AdventureGame> {
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
-    // ADDED: Load ads
     _loadBannerAd();
     _loadInterstitialAd();
   }
 
-  // ADDED: Banner ad loader
   void _loadBannerAd() {
     _bannerAd = BannerAd(
       adUnitId: 'ca-app-pub-6740638137327567/1435131168',
@@ -131,7 +118,6 @@ class _AdventureGameState extends State<AdventureGame> {
     )..load();
   }
 
-  // ADDED: Interstitial ad loader
   void _loadInterstitialAd() {
     InterstitialAd.load(
       adUnitId: 'ca-app-pub-6740638137327567/9168616109',
@@ -147,8 +133,6 @@ class _AdventureGameState extends State<AdventureGame> {
     );
   }
 
-  // FIX 1: Single method handles both Play Again and Continue.
-  // Interstitial fires on every 10th combined action across both buttons.
   void _onActionPressed({required bool isContinue}) {
     _actionCount++;
     if (_actionCount % 10 == 0 && _interstitialAd != null) {
@@ -187,50 +171,39 @@ class _AdventureGameState extends State<AdventureGame> {
   @override
   void dispose() {
     timer?.cancel();
-    // ADDED: Dispose ads
     _bannerAd?.dispose();
     _interstitialAd?.dispose();
     super.dispose();
   }
 
   void _initializeGame() {
-    // FIX 4: Cancel any running timer before reinitialising to prevent
-    // the old periodic callback from firing on the new state and freezing.
     timer?.cancel();
     timer = null;
 
-    // Get game rules - IMPORTANT: recalculate with currentMatch for proper rule application
     gameRules = getGameRules(currentGame, currentMatch);
     aiDifficulty = gameRules!.aiDifficulty;
     
-    // Initialize board with blocks - use currentMatch to get correct blocks for this match
     isBlindPlay = gameRules!.hasBlindPlay;
     board = logic.createBoardWithBlocks(currentGame, isBlindPlay, currentMatch);
     
-    // Initialize mud zones
     if (gameRules!.hasMudZones) {
       mudZones = logic.generateMudZones(currentGame);
     } else {
       mudZones = [];
     }
     
-    // Initialize piece ages
     pieceAges = logic.initializePieceAges();
     
-    // Reset game state
     winner = 0;
     winningPieces = [];
     isGameOver = false;
     currentPlayer = gameRules!.startingPlayer;
-    // FIX 4: Reset ALL countdown and started flags so the restart path
-    // always goes through the countdown before making anything interactive.
     gameStarted = false;
     gameInitialized = false;
     showStartCountdown = true;
     startCountdown = 3;
     timeLeft = gameRules!.timeLimit;
     
-    // Reset move counts
     humanMoveCount = 0;
     player1MoveCount = 0;
     player2MoveCount = 0;
@@ -239,7 +212,6 @@ class _AdventureGameState extends State<AdventureGame> {
     temporaryBlindPlay = false;
     blindPlayTriggerMove = 0;
 
-    // Determine match system
     if (gameRules!.isMatchGame) {
       requiredWins = gameRules!.matchType == 'best-of-5' ? 3 : 2;
       totalGames = gameRules!.matchType == 'best-of-5' ? 5 : 3;
@@ -252,7 +224,6 @@ class _AdventureGameState extends State<AdventureGame> {
 
     _currentBeeFact = getBeeFactForGame(currentGame);
 
-    // Show fact before qualifying levels, then start countdown.
     if (_currentBeeFact != null) {
       showStartCountdown = false;
       _showBeeFactScreen = true;
@@ -275,8 +246,6 @@ class _AdventureGameState extends State<AdventureGame> {
     if (startCountdown > 0) {
       Future.delayed(const Duration(seconds: 1), () {
         if (!mounted) return;
-        // FIX 4: Guard against a stale delayed callback firing after a
-        // restart has already reset startCountdown back to 3.
         if (!showStartCountdown) return;
         setState(() {
           startCountdown--;
@@ -312,7 +281,6 @@ class _AdventureGameState extends State<AdventureGame> {
         timeLeft--;
         if (timeLeft <= 0) {
           timer.cancel();
-          // Time's up - current player loses
           final timeWinner = currentPlayer == 1 ? 2 : 1;
           winner = timeWinner;
           isGameOver = true;
@@ -336,27 +304,22 @@ class _AdventureGameState extends State<AdventureGame> {
       return;
     }
 
-    // Check if in mud zone during blind play (persistent or temporary)
     final effectiveBlindPlay = isBlindPlay || temporaryBlindPlay;
     if (effectiveBlindPlay && logic.isInMudZone(row, col, mudZones)) {
       return;
     }
 
-    // Make player move (create new board copy to ensure state updates)
     final newBoard = board.map((row) => List<int>.from(row)).toList();
     newBoard[row][col] = 1;
     
-    // Update piece ages
     var updatedPieceAges = logic.ageAllPieces(newBoard, pieceAges);
-    updatedPieceAges[row][col] = 0; // New piece starts at age 0
+    updatedPieceAges[row][col] = 0;
     
-    // Update move counts
     final newHumanMoveCount = humanMoveCount + 1;
     final newPlayer1MoveCount = player1MoveCount + 1;
     final newTotalMoveCount = totalMoveCount + 1;
     final newBlockShiftMoveCount = blockShiftMoveCount + 1;
     
-    // Handle adventure mode obstacles on human moves
     final obstacleResult = _handleHumanMoveObstacles(newBoard, updatedPieceAges, newHumanMoveCount, newPlayer1MoveCount, newTotalMoveCount, newBlockShiftMoveCount);
     final finalBoard = obstacleResult['board'] as List<List<int>>;
     final finalPieceAges = obstacleResult['pieceAges'] as List<List<int>>;
@@ -369,7 +332,6 @@ class _AdventureGameState extends State<AdventureGame> {
       totalMoveCount = newTotalMoveCount;
       blockShiftMoveCount = newBlockShiftMoveCount;
       
-      // Check for winner
       if (logic.checkWinCondition(board, row, col, 1)) {
         winner = 1;
         winningPieces = logic.getWinningPieces(board, row, col, 1);
@@ -378,7 +340,6 @@ class _AdventureGameState extends State<AdventureGame> {
         return;
       }
       
-      // Check for draw
       if (_isBoardFull()) {
         winner = 0;
         isGameOver = true;
@@ -388,12 +349,10 @@ class _AdventureGameState extends State<AdventureGame> {
         return;
       }
       
-      // Switch to AI
       currentPlayer = 2;
       gameStatus = 'AI thinking...';
       _resetTimer();
       
-      // Make AI move after delay
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && currentPlayer == 2 && winner == 0) {
           _makeAIMove();
@@ -417,7 +376,6 @@ class _AdventureGameState extends State<AdventureGame> {
     var workingBoard = currentBoard.map((row) => List<int>.from(row)).toList();
     var workingPieceAges = currentPieceAges.map((row) => List<int>.from(row)).toList();
     
-    // Progressive blocks (games ending with 3)
     if (gameRules!.hasProgressiveBlocks) {
       final rules = logic.getProgressiveBlockRules(currentGame);
       if (rules['blocksToAdd']! > 0 && newHumanMoveCount % rules['movesInterval']! == 0) {
@@ -425,28 +383,24 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
     
-    // Disappearing blocks (games ending with 4)
     if (gameRules!.hasDisappearingBlocks) {
       if (newHumanMoveCount % 3 == 0) {
         workingBoard = logic.removeTwoBlockedCells(workingBoard);
       }
     }
     
-    // Strategic blocking (multiples of 50, match 1)
     if (currentGame % 50 == 0 && currentMatch == 1) {
       if (newHumanMoveCount % 8 == 0) {
         workingBoard = logic.addStrategicBlock(workingBoard);
       }
     }
     
-    // Strategic blocking (games ending with 1 in ranges 500-700 and 1001-1591)
     if (logic.gameEndsWith1InSpecifiedRanges(currentGame)) {
       if (newHumanMoveCount % 8 == 0) {
         workingBoard = logic.addStrategicBlock(workingBoard);
       }
     }
     
-    // Block shifting (games ending with 7 or 8)
     if (gameRules!.hasShiftingBlocks) {
       if (logic.gameEndsWith7After250(currentGame) && newBlockShiftMoveCount % 2 == 0) {
         workingBoard = logic.shiftAllBlocks(workingBoard);
@@ -455,19 +409,16 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
     
-    // Strategic block movement for games ending with 9 from game 400
     if (currentGame >= 400 && currentGame % 10 == 9 && newTotalMoveCount == 27) {
       workingBoard = logic.moveRandomBlockToStrategicPosition(workingBoard);
     }
     
-    // Piece capacity (multiples of 17)
     if (gameRules!.hasPieceCapacity) {
       final capacityResult = logic.enforcePieceCapacity(workingBoard, workingPieceAges, 35);
       workingBoard = capacityResult['board'] as List<List<int>>;
       workingPieceAges = capacityResult['pieceAges'] as List<List<int>>;
     }
     
-    // Disappearing pieces - remove 2 oldest opponent pieces every 4 moves
     if (gameRules!.hasDisappearingPieces) {
       if (newPlayer1MoveCount % 4 == 0) {
         final disappearResult = logic.removeOldestPiecesOfPlayer(workingBoard, workingPieceAges, 2, 2);
@@ -476,21 +427,18 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
     
-    // Board rearrangement (multiples of 50, match 3) - every 5 total moves
     if (logic.isMultipleOf50Match3(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 == 0) {
       final rearrangeResult = logic.rearrangeBoard(workingBoard, workingPieceAges);
       workingBoard = rearrangeResult['board'] as List<List<int>>;
       workingPieceAges = rearrangeResult['pieceAges'] as List<List<int>>;
     }
     
-    // Piece swapping (multiples of 50, match 4) - every 5 total moves
     if (logic.isMultipleOf50Match4(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 == 0) {
       final swapResult = logic.swapOpponentPiecePairs(workingBoard, workingPieceAges);
       workingBoard = swapResult['board'] as List<List<int>>;
       workingPieceAges = swapResult['pieceAges'] as List<List<int>>;
     }
     
-    // Piece swapping for multiples of 10 Match 2/3
     if (logic.isMultipleOf10Match2From30(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 == 0) {
       final swapResult = logic.swapOpponentPiecePairs(workingBoard, workingPieceAges);
       workingBoard = swapResult['board'] as List<List<int>>;
@@ -509,21 +457,18 @@ class _AdventureGameState extends State<AdventureGame> {
       workingPieceAges = swapResult['pieceAges'] as List<List<int>>;
     }
     
-    // Swap all pieces for multiples of 10 match 1 from game 60 every 11 moves
     if (logic.isMultipleOf10Match1From60(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 11 == 0) {
       final swapAllResult = logic.swapAllPieces(workingBoard, workingPieceAges);
       workingBoard = swapAllResult['board'] as List<List<int>>;
       workingPieceAges = swapAllResult['pieceAges'] as List<List<int>>;
     }
     
-    // Swap all pieces for games ending with 1 (from game 31) every 13 moves
     if (currentGame % 10 == 1 && currentGame >= 31 && !logic.gameEndsWith1InSpecifiedRanges(currentGame) && newTotalMoveCount > 0 && newTotalMoveCount % 13 == 0) {
       final swapAllResult = logic.swapAllPieces(workingBoard, workingPieceAges);
       workingBoard = swapAllResult['board'] as List<List<int>>;
       workingPieceAges = swapAllResult['pieceAges'] as List<List<int>>;
     }
     
-    // Temporary blind play triggers
     if (logic.isMultipleOf10Match1From210(currentGame, currentMatch) && newPlayer1MoveCount == 15) {
       setState(() {
         temporaryBlindPlay = true;
@@ -545,7 +490,6 @@ class _AdventureGameState extends State<AdventureGame> {
       });
     }
     
-    // Reset temporary blind play after one move
     if (temporaryBlindPlay && !gameRules!.hasBlindPlay && newTotalMoveCount > blindPlayTriggerMove && blindPlayTriggerMove > 0) {
       setState(() {
         temporaryBlindPlay = false;
@@ -562,14 +506,12 @@ class _AdventureGameState extends State<AdventureGame> {
     }
 
     setState(() {
-      // Get available cells
       final availableCells = <Map<String, int>>[];
       final effectiveBlindPlay = isBlindPlay || temporaryBlindPlay;
       
       for (int row = 0; row < boardSize; row++) {
         for (int col = 0; col < boardSize; col++) {
           if (board[row][col] == 0) {
-            // In blind play mode, AI should avoid mud zones too
             if (effectiveBlindPlay && logic.isInMudZone(row, col, mudZones)) {
               continue;
             }
@@ -579,7 +521,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
 
       if (availableCells.isEmpty) {
-        // Board is full - draw
         winner = 0;
         isGameOver = true;
         gameStatus = 'Draw!';
@@ -588,26 +529,20 @@ class _AdventureGameState extends State<AdventureGame> {
         return;
       }
 
-      // Get AI move based on difficulty
       final selectedCell = _getBestAIMove(availableCells, board, effectiveBlindPlay);
 
-      // Make the AI move
       board[selectedCell['row']!][selectedCell['col']!] = 2;
 
-      // Update piece ages
       pieceAges = logic.ageAllPieces(board, pieceAges);
-      pieceAges[selectedCell['row']!][selectedCell['col']!] = 0; // New piece starts at age 0
+      pieceAges[selectedCell['row']!][selectedCell['col']!] = 0;
       
-      // Update move counts
       player2MoveCount++;
       totalMoveCount++;
 
-      // Handle adventure mode obstacles on AI moves
       final obstacleResult = _handleAIMoveObstacles(board, pieceAges, player2MoveCount, totalMoveCount);
       board = obstacleResult['board'] as List<List<int>>;
       pieceAges = obstacleResult['pieceAges'] as List<List<int>>;
 
-      // Check for winner
       if (logic.checkWinCondition(board, selectedCell['row']!, selectedCell['col']!, 2)) {
         winner = 2;
         winningPieces = logic.getWinningPieces(board, selectedCell['row']!, selectedCell['col']!, 2);
@@ -616,7 +551,6 @@ class _AdventureGameState extends State<AdventureGame> {
         return;
       }
 
-      // Check for draw
       if (_isBoardFull()) {
         winner = 0;
         isGameOver = true;
@@ -626,7 +560,6 @@ class _AdventureGameState extends State<AdventureGame> {
         return;
       }
 
-      // Switch to player
       currentPlayer = 1;
       gameStatus = 'Your turn';
       _resetTimer();
@@ -646,14 +579,12 @@ class _AdventureGameState extends State<AdventureGame> {
     var workingBoard = currentBoard.map((row) => List<int>.from(row)).toList();
     var workingPieceAges = currentPieceAges.map((row) => List<int>.from(row)).toList();
     
-    // Piece capacity (multiples of 17)
     if (gameRules!.hasPieceCapacity) {
       final capacityResult = logic.enforcePieceCapacity(workingBoard, workingPieceAges, 35);
       workingBoard = capacityResult['board'] as List<List<int>>;
       workingPieceAges = capacityResult['pieceAges'] as List<List<int>>;
     }
     
-    // Disappearing pieces - remove 2 oldest opponent pieces every 4 moves
     if (gameRules!.hasDisappearingPieces) {
       if (newPlayer2MoveCount % 4 == 0) {
         final disappearResult = logic.removeOldestPiecesOfPlayer(workingBoard, workingPieceAges, 1, 2);
@@ -662,21 +593,18 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
     
-    // Board rearrangement (multiples of 50, match 3) - every 5 total moves
     if (logic.isMultipleOf50Match3(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 == 0) {
       final rearrangeResult = logic.rearrangeBoard(workingBoard, workingPieceAges);
       workingBoard = rearrangeResult['board'] as List<List<int>>;
       workingPieceAges = rearrangeResult['pieceAges'] as List<List<int>>;
     }
     
-    // Piece swapping (multiples of 50, match 4) - every 5 total moves
     if (logic.isMultipleOf50Match4(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 == 0) {
       final swapResult = logic.swapOpponentPiecePairs(workingBoard, workingPieceAges);
       workingBoard = swapResult['board'] as List<List<int>>;
       workingPieceAges = swapResult['pieceAges'] as List<List<int>>;
     }
     
-    // Piece swapping for multiples of 10 Match 2/3
     if (logic.isMultipleOf10Match2From30(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 == 0) {
       final swapResult = logic.swapOpponentPiecePairs(workingBoard, workingPieceAges);
       workingBoard = swapResult['board'] as List<List<int>>;
@@ -695,14 +623,12 @@ class _AdventureGameState extends State<AdventureGame> {
       workingPieceAges = swapResult['pieceAges'] as List<List<int>>;
     }
     
-    // Swap all pieces for multiples of 10 match 1 from game 60 every 11 moves
     if (logic.isMultipleOf10Match1From60(currentGame, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 11 == 0) {
       final swapAllResult = logic.swapAllPieces(workingBoard, workingPieceAges);
       workingBoard = swapAllResult['board'] as List<List<int>>;
       workingPieceAges = swapAllResult['pieceAges'] as List<List<int>>;
     }
     
-    // Swap all pieces for games ending with 1 (from game 31) every 13 moves
     if (currentGame % 10 == 1 && currentGame >= 31 && !logic.gameEndsWith1InSpecifiedRanges(currentGame) && newTotalMoveCount > 0 && newTotalMoveCount % 13 == 0) {
       final swapAllResult = logic.swapAllPieces(workingBoard, workingPieceAges);
       workingBoard = swapAllResult['board'] as List<List<int>>;
@@ -713,13 +639,11 @@ class _AdventureGameState extends State<AdventureGame> {
   }
 
   Map<String, int> _getBestAIMove(List<Map<String, int>> availableCells, List<List<int>> currentBoard, bool blindPlay) {
-    // For blind play games, AI makes completely random moves
     if (blindPlay) {
       final random = math.Random();
       return availableCells[random.nextInt(availableCells.length)];
     }
     
-    // For normal games, use difficulty-based AI
     if (aiDifficulty == 'easy') {
       return _getEasyAIMove(availableCells, currentBoard);
     } else if (aiDifficulty == 'medium') {
@@ -730,7 +654,6 @@ class _AdventureGameState extends State<AdventureGame> {
   }
 
   Map<String, int> _getEasyAIMove(List<Map<String, int>> availableCells, List<List<int>> currentBoard) {
-    // Priority 1: Take winning move if available
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -739,7 +662,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately (always)
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -748,7 +670,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 3: Block 3-in-a-row threats (50% of the time)
     if (math.Random().nextDouble() > 0.5) {
       for (final cell in availableCells) {
         final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
@@ -759,13 +680,11 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 4: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }
 
   Map<String, int> _getMediumAIMove(List<Map<String, int>> availableCells, List<List<int>> currentBoard) {
-    // Priority 1: Take winning move if available
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -774,7 +693,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -783,7 +701,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 3: Block 3-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -792,7 +709,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 4: Create 3-in-a-row if it can lead to 5
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -801,7 +717,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 5: Block 2-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -810,7 +725,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 6: Create 2-in-a-row if it can lead to 5
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -819,13 +733,11 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 7: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }
 
   Map<String, int> _getHardAIMove(List<Map<String, int>> availableCells, List<List<int>> currentBoard) {
-    // Priority 1: Take winning move if available
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -834,7 +746,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 2: Block if human can win immediately
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -843,7 +754,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 3: Block 4-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -852,7 +762,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 4: Create 4-in-a-row if possible
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -861,7 +770,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 5: Block 3-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -870,7 +778,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 6: Create 3-in-a-row if it can lead to 5
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -879,7 +786,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 7: Block 2-in-a-row threats
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 1;
@@ -888,7 +794,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 8: Create 2-in-a-row if it can lead to 5
     for (final cell in availableCells) {
       final testBoard = currentBoard.map((row) => List<int>.from(row)).toList();
       testBoard[cell['row']!][cell['col']!] = 2;
@@ -897,14 +802,12 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Priority 9: Strategic positioning near existing pieces
     for (final cell in availableCells) {
       if (_isNearHumanPiece(currentBoard, cell['row']!, cell['col']!)) {
         return cell;
       }
     }
 
-    // Priority 10: Try to control center area
     final centerCells = availableCells.where((cell) {
       final centerRow = 4.5;
       final centerCol = 4.5;
@@ -917,7 +820,6 @@ class _AdventureGameState extends State<AdventureGame> {
       return centerCells[random.nextInt(centerCells.length)];
     }
 
-    // Priority 11: Random move
     final random = math.Random();
     return availableCells[random.nextInt(availableCells.length)];
   }
@@ -1040,7 +942,7 @@ class _AdventureGameState extends State<AdventureGame> {
           } else if (testBoard[newRow][newCol] == 0) {
             emptySpaces++;
           } else {
-            break; // Blocked cells or opponent pieces stop the line
+            break;
           }
         }
       }
@@ -1054,7 +956,6 @@ class _AdventureGameState extends State<AdventureGame> {
       for (int col = 0; col < boardSize; col++) {
         final cell = board[row][col];
         if (cell == 0) {
-          // In blind play mode, mud zones are not playable, so they count as "full"
           if ((isBlindPlay || temporaryBlindPlay) && logic.isInMudZone(row, col, mudZones)) {
             continue;
           }
@@ -1101,7 +1002,6 @@ class _AdventureGameState extends State<AdventureGame> {
         isMatchComplete = true;
         gameStatus = 'Match lost! You: $playerWins, AI: $aiWins';
       } else if (currentMatch < totalGames) {
-        // Continue to next match
         gameStatus = 'Match $currentMatch complete. Starting match ${currentMatch + 1}...';
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
@@ -1115,7 +1015,6 @@ class _AdventureGameState extends State<AdventureGame> {
       }
     }
 
-    // Show popup after a short delay
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         _showGameOverPopup();
@@ -1141,8 +1040,6 @@ class _AdventureGameState extends State<AdventureGame> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.7),
-      // FIX 3: Use dialogContext from builder so Navigator.pop targets
-      // only this dialog and never touches the game screen's context.
       builder: (BuildContext dialogContext) {
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -1163,7 +1060,6 @@ class _AdventureGameState extends State<AdventureGame> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Title
                 Text(
                   title,
                   style: TextStyle(
@@ -1186,7 +1082,6 @@ class _AdventureGameState extends State<AdventureGame> {
                   ),
                 ],
                 const SizedBox(height: 20),
-                // Match progress if it's a match game
                 if (gameRules?.isMatchGame ?? false) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -1221,11 +1116,8 @@ class _AdventureGameState extends State<AdventureGame> {
                   ),
                   const SizedBox(height: 20),
                 ],
-                // Buttons
                 Column(
                   children: [
-                    // FIX 1: Continue and Play Again both route through
-                    // _onActionPressed so the combined counter drives the ad.
                     if (winner == 1) ...[
                       ElevatedButton(
                         onPressed: () {
@@ -1278,13 +1170,12 @@ class _AdventureGameState extends State<AdventureGame> {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    // FIX 3: Use dialogContext to pop dialog, then call
-                    // _saveAndBackToMenu which guards with mounted before
-                    // using the widget context.
+                    // CHANGE 2: Back to Menu — navigate immediately, save in background.
+                    // _backToMenu() is synchronous so it never freezes.
                     ElevatedButton(
                       onPressed: () {
                         Navigator.of(dialogContext).pop();
-                        _saveAndBackToMenu();
+                        _backToMenu();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
@@ -1316,8 +1207,6 @@ class _AdventureGameState extends State<AdventureGame> {
   }
   
   void _resetGame() {
-    // FIX 4: setState wraps only the match/win counters; _initializeGame
-    // handles its own internal state and timer cancellation.
     setState(() {
       currentMatch = 1;
       playerWins = 0;
@@ -1329,74 +1218,66 @@ class _AdventureGameState extends State<AdventureGame> {
   
   void _nextGame() {
     final levelJustCompleted = currentGame;
+    final nextLevel = currentGame + 1;
+
+    // Award XP for completing the level — fire and forget
     onAdventureLevelWon(levelJustCompleted).then((result) {
       if (mounted) setState(() => _headerXp = result.$1);
     });
+
+    // CHANGE 3: Save the level that was just completed, then the next level.
+    // Both are fire-and-forget — they never block game flow.
+    saveAdventureLevel(levelJustCompleted).catchError((_) {});
+    saveAdventureLevel(nextLevel).catchError((_) {});
+
     setState(() {
-      currentGame++;
+      currentGame = nextLevel;
       currentMatch = 1;
       playerWins = 0;
       aiWins = 0;
       isMatchComplete = false;
     });
-    // FIX 2: Save immediately after incrementing currentGame so the home
-    // screen always shows the highest level the player has just unlocked.
-    saveAdventureLevel(currentGame);
+
     _initializeGame();
   }
 
-  // FIX 2: Save currentGame (the level just reached) so the home screen
-  // always reflects the highest level the player has passed.
-  Future<void> _saveAdventureLevel() async {
-    // Use a timeout so a slow or hanging save never blocks navigation.
-    try {
-      await saveAdventureLevel(currentGame)
-          .timeout(const Duration(seconds: 2));
-    } catch (_) {
-      // Save failed or timed out — continue anyway.
-    }
-  }
-
-  // FIX 3 + TIMEOUT FIX: Save with timeout then navigate home.
-  // Navigation always happens within 2 seconds regardless of save outcome.
-  Future<void> _saveAndBackToMenu() async {
-    try {
-      await saveAdventureLevel(currentGame)
-          .timeout(const Duration(seconds: 2));
-    } catch (_) {
-      // Save failed or timed out — navigate home anyway.
-    }
+  // CHANGE 4: _backToMenu is fully synchronous — no async, no await, never freezes.
+  // It passes currentGame directly to the home page via the callback.
+  // saveAdventureLevel fires in the background after navigation has already happened.
+  void _backToMenu() {
     if (!mounted) return;
-    widget.onBackToMenu();
+    final levelToReport = currentGame;
+    // Fire-and-forget save — never blocks navigation
+    saveAdventureLevel(levelToReport).catchError((_) {});
+    // Pass the current level directly to home page — no SharedPreferences read needed
+    widget.onBackToMenu(levelToReport);
   }
 
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    // Use 46 so board fits in padded area (avoids "Right overflowed by 6.0 Pixels" with SafeArea)
     final cellSize = math.min(
       (screenSize.width - 46) / boardSize,
       (screenSize.height - 300) / boardSize,
     );
 
-    // FIX 3: showExitDialog uses dialogContext from its own builder so
-    // Navigator.pop only dismisses the dialog and never the game screen.
+    // CHANGE 5: showExitDialog calls _backToMenu directly — same synchronous pattern
     void showExitDialog() {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
+        builder: (BuildContext exitDialogContext) => AlertDialog(
           title: const Text('Exit Game?'),
           content: const Text('Are you sure you want to exit? Your progress will be saved.'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () => Navigator.of(exitDialogContext).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop();
-                _saveAndBackToMenu();
+                Navigator.of(exitDialogContext).pop();
+                _backToMenu();
               },
               child: const Text('Exit'),
             ),
@@ -1564,7 +1445,6 @@ class _AdventureGameState extends State<AdventureGame> {
                 )
               : Column(
             children: [
-            // Game status (black bar with yellow bottom border, like reference)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -1625,7 +1505,6 @@ class _AdventureGameState extends State<AdventureGame> {
                 ],
               ),
             ),
-            // Game board
             Expanded(
               child: Container(
                 padding: const EdgeInsets.only(top: 10, left: 20, right: 20, bottom: 20),
@@ -1633,10 +1512,8 @@ class _AdventureGameState extends State<AdventureGame> {
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     const SizedBox(height: 10),
-                    // Board with blind play overlay
                     Stack(
                         children: [
-                          // Board
                           Opacity(
                             opacity: ((isBlindPlay || temporaryBlindPlay) && gameStarted && gameInitialized) ? 0 : 1,
                             child: Container(
@@ -1665,7 +1542,6 @@ class _AdventureGameState extends State<AdventureGame> {
                                           width: cellSize,
                                           height: cellSize,
                                           decoration: BoxDecoration(
-                                            // *** ONLY CHANGE: winning cell background is now the opponent's color ***
                                             color: isWinning
                                                 ? (winner == 1 ? Colors.black : primaryYellow)
                                                 : isBlocked
@@ -1713,7 +1589,6 @@ class _AdventureGameState extends State<AdventureGame> {
                               ),
                             ),
                           ),
-                          // Blind Play Overlay
                           if ((isBlindPlay || temporaryBlindPlay) && gameStarted && gameInitialized)
                             Positioned.fill(
                               child: IgnorePointer(
@@ -1751,7 +1626,6 @@ class _AdventureGameState extends State<AdventureGame> {
                   ),
                 ),
               ),
-            // ADDED: Banner ad above footer
             if (_isBannerAdLoaded && _bannerAd != null)
               Container(
                 alignment: Alignment.center,
@@ -1760,7 +1634,6 @@ class _AdventureGameState extends State<AdventureGame> {
                 color: Colors.black,
                 child: AdWidget(ad: _bannerAd!),
               ),
-            // Footer (black bar with yellow top border, Home & Restart - like reference)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
@@ -1773,9 +1646,6 @@ class _AdventureGameState extends State<AdventureGame> {
                   children: [
                     Expanded(
                       child: TextButton(
-                        // FIX 3: Home button uses the same showExitDialog
-                        // which properly isolates dialog context from game
-                        // screen context, so navigation always works.
                         onPressed: showExitDialog,
                         style: TextButton.styleFrom(
                           backgroundColor: primaryYellow,
@@ -1806,10 +1676,6 @@ class _AdventureGameState extends State<AdventureGame> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: TextButton(
-                        // FIX 4: Restart calls _resetGame which cancels the
-                        // timer inside _initializeGame before resetting any
-                        // state, preventing the old timer callback from
-                        // freezing the screen.
                         onPressed: _resetGame,
                         style: TextButton.styleFrom(
                           backgroundColor: primaryYellow,

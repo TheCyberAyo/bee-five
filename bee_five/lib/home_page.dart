@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // ADDED: AdMob import
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'adventure_game.dart';
 import 'contexts/auth_context.dart';
 import 'simple_game.dart';
@@ -211,14 +211,13 @@ class HexagonLevelMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Passed = green, current = orange, levels ahead = red
     final Color fillColor;
     if (isCompleted) {
-      fillColor = const Color(0xFF4CAF50); // green
+      fillColor = const Color(0xFF4CAF50);
     } else if (isCurrent) {
-      fillColor = const Color(0xFFFF9800); // orange
+      fillColor = const Color(0xFFFF9800);
     } else {
-      fillColor = const Color(0xFFE53935); // red (levels ahead / locked)
+      fillColor = const Color(0xFFE53935);
     }
     return IgnorePointer(
       ignoring: isLocked,
@@ -360,7 +359,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   int aiTimer = 15;
   bool isClassicStreakMode = false;
   int currentGame = 1;
-  int highestUnlockedGame = 1; // Only levels up to current can be tapped
+  int highestUnlockedGame = 1;
   List<int> gamesCompleted = [];
   double mapScrollY = 0;
   final ScrollController mapScrollController = ScrollController();
@@ -375,30 +374,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late AnimationController bee2Controller;
   late AnimationController bee3Controller;
 
-  // ADDED: Rewarded ad variables
   RewardedAd? _rewardedAd;
 
   @override
   void initState() {
     super.initState();
-    // Load saved sound preference and start looping background sound when player enters the game
-      SharedPreferences.getInstance().then((prefs) async {
-      if (!mounted) return;
-      final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
-      if (saved != soundEnabled) setState(() => soundEnabled = saved);
-      final progress = await syncAdventureProgress();
-      if (progress.currentGame != currentGame || progress.highestUnlockedGame != highestUnlockedGame) {
-        setState(() {
-          currentGame = progress.currentGame;
-          highestUnlockedGame = progress.highestUnlockedGame;
-          gamesCompleted = progress.gamesCompleted;
-        });
-      } else {
-        if (gamesCompleted.isEmpty && progress.gamesCompleted.isNotEmpty) {
-          setState(() => gamesCompleted = progress.gamesCompleted);
-        }
-      }
-    });
+    _loadProgressOnStartup();
     getDailyChallengeStatus().then((status) {
       if (!mounted) return;
       setState(() {
@@ -415,7 +396,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (mounted) _scheduleScrollToCurrentLevel();
     });
     _connectTalkToUsFocus.addListener(_onConnectTalkToUsFocusChange);
-    // Initialize bee animations
+    
     bee1Controller = AnimationController(
       duration: const Duration(seconds: 12),
       vsync: this,
@@ -431,23 +412,39 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       vsync: this,
     )..repeat();
     
-    // Delay bee 3 animation
     Future.delayed(const Duration(seconds: 10), () {
       if (mounted) {
         bee3Controller.repeat();
       }
     });
-    // XP: apply login bonus and show in header
+    
     onAppOpen().then((_) => getXp()).then((xp) {
       if (mounted) {
         setState(() => _headerXp = xp);
       }
     });
-    // ADDED: Load rewarded ad
     _loadRewardedAd();
   }
 
-  // ADDED: Rewarded ad loader
+  // CHANGE 6: Clean startup loader — reads progress once from SharedPreferences/Supabase.
+  // No complex logic, just load and display.
+  Future<void> _loadProgressOnStartup() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
+    if (mounted && saved != soundEnabled) setState(() => soundEnabled = saved);
+
+    final progress = await syncAdventureProgress();
+    if (!mounted) return;
+    setState(() {
+      currentGame = progress.currentGame;
+      highestUnlockedGame = progress.highestUnlockedGame;
+      gamesCompleted = List.from(progress.gamesCompleted);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollMapToCurrentLevel();
+    });
+  }
+
   void _loadRewardedAd() {
     RewardedAd.load(
       adUnitId: 'ca-app-pub-6740638137327567/2005976804',
@@ -463,10 +460,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // ADDED: Show rewarded ad and grant XP bonus on completion
   void _showRewardedAd() {
     if (_rewardedAd == null) {
-      // Ad not ready yet — show a message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Ad not ready yet, please try again in a moment.'),
@@ -479,7 +474,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _rewardedAd = null;
-        _loadRewardedAd(); // Preload next ad
+        _loadRewardedAd();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();
@@ -489,7 +484,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
     _rewardedAd!.show(
       onUserEarnedReward: (ad, reward) async {
-        // ADDED: Grant +2 XP bonus when ad is fully watched
         await addXp(2);
         final newXp = await getXp();
         if (mounted) {
@@ -522,7 +516,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       scrollFieldIntoView();
-      // Keyboard often resizes after the first frame; scroll again so the field stays visible.
       Future.delayed(const Duration(milliseconds: 350), scrollFieldIntoView);
     });
   }
@@ -536,7 +529,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     bee2Controller.dispose();
     bee3Controller.dispose();
     mapScrollController.dispose();
-    // ADDED: Dispose rewarded ad
     _rewardedAd?.dispose();
     super.dispose();
   }
@@ -598,11 +590,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   List<Widget> _buildMapImagery(Size screenSize, double totalHeight) {
-    const imageSize = 144.0; // 2x bigger (was 72)
-    const imageSizeSmall = 72.0; // half of honeycomb/pollen for honey and nectar
-    const sideOffset = 28.0; // distance from path to place on sides
+    const imageSize = 144.0;
+    const imageSizeSmall = 72.0;
+    const sideOffset = 28.0;
     final positions = <Widget>[];
-    // Pollen at 1, 11, 21, 31, ... on LEFT side of path (not behind numbers)
+    
     for (var level = 1; level <= totalGames; level += 10) {
       final pos = getGamePosition(level, screenSize);
       final pathX = screenSize.width * (pos['left']! / 100);
@@ -622,7 +614,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       );
     }
-    // Honeycomb at 5, 15, 25, 35, ... on RIGHT side of path (not behind numbers)
+    
     for (var level = 5; level <= totalGames; level += 10) {
       final pos = getGamePosition(level, screenSize);
       final pathX = screenSize.width * (pos['left']! / 100);
@@ -642,7 +634,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       );
     }
-    // Honey at multiples of 16 on RIGHT side (half size; does not overlap nectar)
+    
     for (var level = 16; level <= totalGames; level += 16) {
       final pos = getGamePosition(level, screenSize);
       final pathX = screenSize.width * (pos['left']! / 100);
@@ -662,9 +654,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       );
     }
-    // Nectar at multiples of 13 on LEFT side (half size; skip multiples of 16 so no overlap with honey)
+    
     for (var level = 13; level <= totalGames; level += 13) {
-      if (level % 16 == 0) continue; // same position as honey
+      if (level % 16 == 0) continue;
       final pos = getGamePosition(level, screenSize);
       final pathX = screenSize.width * (pos['left']! / 100);
       final top = (pos['top']! - imageSizeSmall / 2).clamp(4.0, totalHeight - imageSizeSmall - 4);
@@ -690,7 +682,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final isMobile = screenSize.width <= 768;
     final spacing = isMobile ? 60.0 : 80.0;
     final totalHeight = totalGames * spacing;
-    final viewportHeight = math.max(100.0, (screenSize.height - 324) * 0.9); // map 10% shorter
+    final viewportHeight = math.max(100.0, (screenSize.height - 324) * 0.9);
     final buffer = viewportHeight * 2;
     final startY = math.max(0.0, mapScrollY - buffer);
     final endY = mapScrollY + viewportHeight + buffer;
@@ -702,48 +694,43 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     };
   }
 
-  /// Scrolls the map so the current level is visible (centered when possible).
   void _scrollMapToCurrentLevel() {
     if (!mounted || !mapScrollController.hasClients) return;
-    final position = mapScrollController.position;
-    if (!position.hasContentDimensions) return;
+    
     final screenSize = MediaQuery.sizeOf(context);
     final isMobile = screenSize.width <= 768;
     final spacing = isMobile ? 60.0 : 80.0;
     final totalHeight = totalGames * spacing;
+    
     final levelY = totalHeight - (currentGame - 1) * spacing;
-    final viewportHeight = position.viewportDimension;
-    final minOffset = _minMapScrollOffset(screenSize, totalHeight, spacing, viewportHeight).clamp(0.0, position.maxScrollExtent);
-    final targetOffset = (levelY - viewportHeight * 0.4).clamp(minOffset, position.maxScrollExtent);
+    final viewportHeight = mapScrollController.position.viewportDimension;
+    
+    double targetOffset = levelY - (viewportHeight / 2);
+    targetOffset = targetOffset.clamp(0.0, mapScrollController.position.maxScrollExtent);
+    
     mapScrollController.jumpTo(targetOffset);
   }
 
-  /// Minimum scroll offset so the user cannot scroll past (beyond) their current level.
-  double _minMapScrollOffset(Size screenSize, double totalHeight, double spacing, double viewportHeight) {
-    final levelY = totalHeight - (currentGame - 1) * spacing;
-    return levelY.clamp(0.0, double.infinity);
-  }
-
-  /// Schedules scroll to current level with retries so the map is visible after returning to menu.
   void _scheduleScrollToCurrentLevel() {
-    void tryScroll() {
+    void attemptScroll(int attempt) {
       if (!mounted) return;
-      _scrollMapToCurrentLevel();
+      if (mapScrollController.hasClients) {
+        _scrollMapToCurrentLevel();
+      } else if (attempt < 5) {
+        Future.delayed(Duration(milliseconds: 100 * attempt), () {
+          attemptScroll(attempt + 1);
+        });
+      }
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
-    Future.delayed(const Duration(milliseconds: 100), tryScroll);
-    Future.delayed(const Duration(milliseconds: 300), tryScroll);
-    Future.delayed(const Duration(milliseconds: 600), tryScroll);
+    attemptScroll(1);
   }
 
-  /// Vertical margin used to center the map between the two yellow bands.
   (double, double) _mapVerticalMargins(Size screenSize) {
-    const topOfSpace = 166.0;   // below header + yellow band (74 + 92)
-    const bottomOfSpaceFromBottom = 140.0; // above footer yellow band
+    const topOfSpace = 166.0;
+    const bottomOfSpaceFromBottom = 140.0;
     final availableHeight = screenSize.height - topOfSpace - bottomOfSpaceFromBottom;
     final mapHeight = (screenSize.height - 324) * 0.9;
     final totalMargin = math.max(0.0, availableHeight - mapHeight);
-    // More margin at bottom so the map sits higher / more centred
     final marginTop = totalMargin * 0.25;
     final marginBottom = totalMargin * 0.75;
     return (marginTop, marginBottom);
@@ -762,7 +749,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     
     return Stack(
       children: [
-        // Header: back up 10px (top 0), opacity 0.5, padding top -20px, padding bottom -10px, height -30px
         Positioned(
           top: 0,
           left: 0,
@@ -788,7 +774,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Logo centered in header
                 Center(
                   child: Image.asset(
                     'assets/BEE-FIVE.png',
@@ -804,7 +789,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                // Right side: XP gem + profile
                 Positioned(
                   right: 0,
                   top: 0,
@@ -814,27 +798,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     children: [
                       _buildHeaderXpGem(isMobile),
                       GestureDetector(
-                  onTap: () => setState(() => gameMode = GameMode.profile),
-                  child: Container(
-                    width: isMobile ? 40 : 48,
-                    height: isMobile ? 40 : 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2c2c2c),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.black, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                        onTap: () => setState(() => gameMode = GameMode.profile),
+                        child: Container(
+                          width: isMobile ? 40 : 48,
+                          height: isMobile ? 40 : 48,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2c2c2c),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.black, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Text('👤', style: TextStyle(fontSize: 24)),
+                          ),
                         ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text('👤', style: TextStyle(fontSize: 24)),
-                    ),
-                  ),
-                ),
+                      ),
                     ],
                   ),
                 ),
@@ -843,7 +827,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
         
-        // Yellow band between header and map: BEE FIVE (black) + tagline
         Positioned(
           top: 74,
           left: 0,
@@ -886,7 +869,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ),
         ),
-        // Map Container (world map style) - centred vertically
+        
         Positioned(
           top: 166 + mapMarginTop,
           left: 0,
@@ -913,271 +896,260 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               clipBehavior: Clip.none,
               children: [
                 NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                if (notification is ScrollUpdateNotification) {
-                  setState(() => mapScrollY = mapScrollController.offset);
-                }
-                if (notification is ScrollEndNotification || notification is ScrollUpdateNotification) {
-                  final pos = mapScrollController.position;
-                  if (pos.hasContentDimensions && pos.viewportDimension > 0) {
-                    final screenSize = MediaQuery.sizeOf(context);
-                    final isMobile = screenSize.width <= 768;
-                    final spacing = isMobile ? 60.0 : 80.0;
-                    final totalHeight = totalGames * spacing;
-                    final minOffset = _minMapScrollOffset(screenSize, totalHeight, spacing, pos.viewportDimension).clamp(0.0, pos.maxScrollExtent);
-                    if (pos.pixels < minOffset) {
-                      mapScrollController.jumpTo(minOffset);
+                  onNotification: (notification) {
+                    if (notification is ScrollUpdateNotification) {
+                      setState(() => mapScrollY = mapScrollController.offset);
                     }
-                  }
-                }
-                return false;
-              },
-              child: SingleChildScrollView(
-                controller: mapScrollController,
-                child: SizedBox(
-                  height: totalHeight,
-                  width: screenSize.width,
-                  child: Stack(
-                    children: [
-                      // 1) Hills (background)
-                      Positioned(
-                        left: -80,
-                        top: totalHeight * 0.6,
-                        child: Container(
-                          width: 280,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.rectangle,
-                            borderRadius: BorderRadius.circular(100),
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [Color(0xFFa89840), Color(0xFFc9b85c)],
+                    if (notification is ScrollEndNotification || notification is ScrollUpdateNotification) {
+                      final pos = mapScrollController.position;
+                      if (pos.hasContentDimensions && pos.viewportDimension > 0) {
+                        final screenSize = MediaQuery.sizeOf(context);
+                        final isMobile = screenSize.width <= 768;
+                        final spacing = isMobile ? 60.0 : 80.0;
+                        final totalHeight = totalGames * spacing;
+                        final minOffset = _minMapScrollOffset(screenSize, totalHeight, spacing, pos.viewportDimension).clamp(0.0, pos.maxScrollExtent);
+                        if (pos.pixels < minOffset) {
+                          mapScrollController.jumpTo(minOffset);
+                        }
+                      }
+                    }
+                    return false;
+                  },
+                  child: SingleChildScrollView(
+                    controller: mapScrollController,
+                    child: SizedBox(
+                      height: totalHeight,
+                      width: screenSize.width,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: -80,
+                            top: totalHeight * 0.6,
+                            child: Container(
+                              width: 280,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.rectangle,
+                                borderRadius: BorderRadius.circular(100),
+                                gradient: LinearGradient(
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                  colors: [Color(0xFFa89840), Color(0xFFc9b85c)],
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Positioned(
-                        right: -60,
-                        top: totalHeight * 0.65,
-                        child: Container(
-                          width: 220,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(80),
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [Color(0xFF8b7a2e), Color(0xFFb8982e)],
+                          Positioned(
+                            right: -60,
+                            top: totalHeight * 0.65,
+                            child: Container(
+                              width: 220,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(80),
+                                gradient: LinearGradient(
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                  colors: [Color(0xFF8b7a2e), Color(0xFFb8982e)],
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      // 2) Winding path (golden)
-                      CustomPaint(
-                        size: Size(screenSize.width, totalHeight),
-                        painter: WindingPathPainter(
-                          screenSize: screenSize,
-                          pathPoints: List.generate(
+                          CustomPaint(
+                            size: Size(screenSize.width, totalHeight),
+                            painter: WindingPathPainter(
+                              screenSize: screenSize,
+                              pathPoints: List.generate(
+                                visibleRange['endGame']! - visibleRange['startGame']! + 1,
+                                (i) {
+                                  final g = visibleRange['startGame']! + i;
+                                  final pos = getGamePosition(g, screenSize);
+                                  return Offset(
+                                    screenSize.width * (pos['left']! / 100),
+                                    pos['top']!,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            top: totalHeight * 0.72,
+                            child: Container(
+                              width: screenSize.width,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Color(0xFF5DADE2), Color(0xFF3498DB)],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: screenSize.width * 0.35,
+                            top: totalHeight * 0.71,
+                            child: Container(
+                              width: screenSize.width * 0.3,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: Color(0xFF8B4513),
+                                borderRadius: BorderRadius.circular(4),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: List.generate(5, (_) => Container(width: 2, height: 10, color: Color(0xFF5D4037))),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: screenSize.width * 0.05,
+                            top: totalHeight * 0.78,
+                            child: CustomPaint(
+                              size: Size(50, 70),
+                              painter: _VolcanoPainter(),
+                            ),
+                          ),
+                          ..._buildMapImagery(screenSize, totalHeight),
+                          Positioned(
+                            right: screenSize.width * 0.08,
+                            top: totalHeight * 0.08,
+                            child: Image.asset(
+                              'assets/homeImagery/home.png',
+                              width: 36,
+                              height: 36,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                            ),
+                          ),
+                          ...List.generate(40, (i) {
+                            final gameIndex = visibleRange['startGame']! + (i * 2);
+                            if (gameIndex > visibleRange['endGame']!) return null;
+                            final position = getGamePosition(gameIndex, screenSize);
+                            final pathX = screenSize.width * (position['left']! / 100);
+                            final leftX = pathX - 42 - (i % 3) * 8;
+                            if (leftX < -20) return null;
+                            const leftFlowerPaths = [
+                              'assets/mapImagery/borage.png',
+                              'assets/mapImagery/clover.png',
+                              'assets/mapImagery/echinacea.png',
+                              'assets/mapImagery/lavender.png',
+                              'assets/mapImagery/sunflower.png',
+                            ];
+                            const flowerSize = 60.0;
+                            return Positioned(
+                              left: leftX,
+                              top: position['top']! - 12 + (i % 5) * 4,
+                              child: Image.asset(
+                                leftFlowerPaths[i % leftFlowerPaths.length],
+                                width: flowerSize,
+                                height: flowerSize,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                              ),
+                            );
+                          }).whereType<Widget>(),
+                          ...List.generate(40, (i) {
+                            final gameIndex = visibleRange['startGame']! + (i * 2);
+                            if (gameIndex > visibleRange['endGame']!) return null;
+                            final position = getGamePosition(gameIndex, screenSize);
+                            final pathX = screenSize.width * (position['left']! / 100);
+                            final rightX = pathX + 42 + (i % 3) * 8;
+                            if (rightX > screenSize.width - 10) return null;
+                            const rightFlowerPaths = [
+                              'assets/mapImagery/borage.png',
+                              'assets/mapImagery/clover.png',
+                              'assets/mapImagery/echinacea.png',
+                              'assets/mapImagery/lavender.png',
+                              'assets/mapImagery/sunflower.png',
+                            ];
+                            const flowerSize = 60.0;
+                            return Positioned(
+                              left: rightX,
+                              top: position['top']! - 18 - (i % 4) * 3,
+                              child: Image.asset(
+                                rightFlowerPaths[i % rightFlowerPaths.length],
+                                width: flowerSize,
+                                height: flowerSize,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                              ),
+                            );
+                          }).whereType<Widget>(),
+                          ...adventureStages.map((stage) {
+                            final position = getGamePosition(stage.games, screenSize);
+                            return Positioned(
+                              left: screenSize.width / 2 - 45,
+                              top: position['top']! - 36,
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: stage.color,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.black, width: 2),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (stage.emoji == '🏠')
+                                      Image.asset(
+                                        'assets/homeImagery/home.png',
+                                        width: 18,
+                                        height: 18,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, _, _) => Text(stage.emoji, style: TextStyle(fontSize: 18)),
+                                      )
+                                    else
+                                      Text(stage.emoji, style: TextStyle(fontSize: 18)),
+                                    SizedBox(width: 4),
+                                    Text('S${adventureStages.indexOf(stage) + 1}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                          ...List.generate(
                             visibleRange['endGame']! - visibleRange['startGame']! + 1,
                             (i) {
-                              final g = visibleRange['startGame']! + i;
-                              final pos = getGamePosition(g, screenSize);
-                              return Offset(
-                                screenSize.width * (pos['left']! / 100),
-                                pos['top']!,
+                              final gameNumber = visibleRange['startGame']! + i;
+                              if (gameNumber < 1 || gameNumber > totalGames) return const SizedBox.shrink();
+                              final position = getGamePosition(gameNumber, screenSize);
+                              final isCompleted = gamesCompleted.contains(gameNumber);
+                              final isCurrent = gameNumber == currentGame;
+                              final isLocked = gameNumber > highestUnlockedGame;
+                              const hexSize = 40.0;
+                              return Positioned(
+                                left: screenSize.width * position['left']! / 100 - hexSize / 2,
+                                top: position['top']! - hexSize / 2,
+                                child: HexagonLevelMarker(
+                                  levelNumber: gameNumber,
+                                  isCurrent: isCurrent,
+                                  isLocked: isLocked,
+                                  isCompleted: isCompleted,
+                                  size: hexSize,
+                                  onTap: () {
+                                    if (!isLocked) {
+                                      _tryStartAdventure(() {
+                                        setState(() {
+                                          currentGame = gameNumber;
+                                          gameMode = GameMode.adventureGame;
+                                        });
+                                      });
+                                    }
+                                  },
+                                ),
                               );
                             },
                           ),
-                        ),
+                        ],
                       ),
-                      // 3) River + bridge
-                      Positioned(
-                        left: 0,
-                        top: totalHeight * 0.72,
-                        child: Container(
-                          width: screenSize.width,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Color(0xFF5DADE2), Color(0xFF3498DB)],
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: screenSize.width * 0.35,
-                        top: totalHeight * 0.71,
-                        child: Container(
-                          width: screenSize.width * 0.3,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF8B4513),
-                            borderRadius: BorderRadius.circular(4),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: List.generate(5, (_) => Container(width: 2, height: 10, color: Color(0xFF5D4037))),
-                          ),
-                        ),
-                      ),
-                      // 4) Volcano (bottom right)
-                      Positioned(
-                        right: screenSize.width * 0.05,
-          top: totalHeight * 0.78,
-                        child: CustomPaint(
-                          size: Size(50, 70),
-                          painter: _VolcanoPainter(),
-                        ),
-                      ),
-                      // 4b) Map imagery: beefivemascot, honeycomb, pollen (appear as user scrolls)
-                      ..._buildMapImagery(screenSize, totalHeight),
-                      // 5) Beehive (top-right area, no leaves)
-                      Positioned(
-                        right: screenSize.width * 0.08,
-                        top: totalHeight * 0.08,
-                        child: Image.asset(
-                          'assets/homeImagery/home.png',
-                          width: 36,
-                          height: 36,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                        ),
-                      ),
-                      // 6) Flower images on the LEFT side of the hexagonal path
-                      ...List.generate(40, (i) {
-                        final gameIndex = visibleRange['startGame']! + (i * 2);
-                        if (gameIndex > visibleRange['endGame']!) return null;
-                        final position = getGamePosition(gameIndex, screenSize);
-                        final pathX = screenSize.width * (position['left']! / 100);
-                        final leftX = pathX - 42 - (i % 3) * 8;
-                        if (leftX < -20) return null;
-                        const leftFlowerPaths = [
-                          'assets/mapImagery/borage.png',
-                          'assets/mapImagery/clover.png',
-                          'assets/mapImagery/echinacea.png',
-                          'assets/mapImagery/lavender.png',
-                          'assets/mapImagery/sunflower.png',
-                        ];
-                        const flowerSize = 60.0; // ~3x emoji size (18–22)
-                        return Positioned(
-                          left: leftX,
-                          top: position['top']! - 12 + (i % 5) * 4,
-                          child: Image.asset(
-                            leftFlowerPaths[i % leftFlowerPaths.length],
-                            width: flowerSize,
-                            height: flowerSize,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                          ),
-                        );
-                      }).whereType<Widget>(),
-                      // 7) Flower images on the RIGHT side of the hexagonal path
-                      ...List.generate(40, (i) {
-                        final gameIndex = visibleRange['startGame']! + (i * 2);
-                        if (gameIndex > visibleRange['endGame']!) return null;
-                        final position = getGamePosition(gameIndex, screenSize);
-                        final pathX = screenSize.width * (position['left']! / 100);
-                        final rightX = pathX + 42 + (i % 3) * 8;
-                        if (rightX > screenSize.width - 10) return null;
-                        const rightFlowerPaths = [
-                          'assets/mapImagery/borage.png',
-                          'assets/mapImagery/clover.png',
-                          'assets/mapImagery/echinacea.png',
-                          'assets/mapImagery/lavender.png',
-                          'assets/mapImagery/sunflower.png',
-                        ];
-                        const flowerSize = 60.0; // ~3x emoji size (18–22)
-                        return Positioned(
-                          left: rightX,
-                          top: position['top']! - 18 - (i % 4) * 3,
-                          child: Image.asset(
-                            rightFlowerPaths[i % rightFlowerPaths.length],
-                            width: flowerSize,
-                            height: flowerSize,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                          ),
-                        );
-                      }).whereType<Widget>(),
-                      // 8) Stage markers (compact)
-                      ...adventureStages.map((stage) {
-                        final position = getGamePosition(stage.games, screenSize);
-                        return Positioned(
-                          left: screenSize.width / 2 - 45,
-                          top: position['top']! - 36,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: stage.color,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.black, width: 2),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (stage.emoji == '🏠')
-                                  Image.asset(
-                                    'assets/homeImagery/home.png',
-                                    width: 18,
-                                    height: 18,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, _, _) => Text(stage.emoji, style: TextStyle(fontSize: 18)),
-                                  )
-                                else
-                                  Text(stage.emoji, style: TextStyle(fontSize: 18)),
-                                SizedBox(width: 4),
-                                Text('S${adventureStages.indexOf(stage) + 1}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                      // 9) Level markers = hexagons with numbers
-                      ...List.generate(
-                        visibleRange['endGame']! - visibleRange['startGame']! + 1,
-                        (i) {
-                          final gameNumber = visibleRange['startGame']! + i;
-                          if (gameNumber < 1 || gameNumber > totalGames) return const SizedBox.shrink();
-                          final position = getGamePosition(gameNumber, screenSize);
-                          final isCompleted = gamesCompleted.contains(gameNumber);
-                          final isCurrent = gameNumber == currentGame;
-                          final isLocked = gameNumber > highestUnlockedGame;
-                          const hexSize = 40.0;
-                          return Positioned(
-                            left: screenSize.width * position['left']! / 100 - hexSize / 2,
-                            top: position['top']! - hexSize / 2,
-                            child: HexagonLevelMarker(
-                              levelNumber: gameNumber,
-                              isCurrent: isCurrent,
-                              isLocked: isLocked,
-                              isCompleted: isCompleted,
-                              size: hexSize,
-                              onTap: () {
-                                if (!isLocked) {
-                                  _tryStartAdventure(() {
-                                    setState(() {
-                                      currentGame = gameNumber;
-                                      gameMode = GameMode.adventureGame;
-                                    });
-                                  });
-                                }
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-                // Fixed mascot: larger, shifted more right and 100px down, bottom right of map, half visible (left side), does not scroll.
                 Positioned(
                   right: -80,
                   bottom: -100,
@@ -1205,6 +1177,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       ],
     );
+  }
+
+  double _minMapScrollOffset(Size screenSize, double totalHeight, double spacing, double viewportHeight) {
+    final levelY = totalHeight - (currentGame - 1) * spacing;
+    return levelY.clamp(0.0, double.infinity);
   }
 
   Future<void> _tryStartAdventure(void Function() startAdventure) async {
@@ -1281,7 +1258,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     
     return Stack(
       children: [
-        // Left side buttons (Play with a Friend, Classic Mode, Settings)
         Positioned(
           left: 10,
           top: 0,
@@ -1290,7 +1266,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Play with a Friend
                 _sideMenuButton(
                   label: 'Play with a Friend',
                   iconImagePath: 'assets/homeImagery/play-with-friend.png',
@@ -1300,7 +1275,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Classic Mode (10 min streak only — no difficulty; practice has Easy/Medium/Hard)
                 _sideMenuButton(
                   label: 'Classic Mode',
                   iconImagePath: 'assets/homeImagery/classic-mode.png',
@@ -1315,7 +1289,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Daily Challenge
                 _sideMenuButton(
                   label: _dailyChallengePlayedToday
                       ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
@@ -1325,7 +1298,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   onPressed: _onDailyChallengePressed,
                 ),
                 const SizedBox(height: 12),
-                // Gain XPs
                 _sideMenuButton(
                   label: 'Gain XPs',
                   iconImagePath: 'assets/homeImagery/buy_icon.png',
@@ -1333,7 +1305,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   onPressed: _showGainXPsModal,
                 ),
                 const SizedBox(height: 12),
-                // Bee Five Tour
                 _sideMenuButton(
                   label: 'Bee Five Tour',
                   iconImagePath: 'assets/homeImagery/tour_icon.png',
@@ -1341,7 +1312,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   onPressed: _showBeeFiveTourModal,
                 ),
                 const SizedBox(height: 12),
-                // ADDED: Watch Ad for XP button
                 _sideMenuButton(
                   label: 'Watch Ad +2 XP',
                   icon: '🎬',
@@ -1353,7 +1323,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
         
-        // Continue Level button (green) — underneath the map, above footer
         Positioned(
           bottom: 140,
           left: 0,
@@ -1408,7 +1377,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ),
         ),
-        // Yellow band between map and footer
+        
         Positioned(
           bottom: 100,
           left: 0,
@@ -1416,7 +1385,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           height: 40,
           child: Container(color: primaryYellow),
         ),
-        // Bottom nav: height -20px, padding top -20px
+        
         Positioned(
           bottom: 0,
           left: 0,
@@ -1454,7 +1423,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (gameMode != GameMode.menu) {
       return const SizedBox.shrink();
     }
-    // Show flying bees on all screen sizes (portrait and landscape)
     final isPortrait = screenSize.width <= 768;
     final range = isPortrait ? 0.25 : 0.35;
     final baseX = 0.5;
@@ -1709,7 +1677,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            // Easy
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -1737,7 +1704,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 12),
-            // Medium
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -1765,7 +1731,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 12),
-            // Hard
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -1793,7 +1758,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 12),
-            // Cancel
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -1848,7 +1812,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            // With Timer
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -1877,7 +1840,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 12),
-            // No Timer
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -1906,7 +1868,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 12),
-            // Cancel
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -2007,10 +1968,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             '• Login: +2 XP per calendar day (once per day).\n\n'
             '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
             '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
-            '• Adventure: +1 XP for every 2 consecutive level wins; −3 XP per loss. '
+            '• Adventure: +1 XP for every 2 consecutive level wins; −2 XP per loss. '
             'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
             '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
-            '• Watch Ad: Watch a short ad → +2 XP (tap "Watch Ad +2 XP" on the home screen).', // ADDED: Watch Ad entry
+            '• Watch Ad: Watch a short ad → +2 XP (tap "Watch Ad +2 XP" on the home screen).',
             style: TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
           ),
@@ -2108,7 +2069,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  /// Shows a password confirmation dialog. Returns the entered password on Confirm, null on Cancel.
   static Future<String?> _showPasswordConfirmDialog({
     required BuildContext context,
     required String title,
@@ -2258,7 +2218,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       final auth = context.read<AuthContext>();
                       Navigator.pop(dialogContext);
                       await auth.signOut();
-                      // AuthGate rebuilds and shows SignInPage when user is null
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black87,
@@ -2278,7 +2237,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // Reset adventure progress — password required
                   if (context.read<AuthContext>().user != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -2338,7 +2296,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
-                  // Delete account — password required
                   OutlinedButton(
                     onPressed: () async {
                       final auth = context.read<AuthContext>();
@@ -2428,7 +2385,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     
-    // Handle different game modes
     if (gameMode == GameMode.aiGame) {
       return ClassicAIGame(
         onBackToMenu: () {
@@ -2462,23 +2418,30 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     
     if (gameMode == GameMode.adventureGame) {
       return AdventureGame(
-        onBackToMenu: () {
-          setState(() => gameMode = GameMode.menu);
-          _scheduleScrollToCurrentLevel();
+        // CHANGE 7: onBackToMenu now receives the level directly from AdventureGame.
+        // No SharedPreferences read, no timing race, no async delay needed.
+        // The level is set instantly in setState — the button and map update immediately.
+        onBackToMenu: (int levelFromGame) {
+          setState(() {
+            gameMode = GameMode.menu;
+            currentGame = levelFromGame; // ← set directly from what game reported
+          });
+          // Sync highestUnlockedGame and gamesCompleted in background
           syncAdventureProgress().then((progress) {
             if (mounted) {
               setState(() {
-                currentGame = progress.currentGame;
                 highestUnlockedGame = progress.highestUnlockedGame;
-                gamesCompleted = progress.gamesCompleted;
+                gamesCompleted = List.from(progress.gamesCompleted);
               });
-              _scheduleScrollToCurrentLevel();
             }
           });
+          // Update XP display
           getXp().then((xp) {
-            if (mounted) {
-              setState(() => _headerXp = xp);
-            }
+            if (mounted) setState(() => _headerXp = xp);
+          });
+          // Scroll map to the level the player just came from
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _scheduleScrollToCurrentLevel();
           });
         },
         initialGame: currentGame,
@@ -2622,7 +2585,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              // Same footer as homepage
               Container(
                 height: 100,
                 decoration: BoxDecoration(
@@ -2811,7 +2773,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              // Same footer as homepage: yellow band + black nav bar
               Container(color: primaryYellow, height: 40),
               Container(
                 height: 100,
@@ -2847,15 +2808,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       backgroundColor: primaryYellow,
       body: Stack(
         children: [
-          // Map background
           buildMapBackground(screenSize),
-          
-          // Animated bees (desktop only)
           buildAnimatedBees(screenSize),
-          
-          // Menu overlay
           buildMenuOverlay(screenSize),
-          
         ],
       ),
     );
