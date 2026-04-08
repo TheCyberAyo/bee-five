@@ -971,7 +971,7 @@ class _AdventureGameState extends State<AdventureGame> {
     
     if (winner == 1) {
       playerWins++;
-      gameStatus = 'You won!';
+      gameStatus = 'You Won!';
       onAdventureGameWon(levelJustPlayed: currentGame).then((result) {
         if (mounted) {
           setState(() {
@@ -982,7 +982,7 @@ class _AdventureGameState extends State<AdventureGame> {
       });
     } else if (winner == 2) {
       aiWins++;
-      gameStatus = 'AI won!';
+      gameStatus = 'Hive Lost!';
       onAdventureMatchLost(levelJustPlayed: currentGame).then((result) {
         if (mounted) {
           setState(() {
@@ -997,10 +997,10 @@ class _AdventureGameState extends State<AdventureGame> {
     if (requiresMatch) {
       if (playerWins >= requiredWins) {
         isMatchComplete = true;
-        gameStatus = 'Match won! You: $playerWins, AI: $aiWins';
+        gameStatus = 'You Won! You: $playerWins, AI: $aiWins';
       } else if (aiWins >= requiredWins) {
         isMatchComplete = true;
-        gameStatus = 'Match lost! You: $playerWins, AI: $aiWins';
+        gameStatus = 'Hive Lost! You: $playerWins, AI: $aiWins';
       } else if (currentMatch < totalGames) {
         gameStatus = 'Match $currentMatch complete. Starting match ${currentMatch + 1}...';
         Future.delayed(const Duration(seconds: 2), () {
@@ -1471,7 +1471,7 @@ class _AdventureGameState extends State<AdventureGame> {
                                 gameStatus == 'AI thinking...')
                             ? _turnAnnouncementOrange
                             : (winner == 1 &&
-                                    (gameStatus == 'You won!' ||
+                                    (gameStatus == 'You Won!' ||
                                         gameStatus.startsWith('Match won')))
                                 ? Colors.green
                                 : primaryYellow,

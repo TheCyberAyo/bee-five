@@ -16,7 +16,7 @@ This guide covers all the steps needed to prepare your Bee Five app for Google P
 
 ### Step 1: Generate a Release Keystore
 
-**IMPORTANT**: Keep your keystore file and passwords secure. If you lose them, you won't be able to update your app on the Play Store.
+**IMPORTANT**: Keep your keystore file and passwords secure. If you lose them, You Won't be able to update your app on the Play Store.
 
 1. Open a terminal/command prompt
 2. Navigate to the `android/app` directory

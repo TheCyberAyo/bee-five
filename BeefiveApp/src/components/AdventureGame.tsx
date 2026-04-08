@@ -711,7 +711,7 @@ export default function AdventureGame({ onBackToMenu, initialGame, autoStart, on
           // Match not complete: show winner announcement for 2 seconds, then countdown for 3 seconds
           const matchKey = `${currentGame}-${currentMatch}`;
           if (lastAnnouncedMatchRef.current !== matchKey) {
-            setMatchWinnerMessage(`You won Match ${currentMatch}/${totalGames}! 🎉`);
+            setMatchWinnerMessage(`You Won Match ${currentMatch}/${totalGames}! 🎉`);
             setShowMatchWinnerAnnouncement(true);
             lastAnnouncedMatchRef.current = matchKey;
             // After 2 seconds, hide announcement and start countdown
