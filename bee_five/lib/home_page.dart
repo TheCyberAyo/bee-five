@@ -16,7 +16,6 @@ import 'game_mode.dart';
 import 'adventure_progress_service.dart';
 import 'xp_service.dart';
 
-// Adventure stages for map background
 class AdventureStage {
   final String name;
   final int games;
@@ -34,103 +33,35 @@ class AdventureStage {
 }
 
 final List<AdventureStage> adventureStages = [
-  AdventureStage(
-    name: "The Whispering Egg",
-    games: 1,
-    emoji: '🥚',
-    color: const Color(0xFFFFE4B5),
-    description: "The prophecy of a hero is laid within a golden cell.",
-  ),
-  AdventureStage(
-    name: "Larva of Legends",
-    games: 201,
-    emoji: '🐛',
-    color: const Color(0xFF98FB98),
-    description: "A tiny creature begins its fabled journey of growth.",
-  ),
-  AdventureStage(
-    name: "Chamber of Royal Nectar",
-    games: 401,
-    emoji: '🍬',
-    color: const Color(0xFFFFD700),
-    description: "A mystical hall where power and destiny are forged.",
-  ),
-  AdventureStage(
-    name: "Silken Cocoon of Secrets",
-    games: 601,
-    emoji: '🕸️',
-    color: const Color(0xFFDDA0DD),
-    description: "Spinning a magical shell to transform.",
-  ),
-  AdventureStage(
-    name: "Dreams of the Pupa Realm",
-    games: 801,
-    emoji: '🦋',
-    color: const Color(0xFF87CEEB),
-    description: "Visions of wings and future battles stir inside.",
-  ),
-  AdventureStage(
-    name: "Wings of Dawn",
-    games: 1001,
-    emoji: '🌅',
-    color: const Color(0xFFFFA500),
-    description: "Breaking free and taking the first heroic flight.",
-  ),
-  AdventureStage(
-    name: "Hive of Trials",
-    games: 1201,
-    emoji: '🏠',
-    color: const Color(0xFF90EE90),
-    description: "Training in ancient duties and learning hidden arts.",
-  ),
-  AdventureStage(
-    name: "Trails of Golden Pollen",
-    games: 1401,
-    emoji: '🌻',
-    color: const Color(0xFFFFC30B),
-    description: "Quests across wildflower kingdoms to gather treasure.",
-  ),
-  AdventureStage(
-    name: "Sentinel of the Hiveheart",
-    games: 1601,
-    emoji: '🛡️',
-    color: const Color(0xFFB0C4DE),
-    description: "Standing guard against dark invaders.",
-  ),
-  AdventureStage(
-    name: "Crown of the Queen-Bee",
-    games: 1801,
-    emoji: '👑',
-    color: const Color(0xFFFF69B4),
-    description: "Ascend the throne, lead the swarm, or begin a new dynasty.",
-  ),
+  AdventureStage(name: "The Whispering Egg", games: 1, emoji: '🥚', color: const Color(0xFFFFE4B5), description: "The prophecy of a hero is laid within a golden cell."),
+  AdventureStage(name: "Larva of Legends", games: 201, emoji: '🐛', color: const Color(0xFF98FB98), description: "A tiny creature begins its fabled journey of growth."),
+  AdventureStage(name: "Chamber of Royal Nectar", games: 401, emoji: '🍬', color: const Color(0xFFFFD700), description: "A mystical hall where power and destiny are forged."),
+  AdventureStage(name: "Silken Cocoon of Secrets", games: 601, emoji: '🕸️', color: const Color(0xFFDDA0DD), description: "Spinning a magical shell to transform."),
+  AdventureStage(name: "Dreams of the Pupa Realm", games: 801, emoji: '🦋', color: const Color(0xFF87CEEB), description: "Visions of wings and future battles stir inside."),
+  AdventureStage(name: "Wings of Dawn", games: 1001, emoji: '🌅', color: const Color(0xFFFFA500), description: "Breaking free and taking the first heroic flight."),
+  AdventureStage(name: "Hive of Trials", games: 1201, emoji: '🏠', color: const Color(0xFF90EE90), description: "Training in ancient duties and learning hidden arts."),
+  AdventureStage(name: "Trails of Golden Pollen", games: 1401, emoji: '🌻', color: const Color(0xFFFFC30B), description: "Quests across wildflower kingdoms to gather treasure."),
+  AdventureStage(name: "Sentinel of the Hiveheart", games: 1601, emoji: '🛡️', color: const Color(0xFFB0C4DE), description: "Standing guard against dark invaders."),
+  AdventureStage(name: "Crown of the Queen-Bee", games: 1801, emoji: '👑', color: const Color(0xFFFF69B4), description: "Ascend the throne, lead the swarm, or begin a new dynasty."),
 ];
 
 const int totalGames = 2000;
 const Color primaryYellow = Color(0xFFFFC30B);
 
-/// Limits text input to [maxWords] words.
 class _WordLimitInputFormatter extends TextInputFormatter {
   final int maxWords;
   _WordLimitInputFormatter(this.maxWords);
 
   @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     if (newValue.text.isEmpty) return newValue;
     final words = newValue.text.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
     if (words.length <= maxWords) return newValue;
     final truncated = words.take(maxWords).join(' ');
-    return TextEditingValue(
-      text: truncated,
-      selection: TextSelection.collapsed(offset: truncated.length),
-    );
+    return TextEditingValue(text: truncated, selection: TextSelection.collapsed(offset: truncated.length));
   }
 }
 
-/// Returns path for a flat-top hexagon centered at 0,0 with given radius.
 Path hexagonPath(double radius) {
   const int sides = 6;
   final path = Path();
@@ -138,35 +69,24 @@ Path hexagonPath(double radius) {
     final angle = (math.pi / 3) * i - math.pi / 6;
     final x = radius * math.cos(angle);
     final y = radius * math.sin(angle);
-    if (i == 0) {
-      path.moveTo(x, y);
-    } else {
-      path.lineTo(x, y);
-    }
+    if (i == 0) path.moveTo(x, y);
+    else path.lineTo(x, y);
   }
   path.close();
   return path;
 }
 
-/// Golden winding path painter: draws a thick path through level positions.
 class WindingPathPainter extends CustomPainter {
   final Size screenSize;
   final List<Offset> pathPoints;
   final double pathWidth;
 
-  WindingPathPainter({
-    required this.screenSize,
-    required this.pathPoints,
-    this.pathWidth = 28,
-  });
+  WindingPathPainter({required this.screenSize, required this.pathPoints, this.pathWidth = 28});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (pathPoints.length < 2) return;
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    final paint = Paint()..style = PaintingStyle.stroke..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
     paint.color = const Color(0xFF6b5010);
     paint.strokeWidth = pathWidth + 6;
     canvas.drawPath(_pathFromPoints(), paint);
@@ -180,9 +100,7 @@ class WindingPathPainter extends CustomPainter {
 
   Path _pathFromPoints() {
     final path = Path()..moveTo(pathPoints.first.dx, pathPoints.first.dy);
-    for (int i = 1; i < pathPoints.length; i++) {
-      path.lineTo(pathPoints[i].dx, pathPoints[i].dy);
-    }
+    for (int i = 1; i < pathPoints.length; i++) path.lineTo(pathPoints[i].dx, pathPoints[i].dy);
     return path;
   }
 
@@ -190,12 +108,21 @@ class WindingPathPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Single level marker: hexagon with number (gold) or lock (grey). Optional bee on current.
+// ---------------------------------------------------------------------------
+// HexagonLevelMarker
+//
+// Color rules:
+//   grey   = locked (> highestUnlockedGame)
+//   green  = passed (< currentGame and unlocked) — clickable to replay
+//   orange = current (== currentGame) — clickable
+//   red    = unlocked but not yet reached (between currentGame and highestUnlockedGame
+//            when user has replayed an old level)
+// ---------------------------------------------------------------------------
 class HexagonLevelMarker extends StatelessWidget {
   final int levelNumber;
   final bool isCurrent;
   final bool isLocked;
-  final bool isCompleted;
+  final bool isPassed;   // true → green
   final VoidCallback? onTap;
   final double size;
 
@@ -204,7 +131,7 @@ class HexagonLevelMarker extends StatelessWidget {
     required this.levelNumber,
     this.isCurrent = false,
     this.isLocked = false,
-    this.isCompleted = false,
+    this.isPassed = false,
     this.onTap,
     this.size = 36,
   });
@@ -212,53 +139,50 @@ class HexagonLevelMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color fillColor;
-    if (isCompleted) {
-      fillColor = const Color(0xFF4CAF50);
+    if (isPassed && !isCurrent) {
+      fillColor = const Color(0xFF4CAF50); // green — already passed
     } else if (isCurrent) {
-      fillColor = const Color(0xFFFF9800);
+      fillColor = const Color(0xFFFF9800); // orange — current level
     } else {
-      fillColor = const Color(0xFFE53935);
+      fillColor = const Color(0xFFE53935); // red — locked or not yet reached
     }
+
     return IgnorePointer(
       ignoring: isLocked,
       child: GestureDetector(
         onTap: isLocked ? null : onTap,
         child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          CustomPaint(
-            size: Size(size * 1.15, size * 1.15),
-            painter: _HexagonShapePainter(
-              fillColor: fillColor,
-              borderColor: isCurrent ? Colors.black : Colors.white,
-              borderWidth: isCurrent ? 3 : 2,
+          clipBehavior: Clip.none,
+          children: [
+            CustomPaint(
+              size: Size(size * 1.15, size * 1.15),
+              painter: _HexagonShapePainter(
+                fillColor: fillColor,
+                borderColor: isCurrent ? Colors.black : Colors.white,
+                borderWidth: isCurrent ? 3 : 2,
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: Center(
-              child: Text(
-                '$levelNumber',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  shadows: [Shadow(color: Colors.black45, offset: Offset(1, 1), blurRadius: 1)],
+            Positioned.fill(
+              child: Center(
+                child: Text(
+                  '$levelNumber',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [Shadow(color: Colors.black45, offset: Offset(1, 1), blurRadius: 1)],
+                  ),
                 ),
               ),
             ),
-          ),
-          if (isCurrent && !isLocked)
-            Positioned(
-              top: -20,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text('🐝', style: TextStyle(fontSize: size * 0.55)),
+            if (isCurrent && !isLocked)
+              Positioned(
+                top: -20, left: 0, right: 0,
+                child: Center(child: Text('🐝', style: TextStyle(fontSize: size * 0.55))),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 }
@@ -268,30 +192,15 @@ class _HexagonShapePainter extends CustomPainter {
   final Color borderColor;
   final double borderWidth;
 
-  _HexagonShapePainter({
-    required this.fillColor,
-    required this.borderColor,
-    required this.borderWidth,
-  });
+  _HexagonShapePainter({required this.fillColor, required this.borderColor, required this.borderWidth});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.shortestSide / 2 - 2;
     final path = hexagonPath(radius).shift(center);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = fillColor
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = borderColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = borderWidth,
-    );
+    canvas.drawPath(path, Paint()..color = fillColor..style = PaintingStyle.fill);
+    canvas.drawPath(path, Paint()..color = borderColor..style = PaintingStyle.stroke..strokeWidth = borderWidth);
   }
 
   @override
@@ -301,46 +210,20 @@ class _HexagonShapePainter extends CustomPainter {
 class _VolcanoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width * 0.5, 0)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = const Color(0xFF4a4a4a)
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.black26
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(size.width * 0.5, size.height * 0.15),
-        width: size.width * 0.5,
-        height: size.height * 0.15,
-      ),
-      Paint()..color = const Color(0xFFE74C3C),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(size.width * 0.5, size.height * 0.12),
-        width: size.width * 0.3,
-        height: size.height * 0.08,
-      ),
-      Paint()..color = const Color(0xFFF5B041),
-    );
+    final path = Path()..moveTo(size.width * 0.5, 0)..lineTo(size.width, size.height)..lineTo(0, size.height)..close();
+    canvas.drawPath(path, Paint()..color = const Color(0xFF4a4a4a)..style = PaintingStyle.fill);
+    canvas.drawPath(path, Paint()..color = Colors.black26..style = PaintingStyle.stroke..strokeWidth = 2);
+    canvas.drawOval(Rect.fromCenter(center: Offset(size.width * 0.5, size.height * 0.15), width: size.width * 0.5, height: size.height * 0.15), Paint()..color = const Color(0xFFE74C3C));
+    canvas.drawOval(Rect.fromCenter(center: Offset(size.width * 0.5, size.height * 0.12), width: size.width * 0.3, height: size.height * 0.08), Paint()..color = const Color(0xFFF5B041));
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+// ===========================================================================
+// HomePage
+// ===========================================================================
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -348,19 +231,31 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin, WidgetsBindingObserver {
   GameMode gameMode = GameMode.menu;
-  bool showDifficultyModal = false;
-  bool showTimerModal = false;
-  bool showSettingsModal = false;
   bool soundEnabled = true;
   String selectedDifficulty = '';
   String aiDifficulty = 'medium';
   int aiTimer = 15;
   bool isClassicStreakMode = false;
-  int currentGame = 1;
+
+  // ---------------------------------------------------------------------------
+  // Progress state
+  //
+  // highestUnlockedGame — the furthest level ever reached.  This is the value
+  //   we persist and restore on every app launch.  Levels <= this are unlocked
+  //   (grey lock icon removed).
+  //
+  // currentGame — the level the bee marker sits on and the button shows.  It
+  //   equals highestUnlockedGame on startup/return-from-game.  It changes when
+  //   the user taps a different (unlocked) level on the map to replay it.  It
+  //   is NOT persisted — it is always reset to highestUnlockedGame on next
+  //   startup, which is the correct "continue" UX.
+  // ---------------------------------------------------------------------------
   int highestUnlockedGame = 1;
+  int currentGame = 1;
   List<int> gamesCompleted = [];
+
   double mapScrollY = 0;
   final ScrollController mapScrollController = ScrollController();
   final TextEditingController _talkToUsController = TextEditingController();
@@ -376,152 +271,62 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   RewardedAd? _rewardedAd;
 
+  static const String _highestGameKey = 'highest_unlocked_game';
+
+  // ---------------------------------------------------------------------------
+  // Persistence: we store highestUnlockedGame, nothing else.
+  // ---------------------------------------------------------------------------
+
+  // Write to both the new key and the legacy key so progress survives any
+  // code path that reads either one.
+  Future<void> _saveHighest(int highest) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_highestGameKey, highest);
+    await prefs.setInt('current_game_level', highest); // legacy key kept in sync
+  }
+
+  Future<int> _loadHighest() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Read both keys and take the max so we never lose progress regardless of
+    // which key a previous version wrote to.
+    final a = prefs.getInt(_highestGameKey) ?? 1;
+    final b = prefs.getInt('current_game_level') ?? 1;
+    return math.max(a, b);
+  }
+
+  // ---------------------------------------------------------------------------
+  // initState / dispose
+  // ---------------------------------------------------------------------------
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadProgressOnStartup();
     getDailyChallengeStatus().then((status) {
       if (!mounted) return;
-      setState(() {
-        _dailyChallengePlayedToday = status.$1;
-        _dailyChallengeWon = status.$2;
-      });
+      setState(() { _dailyChallengePlayedToday = status.$1; _dailyChallengeWon = status.$2; });
     });
     BackgroundSound.instance.startIfEnabled().then((_) {
-      if (mounted) {
-        setState(() => soundEnabled = BackgroundSound.instance.soundEnabled);
-      }
+      if (mounted) setState(() => soundEnabled = BackgroundSound.instance.soundEnabled);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _scheduleScrollToCurrentLevel();
     });
     _connectTalkToUsFocus.addListener(_onConnectTalkToUsFocusChange);
-    
-    bee1Controller = AnimationController(
-      duration: const Duration(seconds: 12),
-      vsync: this,
-    )..repeat();
-    
-    bee2Controller = AnimationController(
-      duration: const Duration(seconds: 15),
-      vsync: this,
-    )..repeat();
-    
-    bee3Controller = AnimationController(
-      duration: const Duration(seconds: 18),
-      vsync: this,
-    )..repeat();
-    
-    Future.delayed(const Duration(seconds: 10), () {
-      if (mounted) {
-        bee3Controller.repeat();
-      }
-    });
-    
-    onAppOpen().then((_) => getXp()).then((xp) {
-      if (mounted) {
-        setState(() => _headerXp = xp);
-      }
-    });
+
+    bee1Controller = AnimationController(duration: const Duration(seconds: 12), vsync: this)..repeat();
+    bee2Controller = AnimationController(duration: const Duration(seconds: 15), vsync: this)..repeat();
+    bee3Controller = AnimationController(duration: const Duration(seconds: 18), vsync: this)..repeat();
+    Future.delayed(const Duration(seconds: 10), () { if (mounted) bee3Controller.repeat(); });
+
+    onAppOpen().then((_) => getXp()).then((xp) { if (mounted) setState(() => _headerXp = xp); });
     _loadRewardedAd();
-  }
-
-  // CHANGE 6: Clean startup loader — reads progress once from SharedPreferences/Supabase.
-  // No complex logic, just load and display.
-  Future<void> _loadProgressOnStartup() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
-    if (mounted && saved != soundEnabled) setState(() => soundEnabled = saved);
-
-    final progress = await syncAdventureProgress();
-    if (!mounted) return;
-    setState(() {
-      currentGame = progress.currentGame;
-      highestUnlockedGame = progress.highestUnlockedGame;
-      gamesCompleted = List.from(progress.gamesCompleted);
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scrollMapToCurrentLevel();
-    });
-  }
-
-  void _loadRewardedAd() {
-    RewardedAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/2005976804',
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (ad) {
-          _rewardedAd = ad;
-        },
-        onAdFailedToLoad: (error) {
-          _rewardedAd = null;
-        },
-      ),
-    );
-  }
-
-  void _showRewardedAd() {
-    if (_rewardedAd == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ad not ready yet, please try again in a moment.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        ad.dispose();
-        _rewardedAd = null;
-        _loadRewardedAd();
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        ad.dispose();
-        _rewardedAd = null;
-        _loadRewardedAd();
-      },
-    );
-    _rewardedAd!.show(
-      onUserEarnedReward: (ad, reward) async {
-        await addXp(2);
-        final newXp = await getXp();
-        if (mounted) {
-          setState(() => _headerXp = newXp);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🎉 +2 XP earned! Well done!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      },
-    );
-  }
-
-  void _onConnectTalkToUsFocusChange() {
-    if (!_connectTalkToUsFocus.hasFocus) return;
-    void scrollFieldIntoView() {
-      if (!mounted) return;
-      final ctx = _connectTalkToUsKey.currentContext;
-      if (ctx != null && ctx.mounted) {
-        Scrollable.ensureVisible(
-          ctx,
-          alignment: 0.1,
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOut,
-        );
-      }
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      scrollFieldIntoView();
-      Future.delayed(const Duration(milliseconds: 350), scrollFieldIntoView);
-    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _connectTalkToUsFocus.removeListener(_onConnectTalkToUsFocusChange);
     _connectTalkToUsFocus.dispose();
     _talkToUsController.dispose();
@@ -533,149 +338,99 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // Startup loader
+  //
+  // Takes the max of:
+  //   (a) what we persisted locally in SharedPreferences
+  //   (b) what the service / Supabase returns
+  // so that neither source alone can cause a regression to 1.
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadProgressOnStartup() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedSound = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
+    if (mounted && savedSound != soundEnabled) setState(() => soundEnabled = savedSound);
+
+    // Step 1: apply the locally persisted value IMMEDIATELY so the map and
+    // button show the correct level even before the network sync finishes.
+    // This means sign-out / cold-restart never briefly shows level 1.
+    final localHighest = await _loadHighest();
+    if (!mounted) return;
+    if (localHighest > 1) {
+      setState(() {
+        highestUnlockedGame = localHighest;
+        currentGame = localHighest;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollMapToCurrentLevel();
+      });
+    }
+
+    // Step 2: sync with Supabase / service and take the max so neither source
+    // can regress progress.
+    final progress = await syncAdventureProgress();
+    if (!mounted) return;
+
+    final resolvedHighest = math.max(localHighest, progress.highestUnlockedGame).clamp(1, totalGames);
+
+    setState(() {
+      highestUnlockedGame = resolvedHighest;
+      currentGame = resolvedHighest;
+      gamesCompleted = List.from(progress.gamesCompleted);
+    });
+
+    // Persist the resolved value so next cold-start has it.
+    await _saveHighest(resolvedHighest);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollMapToCurrentLevel();
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle — save on every foreground→background transition
+  // ---------------------------------------------------------------------------
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _saveHighest(highestUnlockedGame); // fire-and-forget
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Map layout helpers
+  // ---------------------------------------------------------------------------
+
   Map<String, double> getGamePosition(int gameNumber, Size screenSize) {
     final isMobile = screenSize.width <= 768;
     final gameIndex = gameNumber - 1;
     final spacing = isMobile ? 60.0 : 80.0;
     final totalHeight = totalGames * spacing;
     final y = totalHeight - (gameIndex * spacing);
-    
-    final gamesPerSide = 4;
+
+    const gamesPerSide = 4;
     final sideIndex = (gameIndex / gamesPerSide).floor();
     final positionInSide = gameIndex % gamesPerSide;
-    
+
     double x;
     if (isMobile) {
-      if (sideIndex % 2 == 0) {
-        if (positionInSide == 0) {
-          x = 15;
-        } else if (positionInSide == 1) {
-          x = 25;
-        } else if (positionInSide == 2) {
-          x = 35;
-        } else {
-          x = 45;
-        }
-      } else {
-        if (positionInSide == 0) {
-          x = 55;
-        } else if (positionInSide == 1) {
-          x = 65;
-        } else if (positionInSide == 2) {
-          x = 55;
-        } else {
-          x = 45;
-        }
-      }
+      x = (sideIndex % 2 == 0)
+          ? [15.0, 25.0, 35.0, 45.0][positionInSide]
+          : [55.0, 65.0, 55.0, 45.0][positionInSide];
     } else {
       if (sideIndex % 2 == 0) {
-        if (positionInSide < 2) {
-          x = 8 + (positionInSide * 12);
-        } else {
-          x = 28 + ((positionInSide - 2) * 12);
-        }
+        x = positionInSide < 2 ? 8 + positionInSide * 12.0 : 28 + (positionInSide - 2) * 12.0;
       } else {
-        if (positionInSide < 2) {
-          x = 72 + (positionInSide * 12);
-        } else {
-          x = 52 + ((positionInSide - 2) * 12);
-        }
+        x = positionInSide < 2 ? 72 + positionInSide * 12.0 : 52 + (positionInSide - 2) * 12.0;
       }
     }
-    
-    return {
-      'left': math.max(5.0, math.min(95.0, x)),
-      'top': y,
-    };
-  }
 
-  List<Widget> _buildMapImagery(Size screenSize, double totalHeight) {
-    const imageSize = 144.0;
-    const imageSizeSmall = 72.0;
-    const sideOffset = 28.0;
-    final positions = <Widget>[];
-    
-    for (var level = 1; level <= totalGames; level += 10) {
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSize / 2).clamp(4.0, totalHeight - imageSize - 4);
-      final left = (pathX - imageSize - sideOffset).clamp(4.0, screenSize.width - imageSize - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/pollen.png',
-            width: imageSize,
-            height: imageSize,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-    
-    for (var level = 5; level <= totalGames; level += 10) {
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSize / 2).clamp(4.0, totalHeight - imageSize - 4);
-      final left = (pathX + sideOffset).clamp(4.0, screenSize.width - imageSize - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/honeycomb.png',
-            width: imageSize,
-            height: imageSize,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-    
-    for (var level = 16; level <= totalGames; level += 16) {
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSizeSmall / 2).clamp(4.0, totalHeight - imageSizeSmall - 4);
-      final left = (pathX + sideOffset).clamp(4.0, screenSize.width - imageSizeSmall - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/honey.png',
-            width: imageSizeSmall,
-            height: imageSizeSmall,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-    
-    for (var level = 13; level <= totalGames; level += 13) {
-      if (level % 16 == 0) continue;
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSizeSmall / 2).clamp(4.0, totalHeight - imageSizeSmall - 4);
-      final left = (pathX - imageSizeSmall - sideOffset).clamp(4.0, screenSize.width - imageSizeSmall - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/nectar.png',
-            width: imageSizeSmall,
-            height: imageSizeSmall,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-    return positions;
+    return {'left': math.max(5.0, math.min(95.0, x)), 'top': y};
   }
 
   Map<String, int> getVisibleGameRange(Size screenSize) {
@@ -688,41 +443,31 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final endY = mapScrollY + viewportHeight + buffer;
     final startGame = math.max(1, ((totalHeight - endY) / spacing).floor() + 1);
     final endGame = math.min(totalGames, ((totalHeight - startY) / spacing).floor() + 1);
-    return {
-      'startGame': math.max(1, startGame - 20),
-      'endGame': math.min(totalGames, endGame + 20),
-    };
+    return {'startGame': math.max(1, startGame - 20), 'endGame': math.min(totalGames, endGame + 20)};
   }
 
   void _scrollMapToCurrentLevel() {
     if (!mounted || !mapScrollController.hasClients) return;
-    
     final screenSize = MediaQuery.sizeOf(context);
     final isMobile = screenSize.width <= 768;
     final spacing = isMobile ? 60.0 : 80.0;
     final totalHeight = totalGames * spacing;
-    
     final levelY = totalHeight - (currentGame - 1) * spacing;
     final viewportHeight = mapScrollController.position.viewportDimension;
-    
-    double targetOffset = levelY - (viewportHeight / 2);
-    targetOffset = targetOffset.clamp(0.0, mapScrollController.position.maxScrollExtent);
-    
+    final targetOffset = (levelY - viewportHeight / 2).clamp(0.0, mapScrollController.position.maxScrollExtent);
     mapScrollController.jumpTo(targetOffset);
   }
 
   void _scheduleScrollToCurrentLevel() {
-    void attemptScroll(int attempt) {
+    void attempt(int n) {
       if (!mounted) return;
       if (mapScrollController.hasClients) {
         _scrollMapToCurrentLevel();
-      } else if (attempt < 5) {
-        Future.delayed(Duration(milliseconds: 100 * attempt), () {
-          attemptScroll(attempt + 1);
-        });
+      } else if (n < 5) {
+        Future.delayed(Duration(milliseconds: 100 * n), () => attempt(n + 1));
       }
     }
-    attemptScroll(1);
+    attempt(1);
   }
 
   (double, double) _mapVerticalMargins(Size screenSize) {
@@ -731,457 +476,81 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final availableHeight = screenSize.height - topOfSpace - bottomOfSpaceFromBottom;
     final mapHeight = (screenSize.height - 324) * 0.9;
     final totalMargin = math.max(0.0, availableHeight - mapHeight);
-    final marginTop = totalMargin * 0.25;
-    final marginBottom = totalMargin * 0.75;
-    return (marginTop, marginBottom);
-  }
-
-  Widget buildMapBackground(Size screenSize) {
-    if (gameMode != GameMode.menu) {
-      return const SizedBox.shrink();
-    }
-    
-    final isMobile = screenSize.width <= 768;
-    final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing;
-    final visibleRange = getVisibleGameRange(screenSize);
-    final (mapMarginTop, mapMarginBottom) = _mapVerticalMargins(screenSize);
-    
-    return Stack(
-      children: [
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            height: 74,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            padding: EdgeInsets.only(
-              top: 10,
-              left: isMobile ? 12 : 16,
-              right: isMobile ? 12 : 16,
-              bottom: 0,
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Center(
-                  child: Image.asset(
-                    'assets/BEE-FIVE.png',
-                    height: isMobile ? 44 : 52,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
-                      'BEE FIVE',
-                      style: TextStyle(
-                        fontSize: isMobile ? 18 : 22,
-                        fontWeight: FontWeight.w900,
-                        color: primaryYellow,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildHeaderXpGem(isMobile),
-                      GestureDetector(
-                        onTap: () => setState(() => gameMode = GameMode.profile),
-                        child: Container(
-                          width: isMobile ? 40 : 48,
-                          height: isMobile ? 40 : 48,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2c2c2c),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.black, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Center(
-                            child: Text('👤', style: TextStyle(fontSize: 24)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        
-        Positioned(
-          top: 74,
-          left: 0,
-          right: 0,
-          height: 92,
-          child: Container(
-            color: primaryYellow,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'BEE FIVE',
-                  style: TextStyle(
-                    fontSize: isMobile ? 36 : 40,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: isMobile ? 15 : 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    children: [
-                      const TextSpan(text: 'Connect 5', style: TextStyle(color: Colors.red)),
-                      const TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
-                      const TextSpan(text: 'Outthink', style: TextStyle(color: Colors.orange)),
-                      const TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
-                      const TextSpan(text: 'Win', style: TextStyle(color: Colors.green)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        
-        Positioned(
-          top: 166 + mapMarginTop,
-          left: 0,
-          right: 0,
-          bottom: 140 + mapMarginBottom,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFe8d48b),
-                  Color(0xFFc9b85c),
-                  Color(0xFFa89840),
-                  Color(0xFF8b7a2e),
-                ],
-              ),
-              border: Border.all(
-                color: Colors.black,
-                width: 3,
-              ),
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification is ScrollUpdateNotification) {
-                      setState(() => mapScrollY = mapScrollController.offset);
-                    }
-                    if (notification is ScrollEndNotification || notification is ScrollUpdateNotification) {
-                      final pos = mapScrollController.position;
-                      if (pos.hasContentDimensions && pos.viewportDimension > 0) {
-                        final screenSize = MediaQuery.sizeOf(context);
-                        final isMobile = screenSize.width <= 768;
-                        final spacing = isMobile ? 60.0 : 80.0;
-                        final totalHeight = totalGames * spacing;
-                        final minOffset = _minMapScrollOffset(screenSize, totalHeight, spacing, pos.viewportDimension).clamp(0.0, pos.maxScrollExtent);
-                        if (pos.pixels < minOffset) {
-                          mapScrollController.jumpTo(minOffset);
-                        }
-                      }
-                    }
-                    return false;
-                  },
-                  child: SingleChildScrollView(
-                    controller: mapScrollController,
-                    child: SizedBox(
-                      height: totalHeight,
-                      width: screenSize.width,
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: -80,
-                            top: totalHeight * 0.6,
-                            child: Container(
-                              width: 280,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.rectangle,
-                                borderRadius: BorderRadius.circular(100),
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Color(0xFFa89840), Color(0xFFc9b85c)],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            right: -60,
-                            top: totalHeight * 0.65,
-                            child: Container(
-                              width: 220,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(80),
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Color(0xFF8b7a2e), Color(0xFFb8982e)],
-                                ),
-                              ),
-                            ),
-                          ),
-                          CustomPaint(
-                            size: Size(screenSize.width, totalHeight),
-                            painter: WindingPathPainter(
-                              screenSize: screenSize,
-                              pathPoints: List.generate(
-                                visibleRange['endGame']! - visibleRange['startGame']! + 1,
-                                (i) {
-                                  final g = visibleRange['startGame']! + i;
-                                  final pos = getGamePosition(g, screenSize);
-                                  return Offset(
-                                    screenSize.width * (pos['left']! / 100),
-                                    pos['top']!,
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: 0,
-                            top: totalHeight * 0.72,
-                            child: Container(
-                              width: screenSize.width,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [Color(0xFF5DADE2), Color(0xFF3498DB)],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: screenSize.width * 0.35,
-                            top: totalHeight * 0.71,
-                            child: Container(
-                              width: screenSize.width * 0.3,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: Color(0xFF8B4513),
-                                borderRadius: BorderRadius.circular(4),
-                                boxShadow: [
-                                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: List.generate(5, (_) => Container(width: 2, height: 10, color: Color(0xFF5D4037))),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            right: screenSize.width * 0.05,
-                            top: totalHeight * 0.78,
-                            child: CustomPaint(
-                              size: Size(50, 70),
-                              painter: _VolcanoPainter(),
-                            ),
-                          ),
-                          ..._buildMapImagery(screenSize, totalHeight),
-                          Positioned(
-                            right: screenSize.width * 0.08,
-                            top: totalHeight * 0.08,
-                            child: Image.asset(
-                              'assets/homeImagery/home.png',
-                              width: 36,
-                              height: 36,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                            ),
-                          ),
-                          ...List.generate(40, (i) {
-                            final gameIndex = visibleRange['startGame']! + (i * 2);
-                            if (gameIndex > visibleRange['endGame']!) return null;
-                            final position = getGamePosition(gameIndex, screenSize);
-                            final pathX = screenSize.width * (position['left']! / 100);
-                            final leftX = pathX - 42 - (i % 3) * 8;
-                            if (leftX < -20) return null;
-                            const leftFlowerPaths = [
-                              'assets/mapImagery/borage.png',
-                              'assets/mapImagery/clover.png',
-                              'assets/mapImagery/echinacea.png',
-                              'assets/mapImagery/lavender.png',
-                              'assets/mapImagery/sunflower.png',
-                            ];
-                            const flowerSize = 60.0;
-                            return Positioned(
-                              left: leftX,
-                              top: position['top']! - 12 + (i % 5) * 4,
-                              child: Image.asset(
-                                leftFlowerPaths[i % leftFlowerPaths.length],
-                                width: flowerSize,
-                                height: flowerSize,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                              ),
-                            );
-                          }).whereType<Widget>(),
-                          ...List.generate(40, (i) {
-                            final gameIndex = visibleRange['startGame']! + (i * 2);
-                            if (gameIndex > visibleRange['endGame']!) return null;
-                            final position = getGamePosition(gameIndex, screenSize);
-                            final pathX = screenSize.width * (position['left']! / 100);
-                            final rightX = pathX + 42 + (i % 3) * 8;
-                            if (rightX > screenSize.width - 10) return null;
-                            const rightFlowerPaths = [
-                              'assets/mapImagery/borage.png',
-                              'assets/mapImagery/clover.png',
-                              'assets/mapImagery/echinacea.png',
-                              'assets/mapImagery/lavender.png',
-                              'assets/mapImagery/sunflower.png',
-                            ];
-                            const flowerSize = 60.0;
-                            return Positioned(
-                              left: rightX,
-                              top: position['top']! - 18 - (i % 4) * 3,
-                              child: Image.asset(
-                                rightFlowerPaths[i % rightFlowerPaths.length],
-                                width: flowerSize,
-                                height: flowerSize,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                              ),
-                            );
-                          }).whereType<Widget>(),
-                          ...adventureStages.map((stage) {
-                            final position = getGamePosition(stage.games, screenSize);
-                            return Positioned(
-                              left: screenSize.width / 2 - 45,
-                              top: position['top']! - 36,
-                              child: Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: stage.color,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.black, width: 2),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (stage.emoji == '🏠')
-                                      Image.asset(
-                                        'assets/homeImagery/home.png',
-                                        width: 18,
-                                        height: 18,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, _, _) => Text(stage.emoji, style: TextStyle(fontSize: 18)),
-                                      )
-                                    else
-                                      Text(stage.emoji, style: TextStyle(fontSize: 18)),
-                                    SizedBox(width: 4),
-                                    Text('S${adventureStages.indexOf(stage) + 1}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                          ...List.generate(
-                            visibleRange['endGame']! - visibleRange['startGame']! + 1,
-                            (i) {
-                              final gameNumber = visibleRange['startGame']! + i;
-                              if (gameNumber < 1 || gameNumber > totalGames) return const SizedBox.shrink();
-                              final position = getGamePosition(gameNumber, screenSize);
-                              final isCompleted = gamesCompleted.contains(gameNumber);
-                              final isCurrent = gameNumber == currentGame;
-                              final isLocked = gameNumber > highestUnlockedGame;
-                              const hexSize = 40.0;
-                              return Positioned(
-                                left: screenSize.width * position['left']! / 100 - hexSize / 2,
-                                top: position['top']! - hexSize / 2,
-                                child: HexagonLevelMarker(
-                                  levelNumber: gameNumber,
-                                  isCurrent: isCurrent,
-                                  isLocked: isLocked,
-                                  isCompleted: isCompleted,
-                                  size: hexSize,
-                                  onTap: () {
-                                    if (!isLocked) {
-                                      _tryStartAdventure(() {
-                                        setState(() {
-                                          currentGame = gameNumber;
-                                          gameMode = GameMode.adventureGame;
-                                        });
-                                      });
-                                    }
-                                  },
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: -80,
-                  bottom: -100,
-                  child: SizedBox(
-                    width: 200,
-                    height: 320,
-                    child: ClipRect(
-                      clipBehavior: Clip.hardEdge,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Image.asset(
-                          'assets/mapImagery/beefivemascot.png',
-                          width: 400,
-                          height: 320,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+    return (totalMargin * 0.25, totalMargin * 0.75);
   }
 
   double _minMapScrollOffset(Size screenSize, double totalHeight, double spacing, double viewportHeight) {
-    final levelY = totalHeight - (currentGame - 1) * spacing;
-    return levelY.clamp(0.0, double.infinity);
+    return (totalHeight - (currentGame - 1) * spacing).clamp(0.0, double.infinity);
+  }
+
+  List<Widget> _buildMapImagery(Size screenSize, double totalHeight) {
+    const imageSize = 144.0;
+    const imageSizeSmall = 72.0;
+    const sideOffset = 28.0;
+    final positions = <Widget>[];
+
+    void addImg(int level, int step, String asset, double sz, bool leftSide) {
+      for (var l = level; l <= totalGames; l += step) {
+        if (asset == 'assets/mapImagery/nectar.png' && l % 16 == 0) continue;
+        final pos = getGamePosition(l, screenSize);
+        final pathX = screenSize.width * (pos['left']! / 100);
+        final top = (pos['top']! - sz / 2).clamp(4.0, totalHeight - sz - 4);
+        final left = leftSide
+            ? (pathX - sz - sideOffset).clamp(4.0, screenSize.width - sz - 4)
+            : (pathX + sideOffset).clamp(4.0, screenSize.width - sz - 4);
+        positions.add(Positioned(left: left, top: top, child: Image.asset(asset, width: sz, height: sz, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink())));
+      }
+    }
+
+    addImg(1, 10, 'assets/mapImagery/pollen.png', imageSize, true);
+    addImg(5, 10, 'assets/mapImagery/honeycomb.png', imageSize, false);
+    addImg(16, 16, 'assets/mapImagery/honey.png', imageSizeSmall, false);
+    addImg(13, 13, 'assets/mapImagery/nectar.png', imageSizeSmall, true);
+    return positions;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ads
+  // ---------------------------------------------------------------------------
+
+  void _loadRewardedAd() {
+    RewardedAd.load(
+      adUnitId: 'ca-app-pub-6740638137327567/2005976804',
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) => _rewardedAd = ad,
+        onAdFailedToLoad: (_) => _rewardedAd = null,
+      ),
+    );
+  }
+
+  void _showRewardedAd() {
+    if (_rewardedAd == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ad not ready yet, please try again in a moment.'), backgroundColor: Colors.orange));
+      return;
+    }
+    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) { ad.dispose(); _rewardedAd = null; _loadRewardedAd(); },
+      onAdFailedToShowFullScreenContent: (ad, _) { ad.dispose(); _rewardedAd = null; _loadRewardedAd(); },
+    );
+    _rewardedAd!.show(onUserEarnedReward: (ad, reward) async {
+      await addXp(2);
+      final newXp = await getXp();
+      if (mounted) {
+        setState(() => _headerXp = newXp);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🎉 +2 XP earned! Well done!'), backgroundColor: Colors.green));
+      }
+    });
+  }
+
+  void _onConnectTalkToUsFocusChange() {
+    if (!_connectTalkToUsFocus.hasFocus) return;
+    void scroll() {
+      if (!mounted) return;
+      final ctx = _connectTalkToUsKey.currentContext;
+      if (ctx != null && ctx.mounted) Scrollable.ensureVisible(ctx, alignment: 0.1, duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) { scroll(); Future.delayed(const Duration(milliseconds: 350), scroll); });
   }
 
   Future<void> _tryStartAdventure(void Function() startAdventure) async {
@@ -1192,30 +561,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: primaryYellow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.black, width: 4),
-          ),
-          title: const Text(
-            'No XP',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          content: const Text(
-            'You have zero XPs, win Practice hard game, or win 3 games in a classic game to gain XPs.',
-            style: TextStyle(fontSize: 16, color: Colors.black87),
-            textAlign: TextAlign.center,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+          title: const Text('No XP', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black), textAlign: TextAlign.center),
+          content: const Text('You have zero XPs, win Practice hard game, or win 3 games in a classic game to gain XPs.', style: TextStyle(fontSize: 16, color: Colors.black87), textAlign: TextAlign.center),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
         ),
       );
       return;
@@ -1223,1398 +572,659 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     startAdventure();
   }
 
-  Widget _buildHeaderXpGem(bool isMobile) {
-    final size = isMobile ? 28.0 : 32.0;
-    return Padding(
-      padding: EdgeInsets.only(right: isMobile ? 8 : 12),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            'assets/homeImagery/xp_gem.png',
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => Icon(Icons.star, color: primaryYellow, size: size),
-          ),
-          SizedBox(width: isMobile ? 4 : 6),
-          Text(
-            '${_headerXp ?? 0}',
-            style: TextStyle(
-              fontSize: isMobile ? 16 : 18,
-              fontWeight: FontWeight.bold,
-              color: primaryYellow,
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _launchUrl(String url) async {
+    try { await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication); } catch (_) {}
   }
 
-  Widget buildMenuOverlay(Size screenSize) {
-    if (gameMode != GameMode.menu) {
-      return const SizedBox.shrink();
-    }
-    
-    return Stack(
-      children: [
-        Positioned(
-          left: 10,
-          top: 0,
-          bottom: 0,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _sideMenuButton(
-                  label: 'Play with a Friend',
-                  iconImagePath: 'assets/homeImagery/play-with-friend.png',
-                  color: primaryYellow,
-                  onPressed: () {
-                    setState(() => gameMode = GameMode.localMultiplayer);
-                  },
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Classic Mode',
-                  iconImagePath: 'assets/homeImagery/classic-mode.png',
-                  color: primaryYellow,
-                  onPressed: () {
-                    setState(() {
-                      isClassicStreakMode = true;
-                      aiDifficulty = 'medium';
-                      aiTimer = 0;
-                      gameMode = GameMode.aiGame;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: _dailyChallengePlayedToday
-                      ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
-                      : 'Daily Challenge',
-                  iconImagePath: 'assets/homeImagery/daily_challenge_icon.png',
-                  color: primaryYellow,
-                  onPressed: _onDailyChallengePressed,
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Gain XPs',
-                  iconImagePath: 'assets/homeImagery/buy_icon.png',
-                  color: primaryYellow,
-                  onPressed: _showGainXPsModal,
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Bee Five Tour',
-                  iconImagePath: 'assets/homeImagery/tour_icon.png',
-                  color: primaryYellow,
-                  onPressed: _showBeeFiveTourModal,
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Watch Ad +2 XP',
-                  icon: '🎬',
-                  color: primaryYellow,
-                  onPressed: _showRewardedAd,
-                ),
-              ],
-            ),
-          ),
-        ),
-        
-        Positioned(
-          bottom: 140,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  _tryStartAdventure(() => setState(() => gameMode = GameMode.adventureGame));
-                },
-                borderRadius: BorderRadius.circular(14),
+  // ---------------------------------------------------------------------------
+  // Map background widget
+  // ---------------------------------------------------------------------------
+
+  Widget buildMapBackground(Size screenSize) {
+    if (gameMode != GameMode.menu) return const SizedBox.shrink();
+
+    final isMobile = screenSize.width <= 768;
+    final spacing = isMobile ? 60.0 : 80.0;
+    final totalHeight = totalGames * spacing;
+    final visibleRange = getVisibleGameRange(screenSize);
+    final (mapMarginTop, mapMarginBottom) = _mapVerticalMargins(screenSize);
+
+    return Stack(children: [
+      // top header
+      Positioned(
+        top: 0, left: 0, right: 0,
+        child: Container(
+          height: 74,
+          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.5), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 4))]),
+          padding: EdgeInsets.only(top: 10, left: isMobile ? 12 : 16, right: isMobile ? 12 : 16),
+          child: Stack(alignment: Alignment.center, children: [
+            Center(child: Image.asset('assets/BEE-FIVE.png', height: isMobile ? 44 : 52, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Text('BEE FIVE', style: TextStyle(fontSize: isMobile ? 18 : 22, fontWeight: FontWeight.w900, color: primaryYellow)))),
+            Positioned(right: 0, top: 0, bottom: 0, child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _buildHeaderXpGem(isMobile),
+              GestureDetector(
+                onTap: () => setState(() => gameMode = GameMode.profile),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                      BoxShadow(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        blurRadius: 0,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('▶', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Level $currentGame',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
+                  width: isMobile ? 40 : 48, height: isMobile ? 40 : 48,
+                  decoration: BoxDecoration(color: const Color(0xFF2c2c2c), shape: BoxShape.circle, border: Border.all(color: Colors.black, width: 2), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 4, offset: const Offset(0, 2))]),
+                  child: const Center(child: Text('👤', style: TextStyle(fontSize: 24))),
                 ),
+              ),
+            ])),
+          ]),
+        ),
+      ),
+
+      // yellow title band
+      Positioned(
+        top: 74, left: 0, right: 0, height: 92,
+        child: Container(
+          color: primaryYellow, padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
+            Text('BEE FIVE', style: TextStyle(fontSize: isMobile ? 36 : 40, fontWeight: FontWeight.w900, color: Colors.black, letterSpacing: 0.5)),
+            const SizedBox(height: 4),
+            RichText(textAlign: TextAlign.center, text: TextSpan(style: TextStyle(fontSize: isMobile ? 15 : 18, fontWeight: FontWeight.w600), children: const [
+              TextSpan(text: 'Connect 5', style: TextStyle(color: Colors.red)),
+              TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
+              TextSpan(text: 'Outthink', style: TextStyle(color: Colors.orange)),
+              TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
+              TextSpan(text: 'Win', style: TextStyle(color: Colors.green)),
+            ])),
+          ]),
+        ),
+      ),
+
+      // scrollable map area
+      Positioned(
+        top: 166 + mapMarginTop, left: 0, right: 0, bottom: 140 + mapMarginBottom,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFe8d48b), Color(0xFFc9b85c), Color(0xFFa89840), Color(0xFF8b7a2e)]),
+            border: Border.all(color: Colors.black, width: 3),
+          ),
+          child: Stack(clipBehavior: Clip.none, children: [
+            NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollUpdateNotification) setState(() => mapScrollY = mapScrollController.offset);
+                if (notification is ScrollEndNotification || notification is ScrollUpdateNotification) {
+                  final pos = mapScrollController.position;
+                  if (pos.hasContentDimensions && pos.viewportDimension > 0) {
+                    final s = MediaQuery.sizeOf(context);
+                    final sp = s.width <= 768 ? 60.0 : 80.0;
+                    final minOffset = _minMapScrollOffset(s, totalGames * sp, sp, pos.viewportDimension).clamp(0.0, pos.maxScrollExtent);
+                    if (pos.pixels < minOffset) mapScrollController.jumpTo(minOffset);
+                  }
+                }
+                return false;
+              },
+              child: SingleChildScrollView(
+                controller: mapScrollController,
+                child: SizedBox(height: totalHeight, width: screenSize.width, child: Stack(children: [
+                  // background blobs
+                  Positioned(left: -80, top: totalHeight * 0.6, child: Container(width: 280, height: 120, decoration: BoxDecoration(borderRadius: BorderRadius.circular(100), gradient: const LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0xFFa89840), Color(0xFFc9b85c)])))),
+                  Positioned(right: -60, top: totalHeight * 0.65, child: Container(width: 220, height: 100, decoration: BoxDecoration(borderRadius: BorderRadius.circular(80), gradient: const LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0xFF8b7a2e), Color(0xFFb8982e)])))),
+
+                  // winding path
+                  CustomPaint(
+                    size: Size(screenSize.width, totalHeight),
+                    painter: WindingPathPainter(
+                      screenSize: screenSize,
+                      pathPoints: List.generate(visibleRange['endGame']! - visibleRange['startGame']! + 1, (i) {
+                        final g = visibleRange['startGame']! + i;
+                        final pos = getGamePosition(g, screenSize);
+                        return Offset(screenSize.width * (pos['left']! / 100), pos['top']!);
+                      }),
+                    ),
+                  ),
+
+                  // river
+                  Positioned(left: 0, top: totalHeight * 0.72, child: Container(width: screenSize.width, height: 32, decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF5DADE2), Color(0xFF3498DB)])))),
+                  Positioned(left: screenSize.width * 0.35, top: totalHeight * 0.71, child: Container(width: screenSize.width * 0.3, height: 18, decoration: BoxDecoration(color: const Color(0xFF8B4513), borderRadius: BorderRadius.circular(4), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))]), child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: List.generate(5, (_) => Container(width: 2, height: 10, color: const Color(0xFF5D4037)))))),
+
+                  // volcano
+                  Positioned(right: screenSize.width * 0.05, top: totalHeight * 0.78, child: CustomPaint(size: const Size(50, 70), painter: _VolcanoPainter())),
+
+                  ..._buildMapImagery(screenSize, totalHeight),
+
+                  // home icon
+                  Positioned(right: screenSize.width * 0.08, top: totalHeight * 0.08, child: Image.asset('assets/homeImagery/home.png', width: 36, height: 36, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink())),
+
+                  // flowers left
+                  ...List.generate(40, (i) {
+                    final gi = visibleRange['startGame']! + (i * 2);
+                    if (gi > visibleRange['endGame']!) return null;
+                    final p = getGamePosition(gi, screenSize);
+                    final lx = screenSize.width * (p['left']! / 100) - 42 - (i % 3) * 8;
+                    if (lx < -20) return null;
+                    const fp = ['assets/mapImagery/borage.png', 'assets/mapImagery/clover.png', 'assets/mapImagery/echinacea.png', 'assets/mapImagery/lavender.png', 'assets/mapImagery/sunflower.png'];
+                    return Positioned(left: lx, top: p['top']! - 12 + (i % 5) * 4, child: Image.asset(fp[i % fp.length], width: 60, height: 60, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink()));
+                  }).whereType<Widget>(),
+
+                  // flowers right
+                  ...List.generate(40, (i) {
+                    final gi = visibleRange['startGame']! + (i * 2);
+                    if (gi > visibleRange['endGame']!) return null;
+                    final p = getGamePosition(gi, screenSize);
+                    final rx = screenSize.width * (p['left']! / 100) + 42 + (i % 3) * 8;
+                    if (rx > screenSize.width - 10) return null;
+                    const fp = ['assets/mapImagery/borage.png', 'assets/mapImagery/clover.png', 'assets/mapImagery/echinacea.png', 'assets/mapImagery/lavender.png', 'assets/mapImagery/sunflower.png'];
+                    return Positioned(left: rx, top: p['top']! - 18 - (i % 4) * 3, child: Image.asset(fp[i % fp.length], width: 60, height: 60, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink()));
+                  }).whereType<Widget>(),
+
+                  // stage labels
+                  ...adventureStages.map((stage) {
+                    final position = getGamePosition(stage.games, screenSize);
+                    return Positioned(
+                      left: screenSize.width / 2 - 45, top: position['top']! - 36,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: stage.color, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.black, width: 2)),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (stage.emoji == '🏠')
+                            Image.asset('assets/homeImagery/home.png', width: 18, height: 18, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Text(stage.emoji, style: const TextStyle(fontSize: 18)))
+                          else
+                            Text(stage.emoji, style: const TextStyle(fontSize: 18)),
+                          const SizedBox(width: 4),
+                          Text('S${adventureStages.indexOf(stage) + 1}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                        ]),
+                      ),
+                    );
+                  }),
+
+                  // ---- hex level markers ----
+                  ...List.generate(visibleRange['endGame']! - visibleRange['startGame']! + 1, (i) {
+                    final gameNumber = visibleRange['startGame']! + i;
+                    if (gameNumber < 1 || gameNumber > totalGames) return const SizedBox.shrink();
+                    final position = getGamePosition(gameNumber, screenSize);
+
+                    final isLocked = gameNumber > highestUnlockedGame;
+                    final isCurrent = gameNumber == currentGame;
+                    // isPassed = green: any unlocked level that the player has
+                    // already moved past (i.e. lower than currentGame).
+                    final isPassed = !isLocked && gameNumber < currentGame;
+
+                    const hexSize = 40.0;
+                    return Positioned(
+                      left: screenSize.width * position['left']! / 100 - hexSize / 2,
+                      top: position['top']! - hexSize / 2,
+                      child: HexagonLevelMarker(
+                        levelNumber: gameNumber,
+                        isCurrent: isCurrent,
+                        isLocked: isLocked,
+                        isPassed: isPassed,
+                        size: hexSize,
+                        onTap: () {
+                          if (!isLocked) {
+                            _tryStartAdventure(() {
+                              // Tapping a level sets currentGame (moves the bee
+                              // and updates the button label) but does NOT
+                              // change highestUnlockedGame — that only changes
+                              // when levels are actually won.
+                              setState(() {
+                                currentGame = gameNumber;
+                                gameMode = GameMode.adventureGame;
+                              });
+                            });
+                          }
+                        },
+                      ),
+                    );
+                  }),
+                ])),
+              ),
+            ),
+
+            // mascot
+            Positioned(right: -80, bottom: -100, child: SizedBox(width: 200, height: 320, child: ClipRect(clipBehavior: Clip.hardEdge, child: Align(alignment: Alignment.centerRight, child: Image.asset('assets/mapImagery/beefivemascot.png', width: 400, height: 320, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()))))),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Menu overlay
+  // ---------------------------------------------------------------------------
+
+  Widget buildMenuOverlay(Size screenSize) {
+    if (gameMode != GameMode.menu) return const SizedBox.shrink();
+
+    return Stack(children: [
+      // side menu
+      Positioned(
+        left: 10, top: 0, bottom: 0,
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            _sideMenuButton(label: 'Play with a Friend', iconImagePath: 'assets/homeImagery/play-with-friend.png', color: primaryYellow, onPressed: () => setState(() => gameMode = GameMode.localMultiplayer)),
+            const SizedBox(height: 12),
+            _sideMenuButton(label: 'Classic Mode', iconImagePath: 'assets/homeImagery/classic-mode.png', color: primaryYellow, onPressed: () { setState(() { isClassicStreakMode = true; aiDifficulty = 'medium'; aiTimer = 0; gameMode = GameMode.aiGame; }); }),
+            const SizedBox(height: 12),
+            _sideMenuButton(label: _dailyChallengePlayedToday ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}' : 'Daily Challenge', iconImagePath: 'assets/homeImagery/daily_challenge_icon.png', color: primaryYellow, onPressed: _onDailyChallengePressed),
+            const SizedBox(height: 12),
+            _sideMenuButton(label: 'Gain XPs', iconImagePath: 'assets/homeImagery/buy_icon.png', color: primaryYellow, onPressed: _showGainXPsModal),
+            const SizedBox(height: 12),
+            _sideMenuButton(label: 'Bee Five Tour', iconImagePath: 'assets/homeImagery/tour_icon.png', color: primaryYellow, onPressed: _showBeeFiveTourModal),
+            const SizedBox(height: 12),
+            _sideMenuButton(label: 'Watch Ad +2 XP', icon: '🎬', color: primaryYellow, onPressed: _showRewardedAd),
+          ]),
+        ),
+      ),
+
+      // ---- PLAY BUTTON ----
+      // Shows currentGame. On startup currentGame == highestUnlockedGame so the
+      // button reflects saved progress. When the user taps a map level,
+      // currentGame changes to that level and the button updates instantly.
+      Positioned(
+        bottom: 140, left: 0, right: 0,
+        child: Center(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _tryStartAdventure(() => setState(() => gameMode = GameMode.adventureGame)),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)]),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4)), BoxShadow(color: Colors.white.withValues(alpha: 0.2), offset: const Offset(0, 1))],
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('▶', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 10),
+                  Text('Level $currentGame', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                ]),
               ),
             ),
           ),
         ),
-        
-        Positioned(
-          bottom: 100,
-          left: 0,
-          right: 0,
-          height: 40,
-          child: Container(color: primaryYellow),
+      ),
+
+      Positioned(bottom: 100, left: 0, right: 0, height: 40, child: Container(color: primaryYellow)),
+
+      // bottom nav
+      Positioned(
+        bottom: 0, left: 0, right: 0,
+        child: Container(
+          height: 100,
+          decoration: BoxDecoration(color: Colors.black, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, -4))]),
+          padding: const EdgeInsets.only(left: 8, right: 8, bottom: 40),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', active: true, onTap: () {}),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
+            _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
+          ]),
         ),
-        
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 40),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', active: true, onTap: () {}),
-                _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
-                _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
-                _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
-                _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+      ),
+    ]);
   }
 
   Widget buildAnimatedBees(Size screenSize) {
-    if (gameMode != GameMode.menu) {
-      return const SizedBox.shrink();
-    }
+    if (gameMode != GameMode.menu) return const SizedBox.shrink();
     final isPortrait = screenSize.width <= 768;
     final range = isPortrait ? 0.25 : 0.35;
-    final baseX = 0.5;
+    const baseX = 0.5;
     final baseY = isPortrait ? 0.35 : 0.4;
     final beeSize = isPortrait ? 20.0 : 24.0;
 
-    return Stack(
-      children: [
-        AnimatedBuilder(
-          animation: bee1Controller,
-          builder: (context, child) {
-            final t = bee1Controller.value;
-            final x = screenSize.width * (baseX + range * math.sin(t * 2 * math.pi));
-            final y = screenSize.height * (baseY + 0.18 * math.cos(t * 2 * math.pi));
-            return Positioned(
-              left: x,
-              top: y,
-              child: Text('🐝', style: TextStyle(fontSize: beeSize)),
-            );
-          },
-        ),
-        AnimatedBuilder(
-          animation: bee2Controller,
-          builder: (context, child) {
-            final t = bee2Controller.value;
-            final x = screenSize.width * (baseX + (range + 0.05) * math.cos(t * 2 * math.pi));
-            final y = screenSize.height * (baseY + 0.22 * math.sin(t * 2 * math.pi));
-            return Positioned(
-              left: x,
-              top: y,
-              child: Text('🐝', style: TextStyle(fontSize: beeSize)),
-            );
-          },
-        ),
-        AnimatedBuilder(
-          animation: bee3Controller,
-          builder: (context, child) {
-            final t = bee3Controller.value;
-            final x = screenSize.width * (baseX + range * math.sin(t * 2 * math.pi + math.pi / 3));
-            final y = screenSize.height * (baseY + 0.2 * math.cos(t * 2 * math.pi + math.pi / 3));
-            return Positioned(
-              left: x,
-              top: y,
-              child: Text('🐝', style: TextStyle(fontSize: beeSize)),
-            );
-          },
-        ),
-      ],
+    return Stack(children: [
+      AnimatedBuilder(animation: bee1Controller, builder: (_, __) { final t = bee1Controller.value; return Positioned(left: screenSize.width * (baseX + range * math.sin(t * 2 * math.pi)), top: screenSize.height * (baseY + 0.18 * math.cos(t * 2 * math.pi)), child: Text('🐝', style: TextStyle(fontSize: beeSize))); }),
+      AnimatedBuilder(animation: bee2Controller, builder: (_, __) { final t = bee2Controller.value; return Positioned(left: screenSize.width * (baseX + (range + 0.05) * math.cos(t * 2 * math.pi)), top: screenSize.height * (baseY + 0.22 * math.sin(t * 2 * math.pi)), child: Text('🐝', style: TextStyle(fontSize: beeSize))); }),
+      AnimatedBuilder(animation: bee3Controller, builder: (_, __) { final t = bee3Controller.value; return Positioned(left: screenSize.width * (baseX + range * math.sin(t * 2 * math.pi + math.pi / 3)), top: screenSize.height * (baseY + 0.2 * math.cos(t * 2 * math.pi + math.pi / 3)), child: Text('🐝', style: TextStyle(fontSize: beeSize))); }),
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Small reusable widgets
+  // ---------------------------------------------------------------------------
+
+  Widget _buildHeaderXpGem(bool isMobile) {
+    final size = isMobile ? 28.0 : 32.0;
+    return Padding(padding: EdgeInsets.only(right: isMobile ? 8 : 12), child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Image.asset('assets/homeImagery/xp_gem.png', width: size, height: size, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Icon(Icons.star, color: primaryYellow, size: size)),
+      SizedBox(width: isMobile ? 4 : 6),
+      Text('${_headerXp ?? 0}', style: TextStyle(fontSize: isMobile ? 16 : 18, fontWeight: FontWeight.bold, color: primaryYellow)),
+    ]));
+  }
+
+  Widget _sideMenuButton({required String label, String? icon, String? iconImagePath, required Color color, required VoidCallback onPressed}) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.black, width: 2)), minimumSize: const Size(100, 48)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (iconImagePath != null) Image.asset(iconImagePath, width: 24, height: 24, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox(width: 24, height: 24))
+        else if (icon != null) Text(icon, style: const TextStyle(fontSize: 22)),
+        if (iconImagePath != null || icon != null) const SizedBox(width: 6),
+        Flexible(child: Text(label, style: const TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+      ]),
     );
   }
 
-  Widget _sideMenuButton({
-    required String label,
-    String? icon,
-    String? iconImagePath,
-    required Color color,
-    required VoidCallback onPressed,
-  }) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Colors.black, width: 2),
-        ),
-        minimumSize: const Size(100, 48),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (iconImagePath != null)
-            Image.asset(
-              iconImagePath,
-              width: 24,
-              height: 24,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const SizedBox(width: 24, height: 24),
-            )
-          else if (icon != null)
-            Text(icon, style: const TextStyle(fontSize: 22)),
-          if (iconImagePath != null || icon != null) const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
+  Widget _bottomNavItem({String? icon, String? iconImagePath, required String label, bool active = false, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap, behavior: HitTestBehavior.opaque,
+      child: Padding(padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (iconImagePath != null) Image.asset(iconImagePath, width: 26, height: 26, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox(width: 26, height: 26))
+        else if (icon != null) Text(icon, style: TextStyle(fontSize: 22, color: active ? primaryYellow : Colors.white.withValues(alpha: 0.85))),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? primaryYellow : Colors.white.withValues(alpha: 0.85))),
+      ])),
     );
   }
 
   Widget _policySection(String title, List<String> paragraphs) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...paragraphs.map(
-            (p) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Text(
-                p,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+    return Padding(padding: const EdgeInsets.only(top: 24), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
+      const SizedBox(height: 10),
+      ...paragraphs.map((p) => Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(p, style: const TextStyle(fontSize: 15, height: 1.6, color: Colors.black87)))),
+    ]));
   }
 
   Widget _connectTile({required String imagePath, String? link}) {
-    final content = Container(
-      height: 100,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black26),
-      ),
-      padding: const EdgeInsets.all(8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.asset(
-          imagePath,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Center(child: Icon(Icons.image_not_supported, size: 48)),
-        ),
-      ),
-    );
-    if (link != null) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _launchUrl(link),
-        child: content,
-      );
-    }
+    final content = Container(height: 100, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26)), padding: const EdgeInsets.all(8), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset(imagePath, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_not_supported, size: 48)))));
+    if (link != null) return GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _launchUrl(link), child: content);
     return content;
   }
 
-  Widget _bottomNavItem({
-    String? icon,
-    String? iconImagePath,
-    required String label,
-    bool active = false,
-    required VoidCallback onTap,
-  }) {
-    final iconColor = active ? primaryYellow : Colors.white.withValues(alpha: 0.85);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (iconImagePath != null)
-              Image.asset(
-                iconImagePath,
-                width: 26,
-                height: 26,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const SizedBox(width: 26, height: 26),
-              )
-            else if (icon != null)
-              Text(icon, style: TextStyle(fontSize: 22, color: iconColor)),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: active ? primaryYellow : Colors.white.withValues(alpha: 0.85),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // Modals
+  // ---------------------------------------------------------------------------
 
   void _showDifficultyModal() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: primaryYellow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Colors.black, width: 4),
-        ),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/homeImagery/robot_head.png',
-              height: 32,
-              width: 32,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Difficulty',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Image.asset(
-              'assets/homeImagery/robot_head.png',
-              height: 32,
-              width: 32,
-              fit: BoxFit.contain,
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Choose the AI difficulty level:',
-              style: TextStyle(fontSize: 16, color: Colors.black87),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  selectedDifficulty = 'easy';
-                  showDifficultyModal = false;
-                });
-                Navigator.pop(context);
-                _showTimerModal();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                '🟢 Easy',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  selectedDifficulty = 'medium';
-                  showDifficultyModal = false;
-                });
-                Navigator.pop(context);
-                _showTimerModal();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                '🟠 Medium',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  selectedDifficulty = 'hard';
-                  showDifficultyModal = false;
-                });
-                Navigator.pop(context);
-                _showTimerModal();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                '🔴 Hard',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    showDialog(context: context, builder: (context) => AlertDialog(
+      backgroundColor: primaryYellow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+      title: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
+        Image.asset('assets/homeImagery/robot_head.png', height: 32, width: 32, fit: BoxFit.contain),
+        const SizedBox(width: 8),
+        const Text('Difficulty', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black)),
+        const SizedBox(width: 8),
+        Image.asset('assets/homeImagery/robot_head.png', height: 32, width: 32, fit: BoxFit.contain),
+      ]),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('Choose the AI difficulty level:', style: TextStyle(fontSize: 16, color: Colors.black87), textAlign: TextAlign.center),
+        const SizedBox(height: 20),
+        for (final entry in [('🟢 Easy', 'easy'), ('🟠 Medium', 'medium'), ('🔴 Hard', 'hard')])
+          Padding(padding: const EdgeInsets.only(bottom: 12), child: ElevatedButton(
+            onPressed: () { setState(() { selectedDifficulty = entry.$2; }); Navigator.pop(context); _showTimerModal(); },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.black, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            child: Text(entry.$1, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          )),
+        ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.grey, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('Cancel', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+      ]),
+    ));
   }
 
   void _showTimerModal() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: primaryYellow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Colors.black, width: 4),
-        ),
-        title: const Text(
-          '⏱️ Select Timer ⏱️',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Choose timer option:',
-              style: TextStyle(fontSize: 16, color: Colors.black87),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  aiDifficulty = selectedDifficulty;
-                  aiTimer = 15;
-                  showTimerModal = false;
-                  gameMode = GameMode.aiGame;
-                });
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                '⏱️ With Timer (15s)',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  aiDifficulty = selectedDifficulty;
-                  aiTimer = 0;
-                  showTimerModal = false;
-                  gameMode = GameMode.aiGame;
-                });
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                '∞ No Timer',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _showDifficultyModal();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-              ),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    showDialog(context: context, builder: (context) => AlertDialog(
+      backgroundColor: primaryYellow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+      title: const Text('⏱️ Select Timer ⏱️', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black), textAlign: TextAlign.center),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('Choose timer option:', style: TextStyle(fontSize: 16, color: Colors.black87), textAlign: TextAlign.center),
+        const SizedBox(height: 20),
+        ElevatedButton(onPressed: () { setState(() { aiDifficulty = selectedDifficulty; aiTimer = 15; gameMode = GameMode.aiGame; }); Navigator.pop(context); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('⏱️ With Timer (15s)', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
+        const SizedBox(height: 12),
+        ElevatedButton(onPressed: () { setState(() { aiDifficulty = selectedDifficulty; aiTimer = 0; gameMode = GameMode.aiGame; }); Navigator.pop(context); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('∞ No Timer', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
+        const SizedBox(height: 12),
+        ElevatedButton(onPressed: () { Navigator.pop(context); _showDifficultyModal(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.grey, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('Cancel', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+      ]),
+    ));
   }
 
   void _onDailyChallengePressed() {
     if (_dailyChallengePlayedToday) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: primaryYellow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.black, width: 4),
-          ),
-          title: const Text(
-            'Daily Challenge',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
-            textAlign: TextAlign.center,
-          ),
-          content: Text(
-            _dailyChallengeWon == true
-                ? "You've already played today — you won! Come back tomorrow for a new challenge."
-                : "You've already played today — better luck tomorrow!",
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-            textAlign: TextAlign.center,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      showDialog(context: context, builder: (context) => AlertDialog(
+        backgroundColor: primaryYellow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+        title: const Text('Daily Challenge', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black), textAlign: TextAlign.center),
+        content: Text(_dailyChallengeWon == true ? "You've already played today — you won! Come back tomorrow for a new challenge." : "You've already played today — better luck tomorrow!", style: const TextStyle(fontSize: 16, color: Colors.black87), textAlign: TextAlign.center),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+      ));
       return;
     }
     setState(() => gameMode = GameMode.dailyChallenge);
   }
 
   void _showGainXPsModal() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: primaryYellow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Colors.black, width: 4),
-        ),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/homeImagery/buy_icon.png',
-              height: 32,
-              width: 32,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const Icon(Icons.star, size: 32),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Gain XPs',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-          ],
-        ),
-        content: const SingleChildScrollView(
-          child: Text(
-            'How to gain XPs in Bee Five:\n\n'
-            '• Login: +2 XP per calendar day (once per day).\n\n'
-            '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
-            '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
-            '• Adventure: +1 XP for every 2 consecutive level wins; −2 XP per loss. '
-            'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
-            '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
-            '• Watch Ad: Watch a short ad → +2 XP (tap "Watch Ad +2 XP" on the home screen).',
-            style: TextStyle(fontSize: 16, color: Colors.black87),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+    showDialog(context: context, builder: (context) => AlertDialog(
+      backgroundColor: primaryYellow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+      title: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [Image.asset('assets/homeImagery/buy_icon.png', height: 32, width: 32, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.star, size: 32)), const SizedBox(width: 8), const Text('Gain XPs', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black))]),
+      content: const SingleChildScrollView(child: Text(
+        'How to gain XPs in Bee Five:\n\n'
+        '• Login: +2 XP per calendar day (once per day).\n\n'
+        '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
+        '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
+        '• Adventure: +1 XP for every 2 consecutive level wins; −2 XP per loss. Complete a level that is a multiple of 10 → +5 XP bonus.\n\n'
+        '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
+        '• Watch Ad: Watch a short ad → +2 XP.',
+        style: TextStyle(fontSize: 16, color: Colors.black87), textAlign: TextAlign.center,
+      )),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+    ));
   }
 
   void _showBeeFiveTourModal() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: primaryYellow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Colors.black, width: 4),
-        ),
-        title: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('📖 ', style: TextStyle(fontSize: 28)),
-            Text(
-              'Bee Five Tour',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-          ],
-        ),
-        content: const SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Adventure (main game)',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'Play through levels on the map. Each level is a Bee Five game; win to advance. Time per move gets shorter as you progress: from 12 seconds early on down to 2 seconds in the highest levels. Obstacles appear as you go: blocked cells, mud zones, blind play (hidden board), progressive or disappearing blocks, shifting blocks, disappearing pieces, piece capacity limits, and match rounds (best-of-3 or best-of-5). This is the main story mode.',
-                style: TextStyle(fontSize: 15, color: Colors.black87),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Classic Mode',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'You have a 10‑minute session to win as many games as you can against the AI. Each move has a 15‑second timer; if time runs out on your turn, you lose that game. Your best score (most wins in one session) is saved. Win 3 games in a row in that session to earn +2 XP.',
-                style: TextStyle(fontSize: 15, color: Colors.black87),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Daily Challenge',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'One challenge per day: same Bee Five rules with a fixed daily puzzle (e.g. Beat the Clock, Obstacle Course, Blitz, Speed Round). Play once per day. Winning the Daily Challenge awards +3 XP and is the only way to earn XP from a single daily attempt — great for building your total and comparing with others.',
-                style: TextStyle(fontSize: 15, color: Colors.black87),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+    showDialog(context: context, builder: (context) => AlertDialog(
+      backgroundColor: primaryYellow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+      title: const Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [Text('📖 ', style: TextStyle(fontSize: 28)), Text('Bee Five Tour', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black))]),
+      content: const SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text('Adventure (main game)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black)),
+        SizedBox(height: 4),
+        Text('Play through levels on the map. Win to advance. Obstacles appear at higher levels. This is the main story mode.', style: TextStyle(fontSize: 15, color: Colors.black87)),
+        SizedBox(height: 16),
+        Text('Classic Mode', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black)),
+        SizedBox(height: 4),
+        Text('10‑minute session vs AI. Win 3 in a row → +2 XP.', style: TextStyle(fontSize: 15, color: Colors.black87)),
+        SizedBox(height: 16),
+        Text('Daily Challenge', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black)),
+        SizedBox(height: 4),
+        Text('One challenge per day. Win → +3 XP.', style: TextStyle(fontSize: 15, color: Colors.black87)),
+      ])),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+    ));
   }
 
-  static Future<String?> _showPasswordConfirmDialog({
-    required BuildContext context,
-    required String title,
-    required String message,
-  }) async {
+  static Future<String?> _showPasswordConfirmDialog({required BuildContext context, required String title, required String message}) async {
     final controller = TextEditingController();
     return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: primaryYellow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.black, width: 4),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  message,
-                  style: const TextStyle(fontSize: 15, color: Colors.black87),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                  onSubmitted: (value) {
-                    if (value.isNotEmpty) Navigator.pop(ctx, value);
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, null),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                final pwd = controller.text.trim();
-                if (pwd.isEmpty) return;
-                Navigator.pop(ctx, pwd);
-              },
-              child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
+      context: context, barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: primaryYellow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+        title: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(message, style: const TextStyle(fontSize: 15, color: Colors.black87)),
+          const SizedBox(height: 16),
+          TextField(controller: controller, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), filled: true, fillColor: Colors.white), onSubmitted: (v) { if (v.isNotEmpty) Navigator.pop(ctx, v); }),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+          TextButton(onPressed: () { final p = controller.text.trim(); if (p.isEmpty) return; Navigator.pop(ctx, p); }, child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold))),
+        ],
+      ),
     );
   }
 
   void _showSettingsModal() {
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        bool soundOn = BackgroundSound.instance.soundEnabled;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: primaryYellow,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: const BorderSide(color: Colors.black, width: 4),
-              ),
-              title: const Text(
-                'Settings',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Sound:',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            soundOn ? 'On' : 'Off',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Switch(
-                            value: soundOn,
-                            onChanged: (value) async {
-                              final newValue = await BackgroundSound.instance.setEnabled(value);
-                              setDialogState(() => soundOn = newValue);
-                              if (mounted) {
-                                setState(() => soundEnabled = newValue);
-                              }
-                            },
-                            activeTrackColor: Colors.green.shade700,
-                            activeThumbColor: primaryYellow,
-                            inactiveThumbColor: Colors.white,
-                            inactiveTrackColor: Colors.grey.shade600,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const Divider(color: Colors.black54, height: 1),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Account & data',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'These actions require your password to confirm.',
-                    style: TextStyle(fontSize: 14, color: Colors.black54),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final auth = context.read<AuthContext>();
-                      Navigator.pop(dialogContext);
-                      await auth.signOut();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black87,
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: Colors.black, width: 2),
-                      ),
-                    ),
-                    child: const Text(
-                      'Sign out',
-                      style: TextStyle(
-                        color: primaryYellow,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (context.read<AuthContext>().user != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          final auth = context.read<AuthContext>();
-                          final user = auth.user;
-                          if (user?.email == null) return;
-                          final password = await _showPasswordConfirmDialog(
-                            context: context,
-                            title: 'Reset adventure progress',
-                            message: 'Enter your password to reset your adventure progress and start from level 1. This cannot be undone.',
-                          );
-                          if (password == null || !context.mounted) return;
-                          try {
-                            await auth.signIn(email: user!.email!, password: password);
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(e.toString().contains('Invalid login') ? 'Incorrect password.' : e.toString()),
-                                backgroundColor: Colors.red.shade700,
-                              ),
-                            );
-                            return;
-                          }
-                          if (!context.mounted) return;
-                          await resetAdventureProgress();
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setInt('adventure_consecutive_losses', 0);
-                          await prefs.setInt('adventure_consecutive_wins', 0);
-                          if (!context.mounted) return;
-                          setState(() {
-                            currentGame = 1;
-                            highestUnlockedGame = 1;
-                            gamesCompleted = [];
-                          });
-                          Navigator.pop(dialogContext);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Adventure progress reset. You will start from level 1.'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.orange.shade800,
-                          side: BorderSide(color: Colors.orange.shade700, width: 2),
-                          minimumSize: const Size(double.infinity, 48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Reset adventure progress — start from level 1',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  OutlinedButton(
-                    onPressed: () async {
-                      final auth = context.read<AuthContext>();
-                      final user = auth.user;
-                      if (user?.email == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Sign in to delete your account.'), backgroundColor: Colors.red),
-                        );
-                        return;
-                      }
-                      final password = await _showPasswordConfirmDialog(
-                        context: context,
-                        title: 'Delete account',
-                        message: 'Enter your password to confirm. This will permanently delete your account and data. You cannot undo this.',
-                      );
-                      if (password == null || !context.mounted) return;
-                      try {
-                        await auth.signIn(email: user!.email!, password: password);
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(e.toString().contains('Invalid login') ? 'Incorrect password.' : e.toString()),
-                            backgroundColor: Colors.red.shade700,
-                          ),
-                        );
-                        return;
-                      }
-                      if (!context.mounted) return;
-                      Navigator.pop(dialogContext);
-                      final err = await auth.deleteAccount();
-                      if (!context.mounted) return;
-                      if (err != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(err.message),
-                            backgroundColor: Colors.red.shade700,
-                          ),
-                        );
-                      }
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red.shade700,
-                      side: BorderSide(color: Colors.red.shade700, width: 2),
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Delete account',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(dialogContext);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey,
-                      minimumSize: const Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: Colors.black, width: 2),
-                      ),
-                    ),
-                    child: const Text(
-                      'Close',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+    showDialog(context: context, builder: (dialogContext) {
+      bool soundOn = BackgroundSound.instance.soundEnabled;
+      return StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        backgroundColor: primaryYellow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.black, width: 4)),
+        title: const Text('Settings', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black), textAlign: TextAlign.center),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            const Text('Sound:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(soundOn ? 'On' : 'Off', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+              const SizedBox(width: 12),
+              Switch(value: soundOn, onChanged: (value) async { final nv = await BackgroundSound.instance.setEnabled(value); setDialogState(() => soundOn = nv); if (mounted) setState(() => soundEnabled = nv); }, activeTrackColor: Colors.green.shade700, activeThumbColor: primaryYellow, inactiveThumbColor: Colors.white, inactiveTrackColor: Colors.grey.shade600),
+            ]),
+          ]),
+          const SizedBox(height: 24),
+          const Divider(color: Colors.black54, height: 1),
+          const SizedBox(height: 16),
+          const Text('Account & data', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+          const SizedBox(height: 8),
+          const Text('These actions require your password to confirm.', style: TextStyle(fontSize: 14, color: Colors.black54)),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: () async { final auth = context.read<AuthContext>(); Navigator.pop(dialogContext); await auth.signOut(); },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Colors.black, width: 2))),
+            child: const Text('Sign out', style: TextStyle(color: primaryYellow, fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 10),
+          if (context.read<AuthContext>().user != null)
+            Padding(padding: const EdgeInsets.only(bottom: 10), child: OutlinedButton(
+              onPressed: () async {
+                final auth = context.read<AuthContext>();
+                final user = auth.user;
+                if (user?.email == null) return;
+                final password = await _showPasswordConfirmDialog(context: context, title: 'Reset adventure progress', message: 'Enter your password to reset your adventure progress and start from level 1. This cannot be undone.');
+                if (password == null || !context.mounted) return;
+                try { await auth.signIn(email: user!.email!, password: password); } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().contains('Invalid login') ? 'Incorrect password.' : e.toString()), backgroundColor: Colors.red.shade700));
+                  return;
+                }
+                if (!context.mounted) return;
+                await resetAdventureProgress();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('adventure_consecutive_losses', 0);
+                await prefs.setInt('adventure_consecutive_wins', 0);
+                await prefs.setInt(_highestGameKey, 1); // reset persisted progress
+                if (!context.mounted) return;
+                setState(() { currentGame = 1; highestUnlockedGame = 1; gamesCompleted = []; });
+                Navigator.pop(dialogContext);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Adventure progress reset. You will start from level 1.'), backgroundColor: Colors.green));
+              },
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.orange.shade800, side: BorderSide(color: Colors.orange.shade700, width: 2), minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+              child: const Text('Reset adventure progress — start from level 1', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            )),
+          OutlinedButton(
+            onPressed: () async {
+              final auth = context.read<AuthContext>();
+              final user = auth.user;
+              if (user?.email == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in to delete your account.'), backgroundColor: Colors.red)); return; }
+              final password = await _showPasswordConfirmDialog(context: context, title: 'Delete account', message: 'Enter your password to confirm. This will permanently delete your account and data. You cannot undo this.');
+              if (password == null || !context.mounted) return;
+              try { await auth.signIn(email: user!.email!, password: password); } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().contains('Invalid login') ? 'Incorrect password.' : e.toString()), backgroundColor: Colors.red.shade700));
+                return;
+              }
+              if (!context.mounted) return;
+              Navigator.pop(dialogContext);
+              final err = await auth.deleteAccount();
+              if (!context.mounted) return;
+              if (err != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.message), backgroundColor: Colors.red.shade700));
+            },
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade700, side: BorderSide(color: Colors.red.shade700, width: 2), minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            child: const Text('Delete account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(onPressed: () => Navigator.pop(dialogContext), style: ElevatedButton.styleFrom(backgroundColor: Colors.grey, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Colors.black, width: 2))), child: const Text('Close', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+        ]),
+      ));
+    });
   }
+
+  // ---------------------------------------------------------------------------
+  // Build — main router
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    
+
     if (gameMode == GameMode.aiGame) {
       return ClassicAIGame(
-        onBackToMenu: () {
-          setState(() {
-            gameMode = GameMode.menu;
-            isClassicStreakMode = false;
-          });
-          _scheduleScrollToCurrentLevel();
-          getXp().then((xp) {
-            if (mounted) {
-              setState(() => _headerXp = xp);
-            }
-          });
-        },
-        initialDifficulty: aiDifficulty,
-        initialTimer: aiTimer,
-        backgroundColor: 'yellow',
-        isClassicStreakMode: isClassicStreakMode,
+        onBackToMenu: () { setState(() { gameMode = GameMode.menu; isClassicStreakMode = false; }); _scheduleScrollToCurrentLevel(); getXp().then((xp) { if (mounted) setState(() => _headerXp = xp); }); },
+        initialDifficulty: aiDifficulty, initialTimer: aiTimer, backgroundColor: 'yellow', isClassicStreakMode: isClassicStreakMode,
       );
     }
-    
+
     if (gameMode == GameMode.localMultiplayer) {
-      return SimpleGame(
-        onBackToMenu: () {
-          setState(() => gameMode = GameMode.menu);
-          _scheduleScrollToCurrentLevel();
-        },
-        backgroundColor: 'yellow',
-      );
+      return SimpleGame(onBackToMenu: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }, backgroundColor: 'yellow');
     }
-    
+
     if (gameMode == GameMode.adventureGame) {
       return AdventureGame(
-        // CHANGE 7: onBackToMenu now receives the level directly from AdventureGame.
-        // No SharedPreferences read, no timing race, no async delay needed.
-        // The level is set instantly in setState — the button and map update immediately.
         onBackToMenu: (int levelFromGame) {
+          // levelFromGame = the level to return to (next level if won, same if lost).
+          // Update highestUnlockedGame if this is new progress.
+          final newHighest = math.max(highestUnlockedGame, levelFromGame);
+
+          // Persist FIRST — before setState — so a crash can't lose progress.
+          _saveHighest(newHighest);
+
           setState(() {
             gameMode = GameMode.menu;
-            currentGame = levelFromGame; // ← set directly from what game reported
+            highestUnlockedGame = newHighest;
+            currentGame = newHighest; // bee moves to new highest
           });
-          // Sync highestUnlockedGame and gamesCompleted in background
+
+          // Background sync to update gamesCompleted etc.
           syncAdventureProgress().then((progress) {
-            if (mounted) {
-              setState(() {
-                highestUnlockedGame = progress.highestUnlockedGame;
-                gamesCompleted = List.from(progress.gamesCompleted);
-              });
-            }
+            if (!mounted) return;
+            final syncedHighest = math.max(newHighest, progress.highestUnlockedGame);
+            setState(() {
+              highestUnlockedGame = syncedHighest;
+              currentGame = syncedHighest;
+              gamesCompleted = List.from(progress.gamesCompleted);
+            });
+            _saveHighest(syncedHighest);
           });
-          // Update XP display
-          getXp().then((xp) {
-            if (mounted) setState(() => _headerXp = xp);
-          });
-          // Scroll map to the level the player just came from
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _scheduleScrollToCurrentLevel();
-          });
+
+          getXp().then((xp) { if (mounted) setState(() => _headerXp = xp); });
+          WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _scheduleScrollToCurrentLevel(); });
         },
         initialGame: currentGame,
       );
     }
 
     if (gameMode == GameMode.dailyChallenge) {
-      return DailyChallengeGame(
-        onBackToMenu: () {
-          setState(() => gameMode = GameMode.menu);
-          _scheduleScrollToCurrentLevel();
-          getXp().then((xp) {
-            if (mounted) {
-              setState(() => _headerXp = xp);
-            }
-          });
-          getDailyChallengeStatus().then((status) {
-            if (mounted) {
-              setState(() {
-                _dailyChallengePlayedToday = status.$1;
-                _dailyChallengeWon = status.$2;
-              });
-            }
-          });
-        },
-      );
+      return DailyChallengeGame(onBackToMenu: () {
+        setState(() => gameMode = GameMode.menu);
+        _scheduleScrollToCurrentLevel();
+        getXp().then((xp) { if (mounted) setState(() => _headerXp = xp); });
+        getDailyChallengeStatus().then((status) { if (mounted) setState(() { _dailyChallengePlayedToday = status.$1; _dailyChallengeWon = status.$2; }); });
+      });
     }
-    
+
     if (gameMode == GameMode.profile) {
-      return DashboardPage(
-        onBack: () {
-          setState(() => gameMode = GameMode.menu);
-          _scheduleScrollToCurrentLevel();
-        },
-      );
+      return DashboardPage(onBack: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); });
     }
-    
+
     if (gameMode == GameMode.privacyPolicy) {
       return Scaffold(
-        appBar: AppBar(
-          title: Center(
-            child: Image.asset(
-              'assets/BEE-FIVE.png',
-              height: 36,
-              fit: BoxFit.contain,
-              errorBuilder: (_, Object error, StackTrace? stackTrace) => const Text('BEE FIVE'),
-            ),
-          ),
-          backgroundColor: primaryYellow,
-          automaticallyImplyLeading: false,
-        ),
-        body: Container(
-          color: primaryYellow,
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by ayongezwa. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.',
-                        style: TextStyle(
-                          fontSize: 16,
-                          height: 1.6,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const Align(
-                        alignment: Alignment.centerRight,
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Last Updated: January 2026',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontStyle: FontStyle.italic,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ),
-                      _policySection('Information We Collect', [
-                        'We may collect the following types of information:',
-                        '• Non-personal data: Device information, operating system, app version, and general usage statistics',
-                        '• Account information: If you sign up for an account or multiplayer features, we may collect an email address for login and account management purposes',
-                        '• Game progress: Local game progress and statistics stored on your device',
-                        'We do not collect sensitive personal information such as payment details, location data, or contact lists.',
-                      ]),
-                      _policySection('Third-Party Services', [
-                        'Our app may use the following third-party services:',
-                        '• Google AdMob: For displaying advertisements. AdMob may collect device identifiers, IP address, and app interaction data to serve and measure ads. See Google\'s Privacy Policy for details.',
-                        '• Supabase: For backend services and data storage (if applicable). See Supabase\'s Privacy Policy for details.',
-                        'AdMob and other third-party providers process data under their own privacy terms.',
-                        'These services have their own privacy policies governing the collection and use of your information. We encourage you to review their privacy policies.',
-                      ]),
-                      _policySection('Your Rights (GDPR & CCPA)', [
-                        'If you are located in the European Economic Area (EEA) or California, you have the following rights:',
-                        '• Right to Access: You can request a copy of the personal data we hold about you',
-                        '• Right to Rectification: You can request correction of inaccurate personal data',
-                        '• Right to Erasure: You can request deletion of your personal data',
-                        '• Right to Data Portability: You can request your data in a portable format',
-                        '• Right to Object: You can object to processing of your personal data',
-                        '• Right to Withdraw Consent: You can withdraw consent for data processing at any time',
-                        'To exercise these rights, please contact us using the information in the "Contact Us" section below.',
-                      ]),
-                      _policySection('Children\'s Privacy', [
-                        'Our Service is suitable for users ages 13 and above. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.',
-                        'If we discover that we have collected personal information from a child under 13, we will delete that information promptly.',
-                      ]),
-                      _policySection('Data Security', [
-                        'We implement appropriate technical and organizational measures to protect your personal information. However, no method of transmission over the internet or electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your data, we cannot guarantee absolute security.',
-                      ]),
-                      _policySection('Data Retention', [
-                        'We retain your personal information only for as long as necessary to provide our Service and fulfill the purposes outlined in this Privacy Policy. When you request deletion of your data, we will delete it within 30 days, except where we are required to retain it by law.',
-                      ]),
-                      _policySection('Changes to This Policy', [
-                        'We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date. You are advised to review this Privacy Policy periodically for any changes.',
-                      ]),
-                      _policySection('Contact Us', [
-                        'If you have any questions about this Privacy Policy, wish to exercise your rights, or need to contact us regarding your personal data, please reach out to us:',
-                        'Email: admin@mindgrind.co.za',
-                        'Developer: ayongezwa',
-                        'App: Bee Five',
-                        'We will respond to your inquiry within 30 days.',
-                      ]),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 24, bottom: 16),
-                        child: Center(
-                          child: Text(
-                            '© 2026 Bee Five. Product of ayongezwa.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Container(
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                  border: const Border(
-                    top: BorderSide(color: primaryYellow, width: 2),
-                  ),
-                ),
-                padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 40),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', active: true, onTap: () {}),
-                    _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+        appBar: AppBar(title: Center(child: Image.asset('assets/BEE-FIVE.png', height: 36, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Text('BEE FIVE'))), backgroundColor: primaryYellow, automaticallyImplyLeading: false),
+        body: Container(color: primaryYellow, child: Column(children: [
+          Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Bee Five ("we", "our", or "us") operates the Bee Five mobile application (the "Service"), developed by ayongezwa. This page informs you of our policies regarding the collection, use, and disclosure of personal information when you use our Service.', style: TextStyle(fontSize: 16, height: 1.6, color: Colors.black87)),
+            const Align(alignment: Alignment.centerRight, child: Padding(padding: EdgeInsets.only(top: 8), child: Text('Last Updated: January 2026', style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.black87)))),
+            _policySection('Information We Collect', ['We may collect the following types of information:', '• Non-personal data: Device information, operating system, app version, and general usage statistics', '• Account information: email address for login and account management purposes', '• Game progress: Local game progress and statistics stored on your device', 'We do not collect sensitive personal information such as payment details, location data, or contact lists.']),
+            _policySection('Third-Party Services', ['• Google AdMob: For displaying advertisements.', '• Supabase: For backend services and data storage.', 'These services have their own privacy policies governing the collection and use of your information.']),
+            _policySection('Your Rights (GDPR & CCPA)', ['• Right to Access, Rectification, Erasure, Data Portability, Object, and Withdraw Consent.', 'To exercise these rights, please contact us using the information in the "Contact Us" section below.']),
+            _policySection('Children\'s Privacy', ['Our Service is suitable for users ages 13 and above. We do not knowingly collect personal information from children under 13.']),
+            _policySection('Data Security', ['We implement appropriate technical and organizational measures to protect your personal information.']),
+            _policySection('Data Retention', ['We retain your personal information only as long as necessary. We will delete it within 30 days of your request, except where required by law.']),
+            _policySection('Changes to This Policy', ['We may update this Privacy Policy from time to time and will notify you of changes by posting here.']),
+            _policySection('Contact Us', ['Email: admin@mindgrind.co.za', 'Developer: ayongezwa', 'App: Bee Five', 'We will respond within 30 days.']),
+            const Padding(padding: EdgeInsets.only(top: 24, bottom: 16), child: Center(child: Text('© 2026 Bee Five. Product of ayongezwa.', style: TextStyle(fontSize: 14, color: Colors.black54)))),
+          ]))),
+          Container(height: 100, decoration: BoxDecoration(color: Colors.black, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, -4))], border: const Border(top: BorderSide(color: primaryYellow, width: 2))), padding: const EdgeInsets.only(left: 8, right: 8, bottom: 40), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', active: true, onTap: () {}),
+            _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
+          ])),
+        ])),
       );
     }
 
@@ -2622,197 +1232,60 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
       return Scaffold(
         resizeToAvoidBottomInset: true,
-        appBar: AppBar(
-          title: Image.asset(
-            'assets/BEE-FIVE.png',
-            height: 36,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => Text(
-              'BEE FIVE',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: Colors.black,
-              ),
-            ),
-          ),
-          centerTitle: true,
-          backgroundColor: primaryYellow,
-          automaticallyImplyLeading: false,
-        ),
-        body: Container(
-          color: primaryYellow,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: EdgeInsets.only(bottom: keyboardInset + 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 12, bottom: 8),
-                        child: Text(
-                          'Connect with us',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: _connectTile(imagePath: 'assets/BEE-FIVE.png', link: 'https://www.beefiveweb.com')),
-                                const SizedBox(width: 16),
-                                Expanded(child: _connectTile(imagePath: 'assets/socials/instagram.png', link: 'https://www.instagram.com/beefive1.01?igsh=ZjhnbjV4ZW1sYTlx&utm_source=qr')),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                const Spacer(flex: 1),
-                                Expanded(
-                                  flex: 2,
-                                  child: _connectTile(imagePath: 'assets/socials/tiktok.png', link: 'https://www.tiktok.com/@beefive1.1?_r=1&_t=ZS-94N1ujIm1AH'),
-                                ),
-                                const Spacer(flex: 1),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text(
-                              'Talk To Us!',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Give us a compliment, suggest improvements... We value your input.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.black87,
-                                height: 1.3,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Container(
-                              key: _connectTalkToUsKey,
-                              height: math.max(200.0, MediaQuery.sizeOf(context).height * 0.22),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.black, width: 2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              alignment: Alignment.topLeft,
-                              child: TextField(
-                                controller: _talkToUsController,
-                                focusNode: _connectTalkToUsFocus,
-                                expands: true,
-                                maxLines: null,
-                                minLines: null,
-                                textAlignVertical: TextAlignVertical.top,
-                                keyboardType: TextInputType.multiline,
-                                inputFormatters: [_WordLimitInputFormatter(100)],
-                                decoration: const InputDecoration(
-                                  hintText: 'Your message (max 100 words)',
-                                  border: InputBorder.none,
-                                  isCollapsed: true,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                                style: const TextStyle(fontSize: 15, color: Colors.black87),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  final body = _talkToUsController.text.trim();
-                                  if (body.isEmpty) return;
-                                  final uri = Uri.parse(
-                                    'mailto:admin@mindgrind.co.za?body=${Uri.encodeComponent(body)}',
-                                  );
-                                  try {
-                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                  } catch (_) {}
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.black,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Send to admin@mindgrind.co.za'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+        appBar: AppBar(title: Image.asset('assets/BEE-FIVE.png', height: 36, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Text('BEE FIVE', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black))), centerTitle: true, backgroundColor: primaryYellow, automaticallyImplyLeading: false),
+        body: Container(color: primaryYellow, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.only(bottom: keyboardInset + 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Padding(padding: EdgeInsets.only(top: 12, bottom: 8), child: Text('Connect with us', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black))),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Column(children: [
+                Row(children: [Expanded(child: _connectTile(imagePath: 'assets/BEE-FIVE.png', link: 'https://www.beefiveweb.com')), const SizedBox(width: 16), Expanded(child: _connectTile(imagePath: 'assets/socials/instagram.png', link: 'https://www.instagram.com/beefive1.01?igsh=ZjhnbjV4ZW1sYTlx&utm_source=qr'))]),
+                const SizedBox(height: 12),
+                Row(children: [const Spacer(), Expanded(flex: 2, child: _connectTile(imagePath: 'assets/socials/tiktok.png', link: 'https://www.tiktok.com/@beefive1.1?_r=1&_t=ZS-94N1ujIm1AH')), const Spacer()]),
+              ])),
+              const SizedBox(height: 12),
+              Padding(padding: const EdgeInsets.fromLTRB(24, 0, 24, 8), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                const Text('Talk To Us!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
+                const SizedBox(height: 6),
+                const Text('Give us a compliment, suggest improvements... We value your input.', style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.3)),
+                const SizedBox(height: 10),
+                Container(
+                  key: _connectTalkToUsKey,
+                  height: math.max(200.0, MediaQuery.sizeOf(context).height * 0.22),
+                  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.black, width: 2), borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  alignment: Alignment.topLeft,
+                  child: TextField(controller: _talkToUsController, focusNode: _connectTalkToUsFocus, expands: true, maxLines: null, minLines: null, textAlignVertical: TextAlignVertical.top, keyboardType: TextInputType.multiline, inputFormatters: [_WordLimitInputFormatter(100)], decoration: const InputDecoration(hintText: 'Your message (max 100 words)', border: InputBorder.none, isCollapsed: true, contentPadding: EdgeInsets.zero), style: const TextStyle(fontSize: 15, color: Colors.black87)),
                 ),
-              ),
-              Container(color: primaryYellow, height: 40),
-              Container(
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 40),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
-                    _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', active: true, onTap: () {}),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+                const SizedBox(height: 10),
+                SizedBox(width: double.infinity, child: ElevatedButton(
+                  onPressed: () async { final body = _talkToUsController.text.trim(); if (body.isEmpty) return; try { await launchUrl(Uri.parse('mailto:admin@mindgrind.co.za?body=${Uri.encodeComponent(body)}'), mode: LaunchMode.externalApplication); } catch (_) {} },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text('Send to admin@mindgrind.co.za'),
+                )),
+              ])),
+            ]),
+          )),
+          Container(color: primaryYellow, height: 40),
+          Container(height: 100, decoration: BoxDecoration(color: Colors.black, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, -4))]), padding: const EdgeInsets.only(left: 8, right: 8, bottom: 40), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
+            _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', active: true, onTap: () {}),
+            _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
+          ])),
+        ])),
       );
     }
-    
+
     return Scaffold(
       backgroundColor: primaryYellow,
-      body: Stack(
-        children: [
-          buildMapBackground(screenSize),
-          buildAnimatedBees(screenSize),
-          buildMenuOverlay(screenSize),
-        ],
-      ),
+      body: Stack(children: [
+        buildMapBackground(screenSize),
+        buildAnimatedBees(screenSize),
+        buildMenuOverlay(screenSize),
+      ]),
     );
   }
 }
