@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../contexts/auth_context.dart';
 import '../supabase_client.dart';
 
@@ -118,6 +119,10 @@ class _SignUpPageState extends State<SignUpPage> {
       if (!mounted) return;
 
       if (response.user != null) {
+        // Save the username to SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_display_name', _usernameController.text.trim());
+        
         await showDialog(
           context: context,
           builder: (ctx) => AlertDialog(

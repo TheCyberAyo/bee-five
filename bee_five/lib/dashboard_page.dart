@@ -61,6 +61,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final isMobile = MediaQuery.of(context).size.width <= 768;
 
     return Scaffold(
+      backgroundColor: _dashboardPrimaryYellow, // Set scaffold background color
       appBar: AppBar(
         title: const Text(
           'Dashboard',
@@ -71,128 +72,132 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         backgroundColor: _dashboardPrimaryYellow,
         foregroundColor: Colors.black,
+        elevation: 0, // Remove shadow for cleaner look
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: widget.onBack,
         ),
       ),
       body: Container(
-        color: _dashboardPrimaryYellow,
+        color: _dashboardPrimaryYellow, // Ensure body fills with yellow
         child: _loaded
             ? SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isMobile ? 20 : 40,
-                  vertical: 24,
-                ),
-                child: Column(
-                  children: [
-                    // Username and avatar
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Avatar
-                        Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2c2c2c),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.black, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 20 : 40,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    children: [
+                      // Username and avatar
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Avatar
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2c2c2c),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                _username.isNotEmpty && _username != 'Guest'
+                                    ? _username.substring(0, 1).toUpperCase()
+                                    : '👤',
+                                style: TextStyle(
+                                  fontSize: _username.isNotEmpty && _username != 'Guest' ? 28 : 36,
+                                  fontWeight: FontWeight.bold,
+                                  color: _username.isNotEmpty && _username != 'Guest'
+                                      ? _dashboardPrimaryYellow
+                                      : null,
+                                ),
                               ),
-                            ],
+                            ),
                           ),
-                          child: Center(
+                          const SizedBox(width: 20),
+                          Flexible(
                             child: Text(
-                              _username.isNotEmpty
-                                  ? _username.substring(0, 1).toUpperCase()
-                                  : '👤',
-                              style: TextStyle(
-                                fontSize: _username.isNotEmpty ? 28 : 36,
+                              _username,
+                              style: const TextStyle(
+                                fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: _username.isNotEmpty
-                                    ? _dashboardPrimaryYellow
-                                    : null,
+                                color: Colors.black,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Flexible(
-                          child: Text(
-                            _username,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                    // Stats table
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.black, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Table(
-                          border: TableBorder.symmetric(
-                            inside: const BorderSide(
-                              color: Colors.black26,
-                              width: 1,
-                            ),
-                          ),
-                          columnWidths: const {
-                            0: FlexColumnWidth(2),
-                            1: FlexColumnWidth(1),
-                          },
-                          children: [
-                            _buildTableHeader(isMobile),
-                            _buildRow(
-                              'Adventure level',
-                              '$_adventureLevel',
-                              isMobile,
-                            ),
-                            _buildRow(
-                              'Classic best score',
-                              '$_classicBestScore',
-                              isMobile,
-                            ),
-                            _buildRow(
-                              'Login streak',
-                              '$_loginStreak days',
-                              isMobile,
-                            ),
-                            _buildRow(
-                              'XP',
-                              '$_xp',
-                              isMobile,
-                              'assets/homeImagery/xp_gem.png',
+                      const SizedBox(height: 40),
+                      // Stats table
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.black, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Table(
+                            border: TableBorder.symmetric(
+                              inside: const BorderSide(
+                                color: Colors.black26,
+                                width: 1,
+                              ),
+                            ),
+                            columnWidths: const {
+                              0: FlexColumnWidth(2),
+                              1: FlexColumnWidth(1),
+                            },
+                            children: [
+                              _buildTableHeader(isMobile),
+                              _buildRow(
+                                'Adventure level',
+                                '$_adventureLevel',
+                                isMobile,
+                              ),
+                              _buildRow(
+                                'Classic best score',
+                                '$_classicBestScore',
+                                isMobile,
+                              ),
+                              _buildRow(
+                                'Login streak',
+                                '$_loginStreak days',
+                                isMobile,
+                              ),
+                              _buildRow(
+                                'XP',
+                                '$_xp',
+                                isMobile,
+                                'assets/homeImagery/xp_gem.png',
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                  ],
+                      const SizedBox(height: 32),
+                    ],
+                  ),
                 ),
               )
             : const Center(
