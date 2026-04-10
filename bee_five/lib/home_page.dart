@@ -373,6 +373,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   int currentGame = 1;
   int highestUnlockedGame = 1;
   List<int> gamesCompleted = [];
+  // Incremented on every reset so that any in-flight async callbacks
+  // (e.g. syncAdventureProgress().then(...)) can detect they are stale
+  // and skip their setState — preventing them from overwriting a reset.
+  int _progressGeneration = 0;
 
   double mapScrollY = 0;
   final ScrollController mapScrollController = ScrollController();
@@ -397,10 +401,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   // Persistence helpers
   // ---------------------------------------------------------------------------
 
+  // Writes all reset values to SharedPreferences (both key sets).
+  // Called fire-and-forget after the synchronous setState in the reset handler.
+  Future<void> _persistReset() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_highestGameKey, 1);
+    await prefs.setInt('current_game_level', 1);
+    await prefs.setInt('adventure_consecutive_losses', 0);
+    await prefs.setInt('adventure_consecutive_wins', 0);
+    await prefs.setInt('adventure_highest_unlocked_level', 1);
+    await prefs.setInt('adventure_current_level', 1);
+  }
+
   Future<void> _saveHighest(int highest) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_highestGameKey, highest);
-    await prefs.setInt('current_game_level', highest); // keep legacy key in sync
+    await prefs.setInt('current_game_level', highest); // legacy home_page key
+    // Keep dashboard_page keys in sync so the dashboard always shows the
+    // correct level without needing a separate write path.
+    await prefs.setInt('adventure_highest_unlocked_level', highest);
+    await prefs.setInt('adventure_current_level', highest);
   }
 
   Future<int> _loadHighest() async {
@@ -417,6 +437,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   // ---------------------------------------------------------------------------
 
   Future<void> _loadProgressOnStartup() async {
+    // Capture generation so that if a reset fires while this async function
+    // is awaiting the network, we do not overwrite the reset state.
+    final genAtDispatch = _progressGeneration;
+
     final prefs = await SharedPreferences.getInstance();
     final savedSound = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
     if (mounted && savedSound != soundEnabled) setState(() => soundEnabled = savedSound);
@@ -426,6 +450,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     // flash back to level 1 after sign-out or a cold restart.
     final localHighest = await _loadHighest();
     if (!mounted) return;
+    if (_progressGeneration != genAtDispatch) return; // reset happened — discard
     if (localHighest > 1) {
       setState(() {
         highestUnlockedGame = localHighest;
@@ -440,6 +465,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     // can regress the player's progress.
     final progress = await syncAdventureProgress();
     if (!mounted) return;
+    if (_progressGeneration != genAtDispatch) return; // reset happened — discard
 
     final resolvedHighest = math.max(localHighest, progress.highestUnlockedGame).clamp(1, totalGames);
 
@@ -1275,7 +1301,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 _sideMenuButton(
                   label: 'Play with a Friend',
                   iconImagePath: 'assets/homeImagery/play-with-friend.png',
-                  color: primaryYellow,
+                  color: Colors.orange,
+                  textColor: Colors.white,
+                  borderColor: Colors.white,
                   onPressed: () {
                     setState(() => gameMode = GameMode.localMultiplayer);
                   },
@@ -1284,7 +1312,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 _sideMenuButton(
                   label: 'Classic Mode',
                   iconImagePath: 'assets/homeImagery/classic-mode.png',
-                  color: primaryYellow,
+                  color: Colors.orange,
+                  textColor: Colors.white,
+                  borderColor: Colors.white,
                   onPressed: () {
                     setState(() {
                       isClassicStreakMode = true;
@@ -1893,7 +1923,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           ),
           content: Text(
             _dailyChallengeWon == true
-                ? "You've already played today — You Won! Come back tomorrow for a new challenge."
+                ? "You've already played today — you won! Come back tomorrow for a new challenge."
                 : "You've already played today — better luck tomorrow!",
             style: const TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
@@ -2210,41 +2240,70 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       padding: const EdgeInsets.only(bottom: 10),
                       child: OutlinedButton(
                         onPressed: () async {
-                          final auth = context.read<AuthContext>();
-                          final user = auth.user;
-                          if (user?.email == null) return;
-                          final password = await _showPasswordConfirmDialog(
+                          // Ask for confirmation — password dialog is shown purely
+                          // as a "are you sure" UX step. We do NOT re-authenticate
+                          // with Supabase here because signInWithPassword fires the
+                          // auth state stream → notifyListeners() → AuthGate rebuilds
+                          // the whole tree → _HomePageState is disposed and recreated
+                          // → _loadProgressOnStartup() runs again and restores the
+                          // old level, undoing the reset. The user is already signed
+                          // in; Supabase RLS on resetAdventureProgress() enforces
+                          // server-side security.
+                          final confirmed = await showDialog<bool>(
                             context: context,
-                            title: 'Reset adventure progress',
-                            message: 'Enter your password to reset your adventure progress and start from level 1. This cannot be undone.',
-                          );
-                          if (password == null || !context.mounted) return;
-                          try {
-                            await auth.signIn(email: user!.email!, password: password);
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(e.toString().contains('Invalid login') ? 'Incorrect password.' : e.toString()),
-                                backgroundColor: Colors.red.shade700,
+                            barrierDismissible: false,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: primaryYellow,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: const BorderSide(color: Colors.black, width: 4),
                               ),
-                            );
-                            return;
-                          }
-                          if (!context.mounted) return;
-                          await resetAdventureProgress();
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setInt('adventure_consecutive_losses', 0);
-                          await prefs.setInt('adventure_consecutive_wins', 0);
-                          await prefs.setInt(_highestGameKey, 1);
-                          await prefs.setInt('current_game_level', 1);
-                          if (!context.mounted) return;
+                              title: const Text(
+                                'Reset adventure progress',
+                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+                              ),
+                              content: const Text(
+                                'This will permanently reset your adventure progress and start you from level 1. This cannot be undone.',
+                                style: TextStyle(fontSize: 15, color: Colors.black87),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text(
+                                    'Reset',
+                                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed != true || !context.mounted) return;
+                          // ── Step 1: update state SYNCHRONOUSLY before any await ──
+                          // Incrementing the generation first means every in-flight
+                          // async callback (syncAdventureProgress, loadProgressOnStartup)
+                          // will see a stale generation and discard its result.
+                          _progressGeneration++;
                           setState(() {
                             currentGame = 1;
                             highestUnlockedGame = 1;
                             gamesCompleted = [];
                           });
+                          // ── Step 2: close the dialog ──
                           Navigator.pop(dialogContext);
+                          // ── Step 3: flush prefs and Supabase in background ──
+                          // These are all fire-and-forget after the state is already
+                          // reset, so even if they are slow the UI is already correct.
+                          resetAdventureProgress().ignore();
+                          _persistReset().ignore();
+                          // ── Step 4: scroll the map to level 1 ──
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) _scheduleScrollToCurrentLevel();
+                          });
+                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Adventure progress reset. You will start from level 1.'),
@@ -2477,8 +2536,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           });
 
           // Background sync to update gamesCompleted and confirm server state.
+          // Capture generation so this callback can detect if a reset happened
+          // while the network call was in flight and silently discard the result.
+          final genAtDispatch = _progressGeneration;
           syncAdventureProgress().then((progress) {
             if (!mounted) return;
+            if (_progressGeneration != genAtDispatch) return; // reset happened — discard
             final syncedHighest = math.max(newHighest, progress.highestUnlockedGame);
             setState(() {
               highestUnlockedGame = syncedHighest;
