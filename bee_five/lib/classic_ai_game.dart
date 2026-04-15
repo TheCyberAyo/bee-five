@@ -53,16 +53,18 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   /// Game index in the current streak session (1-based). Sequence: 2 easy, 2 medium, 2 hard, repeat.
   int _classicGameIndex = 1;
 
+  // Blocked cells (cannot be played on) — stored as "row,col" strings
+  Set<String> _blockedCells = {};
+
   int _headerXp = 0;
   int _lastXpDelta = 0;
 
-  // CHANGED: Track "Play Again" clicks for interstitial (show on every 4th click)
+  // Track "Play Again" clicks for interstitial (show on every 4th click)
   int _playAgainCount = 0;
 
   /// Difficulty for classic streak: games 1–2 easy, 3–4 medium, 5–6 hard, then repeat.
-  /// CHANGED: Games ending in 6 or 7 within first 100 games are forced to medium.
+  /// Games ending in 6 or 7 within first 100 games are forced to medium.
   static String _classicStreakDifficultyForGame(int gameIndex) {
-    // Force medium for games ending in 6 or 7 within the first 100 games
     if (gameIndex <= 100 && (gameIndex % 10 == 6 || gameIndex % 10 == 7)) {
       return 'medium';
     }
@@ -71,6 +73,45 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     if (slot < 4) return 'medium';
     return 'hard';
   }
+
+  /// Returns the score increment for a win based on difficulty.
+  static int _scoreForDifficulty(String difficulty) {
+    switch (difficulty) {
+      case 'easy':
+        return 1;
+      case 'medium':
+        return 2;
+      case 'hard':
+        return 3;
+      default:
+        return 1;
+    }
+  }
+
+  /// Returns how many cells should be blocked for the given game index.
+  /// Games 1–6: 0 blocked, 7–12: 4 blocked, 13–18: 7 blocked, 19+: 12 blocked.
+  static int _blockedCellCountForGame(int gameIndex) {
+    if (gameIndex <= 6) return 0;
+    if (gameIndex <= 12) return 4;
+    if (gameIndex <= 18) return 7;
+    return 12;
+  }
+
+  /// Generates a set of random blocked cell keys ("row,col") for the board,
+  /// ensuring they don't overlap with each other.
+  Set<String> _generateBlockedCells(int count) {
+    if (count == 0) return {};
+    final random = math.Random();
+    final blocked = <String>{};
+    while (blocked.length < count) {
+      final row = random.nextInt(boardSize);
+      final col = random.nextInt(boardSize);
+      blocked.add('$row,$col');
+    }
+    return blocked;
+  }
+
+  bool _isCellBlocked(int row, int col) => _blockedCells.contains('$row,$col');
 
   // Banner ad variables
   BannerAd? _bannerAd;
@@ -89,7 +130,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       _startSessionTimer();
     } else {
       aiDifficulty = widget.initialDifficulty;
-      // CHANGED: Also apply the ending-in-6-or-7 rule for non-streak mode if applicable
       timeLeft = widget.initialTimer;
     }
     _resetBoard();
@@ -132,7 +172,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     );
   }
 
-  // CHANGED: Show interstitial only when "Play Again" is clicked the 4th time
+  // Show interstitial only when "Play Again" is clicked the 4th time
   void _onPlayAgainPressed() {
     _playAgainCount++;
     if (_playAgainCount % 4 == 0 && _interstitialAd != null) {
@@ -141,7 +181,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           ad.dispose();
           _interstitialAd = null;
           _loadInterstitialAd();
-          // Proceed with resetting the game after ad is dismissed
           setState(() => showWinModal = false);
           _resetGame();
         },
@@ -238,8 +277,15 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   void _resetBoard() {
+    // Compute blocked cells for current game index (only in classic streak mode)
+    final int blockedCount = widget.isClassicStreakMode
+        ? _blockedCellCountForGame(_classicGameIndex)
+        : 0;
+    final newBlockedCells = _generateBlockedCells(blockedCount);
+
     setState(() {
       board = List.generate(boardSize, (_) => List.filled(boardSize, 0));
+      _blockedCells = newBlockedCells;
       currentPlayer = 1;
       winner = 0;
       winningPieces = [];
@@ -298,6 +344,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   void _handleCellClick(int row, int col) {
+    // Blocked cells cannot be played on
+    if (_isCellBlocked(row, col)) return;
     if (board[row][col] != 0 || winner != 0 || currentPlayer != 1 || isAITurn) {
       return;
     }
@@ -309,8 +357,9 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
     if (_checkWinner(row, col, currentPlayer)) {
       if (widget.isClassicStreakMode) {
+        final int points = _scoreForDifficulty(aiDifficulty);
         setState(() {
-          classicGamesWon++;
+          classicGamesWon += points;
           if (classicGamesWon > classicBestStreak) {
             classicBestStreak = classicGamesWon;
             _saveBestStreak(classicBestStreak);
@@ -357,7 +406,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       bool isDraw = true;
       for (int r = 0; r < boardSize; r++) {
         for (int c = 0; c < boardSize; c++) {
-          if (board[r][c] == 0) {
+          if (board[r][c] == 0 && !_isCellBlocked(r, c)) {
             isDraw = false;
             break;
           }
@@ -392,7 +441,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     final availableCells = <Map<String, int>>[];
     for (int row = 0; row < boardSize; row++) {
       for (int col = 0; col < boardSize; col++) {
-        if (board[row][col] == 0) {
+        if (board[row][col] == 0 && !_isCellBlocked(row, col)) {
           availableCells.add({'row': row, 'col': col});
         }
       }
@@ -449,7 +498,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
         bool isDraw = true;
         for (int r = 0; r < boardSize; r++) {
           for (int c = 0; c < boardSize; c++) {
-            if (board[r][c] == 0) {
+            if (board[r][c] == 0 && !_isCellBlocked(r, c)) {
               isDraw = false;
               break;
             }
@@ -761,6 +810,32 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     }
   }
 
+  /// Builds the widget for a blocked cell.
+  Widget _buildBlockedCell(double cellSize) {
+    return Container(
+      width: cellSize,
+      height: cellSize,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade800,
+        border: Border.all(color: Colors.white, width: 2.0),
+      ),
+      child: Center(
+        child: Image.asset(
+          'assets/BEE-FIVE.png',
+          width: cellSize * 0.7,
+          height: cellSize * 0.7,
+          fit: BoxFit.contain,
+          // Fallback: grey X icon if image not found
+          errorBuilder: (_, _, _) => Icon(
+            Icons.block,
+            color: primaryYellow,
+            size: cellSize * 0.6,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const double borderWidth = 2.0;
@@ -878,6 +953,16 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                      // Show blocked cell count hint in classic streak mode
+                      if (widget.isClassicStreakMode && _blockedCells.isNotEmpty)
+                        Text(
+                          '🚫 ${_blockedCells.length} blocked cell${_blockedCells.length == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -904,6 +989,11 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                               return Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: List.generate(boardSize, (col) {
+                                  // Blocked cell — show logo, no interaction
+                                  if (_isCellBlocked(row, col)) {
+                                    return _buildBlockedCell(cellSize);
+                                  }
+
                                   return GestureDetector(
                                     onTap: () => _handleCellClick(row, col),
                                     child: Container(
@@ -1093,7 +1183,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                       children: [
                         if (classicGameOver)
                           ElevatedButton(
-                            // CHANGED: "Try Again" in classic session-end also uses _onPlayAgainPressed
                             onPressed: () {
                               setState(() {
                                 classicGameOver = false;
@@ -1127,7 +1216,6 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                           )
                         else
                           ElevatedButton(
-                            // CHANGED: routes through _onPlayAgainPressed instead of direct reset
                             onPressed: _onPlayAgainPressed,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,

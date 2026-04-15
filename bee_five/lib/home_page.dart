@@ -2282,10 +2282,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                             ),
                           );
                           if (confirmed != true || !context.mounted) return;
-                          // ── Step 1: update state SYNCHRONOUSLY before any await ──
-                          // Incrementing the generation first means every in-flight
-                          // async callback (syncAdventureProgress, loadProgressOnStartup)
-                          // will see a stale generation and discard its result.
+                          // ── Step 1: setState SYNCHRONOUSLY — UI updates instantly ──
+                          // No await before this, so nothing can overwrite it before
+                          // the next frame is drawn.
                           _progressGeneration++;
                           setState(() {
                             currentGame = 1;
@@ -2294,15 +2293,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                           });
                           // ── Step 2: close the dialog ──
                           Navigator.pop(dialogContext);
-                          // ── Step 3: flush prefs and Supabase in background ──
-                          // These are all fire-and-forget after the state is already
-                          // reset, so even if they are slow the UI is already correct.
-                          resetAdventureProgress().ignore();
-                          _persistReset().ignore();
-                          // ── Step 4: scroll the map to level 1 ──
+                          // ── Step 3: scroll map to level 1 immediately ──
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) _scheduleScrollToCurrentLevel();
                           });
+                          // ── Step 4: await prefs and Supabase writes ──
+                          // These must complete so the reset survives app restart.
+                          // We await them AFTER setState so the UI is already showing
+                          // level 1 while the writes happen.
+                          await _persistReset();
+                          await resetAdventureProgress();
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
