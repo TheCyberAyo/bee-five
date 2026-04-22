@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
+import 'adventure_progress_service.dart' show scheduleProgressCloudSync;
 import 'xp_service.dart';
 
 const Color primaryYellow = Color(0xFFFFC30B);
@@ -209,6 +210,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   Future<void> _saveBestStreak(int streak) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefClassicBestStreak, streak);
+    scheduleProgressCloudSync();
   }
 
   void _startSessionTimer() {

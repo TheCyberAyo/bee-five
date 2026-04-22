@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../supabase_client.dart';
+
+/// Same value as `prefUsername` in `dashboard_page.dart` (kept here to avoid circular imports).
+const String _kUserDisplayNamePrefKey = 'user_display_name';
 
 /// Auth state and methods. Same format/order as BeefiveApp AuthContext.
 class AuthContext extends ChangeNotifier {
@@ -9,15 +13,35 @@ class AuthContext extends ChangeNotifier {
   Session? _session;
   bool _loading = true;
   bool _recoverySessionPending = false;
+  bool _isGuest = false;
   StreamSubscription<AuthState>? _authSubscription;
 
   User? get user => _user;
   Session? get session => _session;
   bool get loading => _loading;
   bool get recoverySessionPending => _recoverySessionPending;
+  /// Local-only “play without account”; cleared on [signOut] or when a Supabase session exists.
+  bool get isGuest => _isGuest;
 
   AuthContext() {
     _init();
+  }
+
+  /// Skip account sign-in; cleared when a Supabase session exists or on [signOut].
+  void enterGuestMode() {
+    if (_isGuest) return;
+    _isGuest = true;
+    notifyListeners();
+  }
+
+  static void _persistUsernameFromUserToPrefs(User user) {
+    final raw = user.userMetadata?['username'];
+    if (raw == null) return;
+    final name = raw.toString().trim();
+    if (name.isEmpty) return;
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setString(_kUserDisplayNamePrefKey, name),
+    );
   }
 
   void _init() {
@@ -30,6 +54,10 @@ class AuthContext extends ChangeNotifier {
     final currentSession = supabaseClient!.auth.currentSession;
     _session = currentSession;
     _user = currentSession?.user;
+    if (_user != null) {
+      _isGuest = false;
+      _persistUsernameFromUserToPrefs(_user!);
+    }
     _loading = false;
     notifyListeners();
 
@@ -38,10 +66,15 @@ class AuthContext extends ChangeNotifier {
         _session = null;
         _user = null;
         _loading = false;
+        _isGuest = false;
       } else {
         _session = data.session;
         _user = data.session?.user;
         _loading = false;
+        if (_user != null) {
+          _isGuest = false;
+          _persistUsernameFromUserToPrefs(_user!);
+        }
       }
       notifyListeners();
     });
@@ -97,6 +130,7 @@ class AuthContext extends ChangeNotifier {
     if (supabaseClient == null) return;
     _session = supabaseClient!.auth.currentSession;
     _user = _session?.user;
+    if (_user != null) _persistUsernameFromUserToPrefs(_user!);
     notifyListeners();
   }
 
@@ -133,6 +167,7 @@ class AuthContext extends ChangeNotifier {
     }
     _session = null;
     _user = null;
+    _isGuest = false;
     _loading = false;
     notifyListeners();
   }

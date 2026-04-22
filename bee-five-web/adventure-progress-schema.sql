@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS adventure_progress (
   highest_unlocked_game INTEGER NOT NULL DEFAULT 1,
   games_completed INTEGER[] DEFAULT ARRAY[]::INTEGER[],
   games_won INTEGER NOT NULL DEFAULT 0,
+  user_xp INTEGER NOT NULL DEFAULT 10,
+  login_streak INTEGER NOT NULL DEFAULT 0,
+  classic_best_streak INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

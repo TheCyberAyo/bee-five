@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'adventure_progress_service.dart';
+import 'contexts/auth_context.dart';
 import 'home_page.dart';
 
-/// Splash flow: Connect 5 demo (6s), then BEE FIVE logo (2s), then home.
+/// Splash flow: Connect 5 demo (6s), then BEE FIVE logo (2s), then Home.
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({super.key, required this.auth});
+
+  final AuthContext auth;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -32,21 +36,38 @@ class _SplashScreenState extends State<SplashScreen> {
     _timer?.cancel();
     _timer = Timer(_currentDuration, () {
       if (!mounted) return;
+
       if (_step == 0) {
         setState(() => _step = 1);
         _startTimer();
       } else {
-        _goToHome();
+        _goNext();
       }
     });
   }
 
-  void _goToHome() {
+  /// Splash complete: sync signed-in progress from Supabase, then open Home.
+  Future<void> _goNext() async {
     _timer?.cancel();
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomePage()),
-    );
+
+    // If user is logged in OR guest → go to Home
+    if (widget.auth.user != null || widget.auth.isGuest) {
+      if (widget.auth.user != null) {
+        try {
+          await syncAdventureProgress();
+        } catch (_) {
+          // Still open Home if the network fails; local prefs remain.
+        }
+      }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomePage()),
+      );
+    } else {
+      // Fallback (normally shouldn't happen because AuthGate handles it)
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -64,13 +85,14 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-/// BEE FIVE logo on third splash is larger.
+/// BEE FIVE logo size
 const _beeFiveLogoSize = 300.0;
 
-/// Yellow background, horizontal row of 5 squares at top; Connect 5 played in order: black(3rd), yellow(5th), black(2nd), yellow(1st), black(4th).
+/// Connect 5 demo screen
 class _ConnectFiveDemoScreen extends StatefulWidget {
   @override
-  State<_ConnectFiveDemoScreen> createState() => _ConnectFiveDemoScreenState();
+  State<_ConnectFiveDemoScreen> createState() =>
+      _ConnectFiveDemoScreenState();
 }
 
 class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
@@ -80,8 +102,6 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
   static const double _squareSize = 56.0;
   static const double _gap = 8.0;
 
-  /// Play order: (squareIndex 0..4, isBlack). Squares are horizontal: 0=left (1st), 4=right (5th/far end).
-  /// Move 1: black on 3rd (index 2), 2: yellow on 5th (index 4), 3: black on 2nd (index 1), 4: yellow on 1st (index 0), 5: black on 4th (index 3).
   static const List<int> _playOrder = [2, 4, 1, 0, 3];
   static const List<bool> _isBlack = [true, false, true, false, true];
 
@@ -105,6 +125,7 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
   @override
   Widget build(BuildContext context) {
     final side = MediaQuery.sizeOf(context).shortestSide;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -125,12 +146,20 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: List.generate(_squareCount, (index) {
                             final position = _playOrder.indexOf(index);
-                            final threshold = (position + 0.5) / _squareCount;
-                            final visible = position >= 0 && _controller.value >= threshold;
-                            final isBlack = position >= 0 ? _isBlack[position] : false;
+                            final threshold =
+                                (position + 0.5) / _squareCount;
+
+                            final visible = position >= 0 &&
+                                _controller.value >= threshold;
+
+                            final isBlack =
+                                position >= 0 ? _isBlack[position] : false;
+
                             return Padding(
                               padding: EdgeInsets.only(
-                                right: index < _squareCount - 1 ? _gap : 0,
+                                right: index < _squareCount - 1
+                                    ? _gap
+                                    : 0,
                               ),
                               child: _buildSquare(
                                 hasPiece: visible,
@@ -152,7 +181,10 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
     );
   }
 
-  Widget _buildSquare({required bool hasPiece, required bool isBlack}) {
+  Widget _buildSquare({
+    required bool hasPiece,
+    required bool isBlack,
+  }) {
     return Container(
       width: _squareSize,
       height: _squareSize,
@@ -167,7 +199,9 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
                 width: _squareSize * 0.5,
                 height: _squareSize * 0.5,
                 decoration: BoxDecoration(
-                  color: isBlack ? Colors.black : const Color(0xFFFFC30B),
+                  color: isBlack
+                      ? Colors.black
+                      : const Color(0xFFFFC30B),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -177,7 +211,7 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
   }
 }
 
-/// Third splash: black background, centered BEE-FIVE.png (larger) and "BEE FIVE" text.
+/// Logo screen
 class _BeeFiveLogoScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -196,11 +230,12 @@ class _BeeFiveLogoScreen extends StatelessWidget {
                 child: Image.asset(
                   'assets/BEE-FIVE.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) =>
+                      const SizedBox.shrink(),
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
+              const Text(
                 'BEE FIVE',
                 style: TextStyle(
                   fontSize: 28,

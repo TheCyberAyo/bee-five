@@ -135,7 +135,7 @@ class _AdventureGameState extends State<AdventureGame> {
 
   void _onActionPressed({required bool isContinue}) {
     _actionCount++;
-    if (_actionCount % 10 == 0 && _interstitialAd != null) {
+    if (_actionCount % 8 == 0 && _interstitialAd != null) {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
@@ -1225,10 +1225,16 @@ class _AdventureGameState extends State<AdventureGame> {
       if (mounted) setState(() => _headerXp = result.$1);
     });
 
-    // CHANGE 3: Save the level that was just completed, then the next level.
-    // Both are fire-and-forget — they never block game flow.
-    saveAdventureLevel(levelJustCompleted).catchError((_) {});
-    saveAdventureLevel(nextLevel).catchError((_) {});
+    // Persist completed level then next level **in order**. Two concurrent
+    // `saveAdventureLevel` calls can finish out of order and regress
+    // `adventure_current_level` in SharedPreferences (e.g. save "1" after save "2"),
+    // which makes the next app open look like you are still on level 1.
+    Future.microtask(() async {
+      try {
+        await saveAdventureLevel(levelJustCompleted);
+        await saveAdventureLevel(nextLevel);
+      } catch (_) {}
+    });
 
     setState(() {
       currentGame = nextLevel;
@@ -1318,7 +1324,7 @@ class _AdventureGameState extends State<AdventureGame> {
                             'assets/BEE-FIVE.png',
                             height: 32,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const SizedBox(width: 32, height: 32),
+                            errorBuilder: (_, _, _) => const SizedBox(width: 32, height: 32),
                           ),
                           const SizedBox(width: 6),
                           const Text(
@@ -1366,7 +1372,7 @@ class _AdventureGameState extends State<AdventureGame> {
                         width: 28,
                         height: 28,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Icon(Icons.star, color: primaryYellow, size: 28),
+                        errorBuilder: (_, _, _) => Icon(Icons.star, color: primaryYellow, size: 28),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -1665,7 +1671,7 @@ class _AdventureGameState extends State<AdventureGame> {
                               width: 22,
                               height: 22,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.home, size: 22),
+                              errorBuilder: (_, _, _) => const Icon(Icons.home, size: 22),
                             ),
                             const SizedBox(width: 8),
                             const Text('Home'),
@@ -1695,7 +1701,7 @@ class _AdventureGameState extends State<AdventureGame> {
                               width: 22,
                               height: 22,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.refresh, size: 22),
+                              errorBuilder: (_, _, _) => const Icon(Icons.refresh, size: 22),
                             ),
                             const SizedBox(width: 8),
                             const Text('Restart'),

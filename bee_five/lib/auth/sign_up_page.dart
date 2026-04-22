@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../contexts/auth_context.dart';
+import '../dashboard_page.dart' show prefUsername;
 import '../supabase_client.dart';
 
 /// Sign-up page. Same format and order as BeefiveApp SignUpPage.
@@ -10,11 +11,13 @@ class SignUpPage extends StatefulWidget {
     required this.auth,
     required this.onBack,
     required this.onNavigateToSignIn,
+    this.backButtonLabel = '← Back to Sign In',
   });
 
   final AuthContext auth;
   final VoidCallback onBack;
   final VoidCallback onNavigateToSignIn;
+  final String backButtonLabel;
 
   @override
   State<SignUpPage> createState() => _SignUpPageState();
@@ -118,11 +121,14 @@ class _SignUpPageState extends State<SignUpPage> {
 
       if (!mounted) return;
 
-      if (response.user != null) {
-        // Save the username to SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_display_name', _usernameController.text.trim());
-        
+      if (response.user != null || response.session != null) {
+        final username = _usernameController.text.trim();
+        if (username.isNotEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(prefUsername, username);
+        }
+
+        if (!mounted) return;
         await showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -182,9 +188,9 @@ class _SignUpPageState extends State<SignUpPage> {
                 const SizedBox(height: 20),
                 TextButton(
                   onPressed: _loading ? null : widget.onBack,
-                  child: const Text(
-                    '← Back to Sign In',
-                    style: TextStyle(
+                  child: Text(
+                    widget.backButtonLabel,
+                    style: const TextStyle(
                       color: Color(0xFFFFC30B),
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

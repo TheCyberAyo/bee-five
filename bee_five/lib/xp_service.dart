@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'adventure_progress_service.dart' show scheduleProgressCloudSync;
+
 /// Pref keys (must match dashboard_page.dart).
 const String _prefUserXp = 'user_xp';
 const String _prefLoginStreak = 'login_streak';
@@ -16,8 +18,8 @@ const int xpClassicThreeWins = 2;
 /// XP for winning a hard practice game.
 const int xpHardPracticeWin = 1;
 
-/// XP lost per adventure game loss (each loss = -2 XP).
-const int xpAdventureOneLoss = 2;
+/// XP lost per adventure game loss (each loss = -1 XP).
+const int xpAdventureOneLoss = 1;
 
 /// XP for 2 consecutive adventure game wins.
 const int xpAdventureTwoWins = 1;
@@ -88,6 +90,7 @@ Future<void> onAppOpen() async {
   await prefs.setInt(_prefUserXp, xp);
   await prefs.setInt(_prefLoginStreak, streak);
   await prefs.setString(_prefLastLoginDate, today);
+  scheduleProgressCloudSync();
 }
 
 /// Returns current XP (never null after [ensureXpInitialized]).
@@ -104,6 +107,7 @@ Future<int> addXp(int delta) async {
   final current = prefs.getInt(_prefUserXp) ?? defaultXp;
   final next = current + delta;
   await prefs.setInt(_prefUserXp, next);
+  scheduleProgressCloudSync();
   return next;
 }
 
@@ -114,10 +118,11 @@ Future<int> removeXp(int delta) async {
   final current = prefs.getInt(_prefUserXp) ?? defaultXp;
   final next = (current - delta).clamp(0, 0x7FFFFFFF);
   await prefs.setInt(_prefUserXp, next);
+  scheduleProgressCloudSync();
   return next;
 }
 
-/// Adventure: call when player loses a game. Returns (new XP, delta). Applies -3 XP per loss.
+/// Adventure: call when player loses a game. Returns (new XP, delta). Applies -1 XP per loss.
 /// Also resets consecutive wins.
 Future<(int, int)> onAdventureMatchLost({int? levelJustPlayed}) async {
   final prefs = await SharedPreferences.getInstance();
@@ -216,6 +221,7 @@ Future<int> setDailyChallengeResult(bool won) async {
   await prefs.setString(_prefDailyChallengeDate, today);
   await prefs.setBool(_prefDailyChallengeWon, won);
   if (won) return await addXp(xpDailyChallengeWin);
+  scheduleProgressCloudSync();
   return await getXp();
 }
 

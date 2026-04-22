@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'adventure_game.dart';
 import 'contexts/auth_context.dart';
-import 'simple_game.dart';
+import 'simple_game.dart' hide GameMode;
 import 'classic_ai_game.dart';
 import 'background_sound.dart';
 import 'dashboard_page.dart';
@@ -1301,9 +1301,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 _sideMenuButton(
                   label: 'Play with a Friend',
                   iconImagePath: 'assets/homeImagery/play-with-friend.png',
-                  color: Colors.orange,
-                  textColor: Colors.white,
-                  borderColor: Colors.white,
+                  color: primaryYellow,
                   onPressed: () {
                     setState(() => gameMode = GameMode.localMultiplayer);
                   },
@@ -1312,9 +1310,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 _sideMenuButton(
                   label: 'Classic Mode',
                   iconImagePath: 'assets/homeImagery/classic-mode.png',
-                  color: Colors.orange,
-                  textColor: Colors.white,
-                  borderColor: Colors.white,
+                  color: primaryYellow,
                   onPressed: () {
                     setState(() {
                       isClassicStreakMode = true;
@@ -1978,7 +1974,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             '• Login: +2 XP per calendar day (once per day).\n\n'
             '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
             '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
-            '• Adventure: +1 XP for every 2 consecutive level wins; −2 XP per loss. '
+            '• Adventure: Win 2 consecutive levels → +1 XP; lose a level → −1 XP. '
             'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
             '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
             '• Watch Ad: Watch a short ad → +2 XP (tap "Watch Ad +2 XP" on the home screen).',
@@ -2281,7 +2277,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                               ],
                             ),
                           );
-                          if (confirmed != true || !context.mounted) return;
+                          if (confirmed != true || !mounted) return;
                           // ── Step 1: setState SYNCHRONOUSLY — UI updates instantly ──
                           // No await before this, so nothing can overwrite it before
                           // the next frame is drawn.
@@ -2292,6 +2288,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                             gamesCompleted = [];
                           });
                           // ── Step 2: close the dialog ──
+                          if (!dialogContext.mounted) return;
                           Navigator.pop(dialogContext);
                           // ── Step 3: scroll map to level 1 immediately ──
                           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2304,7 +2301,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                           await _persistReset();
                           await resetAdventureProgress();
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(this.context).showSnackBar(
                             const SnackBar(
                               content: Text('Adventure progress reset. You will start from level 1.'),
                               backgroundColor: Colors.green,
@@ -2586,6 +2583,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
 
     if (gameMode == GameMode.profile) {
       return DashboardPage(
+        auth: context.read<AuthContext>(),
         onBack: () {
           setState(() => gameMode = GameMode.menu);
           _scheduleScrollToCurrentLevel();

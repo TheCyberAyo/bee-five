@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../adventure_progress_service.dart';
 import '../contexts/auth_context.dart';
 import '../supabase_client.dart';
 
@@ -10,6 +11,7 @@ class SignInPage extends StatefulWidget {
     required this.onNavigateToSignUp,
     required this.onNavigateToForgotPassword,
     required this.onTrySetNewPassword,
+    this.onBackToWelcome,
   });
 
   final AuthContext auth;
@@ -17,6 +19,8 @@ class SignInPage extends StatefulWidget {
   final VoidCallback onNavigateToForgotPassword;
   /// Call when user taps "Set new password"; auth will sync session and may show reset page.
   final VoidCallback onTrySetNewPassword;
+  /// When set (e.g. opened from the welcome choice screen), shows a back control to return there.
+  final VoidCallback? onBackToWelcome;
 
   @override
   State<SignInPage> createState() => _SignInPageState();
@@ -85,6 +89,11 @@ class _SignInPageState extends State<SignInPage> {
       if (!mounted) return;
 
       if (response.session != null || response.user != null) {
+        // Merge device + cloud progress before Splash/Home so the map reflects saved state.
+        try {
+          await syncAdventureProgress();
+        } catch (_) {}
+        if (!mounted) return;
         // Success - AuthGate will auto-navigate to Splash then Home
         return;
       }
@@ -134,6 +143,24 @@ class _SignInPageState extends State<SignInPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
+                if (widget.onBackToWelcome != null) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed:
+                          _loading ? null : widget.onBackToWelcome,
+                      child: const Text(
+                        '← Back',
+                        style: TextStyle(
+                          color: Color(0xFFFFC30B),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 Text(
                   '🐝 Sign In',
                   style: TextStyle(

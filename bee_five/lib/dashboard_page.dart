@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'adventure_progress_service.dart' show syncAdventureProgress;
+import 'contexts/auth_context.dart';
 import 'xp_service.dart';
 
 const Color _dashboardPrimaryYellow = Color(0xFFFFC30B);
@@ -16,10 +18,12 @@ const String prefUsername = 'user_display_name';
 /// Full-page dashboard: username, avatar, and stats table.
 /// Replaces the profile popup; opened from the person icon on the home page.
 class DashboardPage extends StatefulWidget {
+  final AuthContext auth;
   final VoidCallback onBack;
 
   const DashboardPage({
     super.key,
+    required this.auth,
     required this.onBack,
   });
 
@@ -44,14 +48,62 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _loadStats() async {
     await ensureXpInitialized();
     final prefs = await SharedPreferences.getInstance();
+    final auth = widget.auth;
+
+    String resolvedName;
+    if (auth.isGuest) {
+      resolvedName = 'Guest';
+    } else if (auth.user != null) {
+      final meta = auth.user!.userMetadata?['username']?.toString().trim();
+      if (meta != null && meta.isNotEmpty) {
+        resolvedName = meta;
+      } else {
+        final fromPrefs = prefs.getString(prefUsername)?.trim();
+        if (fromPrefs != null && fromPrefs.isNotEmpty) {
+          resolvedName = fromPrefs;
+        } else {
+          final email = auth.user!.email;
+          resolvedName = (email != null && email.contains('@'))
+              ? email.split('@').first
+              : 'Guest';
+        }
+      }
+    } else {
+      resolvedName = prefs.getString(prefUsername)?.trim() ?? '';
+      if (resolvedName.isEmpty) resolvedName = 'Guest';
+    }
+
+    int resolvedAdventureLevel =
+        prefs.getInt(prefAdventureHighestLevel) ?? prefs.getInt(prefAdventureCurrentLevel) ?? 1;
+    int resolvedClassicBestScore = prefs.getInt(prefClassicBestStreak) ?? 0;
+    int resolvedLoginStreak = prefs.getInt(prefLoginStreak) ?? 0;
+    int resolvedXp = prefs.getInt(prefUserXp) ?? 0;
+
+    // Refresh from merged local/remote progress so dashboard reflects resets
+    // and progress changes consistently across devices.
+    try {
+      final merged = await syncAdventureProgress();
+      resolvedAdventureLevel = merged.highestUnlockedGame;
+      if (merged.classicBestStreak != null) {
+        resolvedClassicBestScore = merged.classicBestStreak!;
+      }
+      if (merged.loginStreak != null) {
+        resolvedLoginStreak = merged.loginStreak!;
+      }
+      if (merged.userXp != null) {
+        resolvedXp = merged.userXp!;
+      }
+    } catch (_) {
+      // Keep local values on sync errors.
+    }
+
     if (!mounted) return;
     setState(() {
-      _username = prefs.getString(prefUsername) ?? 'Guest';
-      _adventureLevel =
-          prefs.getInt(prefAdventureHighestLevel) ?? prefs.getInt(prefAdventureCurrentLevel) ?? 1;
-      _classicBestScore = prefs.getInt(prefClassicBestStreak) ?? 0;
-      _loginStreak = prefs.getInt(prefLoginStreak) ?? 0;
-      _xp = prefs.getInt(prefUserXp) ?? 0;
+      _username = resolvedName;
+      _adventureLevel = resolvedAdventureLevel;
+      _classicBestScore = resolvedClassicBestScore;
+      _loginStreak = resolvedLoginStreak;
+      _xp = resolvedXp;
       _loaded = true;
     });
   }

@@ -196,7 +196,9 @@ String getAIDifficulty(int gameNumber) {
 
     // MEDIUM: endings 0, 3, 5, 6, 8
     if (lastDigit == 0 || lastDigit == 3 || lastDigit == 5 ||
-        lastDigit == 6 || lastDigit == 8) return 'medium';
+        lastDigit == 6 || lastDigit == 8) {
+      return 'medium';
+    }
 
     // EASY: endings 1 and 2 (and 9 below level 10)
     return 'easy';
@@ -206,7 +208,9 @@ String getAIDifficulty(int gameNumber) {
   if (gameNumber <= 600) {
     // HARD: endings 0, 2, 5, 9
     if (lastDigit == 0 || lastDigit == 2 ||
-        lastDigit == 5 || lastDigit == 9) return 'hard';
+        lastDigit == 5 || lastDigit == 9) {
+      return 'hard';
+    }
 
     // MEDIUM: everything else
     return 'medium';
