@@ -4,7 +4,7 @@ const nextConfig = {
     return [
       {
         source: "/app-ads.txt",
-        destination: "/public/app-ads.txt",
+        destination: "/app-ads.txt",
       },
     ];
   },
