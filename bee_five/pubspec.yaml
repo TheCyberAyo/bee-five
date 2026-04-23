@@ -2,7 +2,7 @@ name: bee_five
 description: "Bee Five game app."
 publish_to: 'none'
 
-version: 1.0.1+16
+version: 1.0.1+18
 
 environment:
   sdk: ^3.10.7
@@ -24,6 +24,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/BEE-FIVE.png"
 
 flutter:
   uses-material-design: true
