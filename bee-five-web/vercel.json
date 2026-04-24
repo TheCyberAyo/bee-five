@@ -1,8 +1,8 @@
-﻿{
-  "routes": [
+{
+  "rewrites": [
     {
-      "src": "/app-ads.txt",
-      "dest": "/public/app-ads.txt"
+      "source": "/app-ads.txt",
+      "destination": "/public/app-ads.txt"
     }
   ]
 }
