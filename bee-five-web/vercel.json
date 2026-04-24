@@ -1,0 +1,8 @@
+﻿{
+  "routes": [
+    {
+      "src": "/app-ads.txt",
+      "dest": "/public/app-ads.txt"
+    }
+  ]
+}
