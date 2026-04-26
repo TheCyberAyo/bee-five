@@ -87,6 +87,8 @@ class _ModeSelectionScreenState extends State<_ModeSelectionScreen> {
   final _p1Controller = TextEditingController();
   final _p2Controller = TextEditingController();
   String? _nameError;
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
 
   void _pickMode(GameMode mode) {
     if (mode == GameMode.single) {
@@ -122,9 +124,30 @@ class _ModeSelectionScreenState extends State<_ModeSelectionScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadBannerAd();
+  }
+
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) => ad.dispose(),
+      ),
+    )..load();
+  }
+
+  @override
   void dispose() {
     _p1Controller.dispose();
     _p2Controller.dispose();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -161,6 +184,14 @@ class _ModeSelectionScreenState extends State<_ModeSelectionScreen> {
                   ? _buildModeButtons()
                   : _buildNameEntry(),
             ),
+            if (_isBannerAdLoaded && _bannerAd != null)
+              Container(
+                alignment: Alignment.center,
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                color: Colors.black,
+                child: AdWidget(ad: _bannerAd!),
+              ),
           ],
         ),
       ),
@@ -1267,7 +1298,7 @@ class _ScorePill extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Final series scoreboard
 // ---------------------------------------------------------------------------
-class _SeriesScoreboard extends StatelessWidget {
+class _SeriesScoreboard extends StatefulWidget {
   final String player1Name;
   final String player2Name;
   final int score1;
@@ -1288,9 +1319,43 @@ class _SeriesScoreboard extends StatelessWidget {
     required this.onBackToMenu,
   });
 
+  @override
+  State<_SeriesScoreboard> createState() => _SeriesScoreboardState();
+}
+
+class _SeriesScoreboardState extends State<_SeriesScoreboard> {
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBannerAd();
+  }
+
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) => ad.dispose(),
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
+
   String get _overallWinner {
-    if (score1 > score2) return '$player1Name wins the series!';
-    if (score2 > score1) return '$player2Name wins the series!';
+    if (widget.score1 > widget.score2) return '${widget.player1Name} wins the series!';
+    if (widget.score2 > widget.score1) return '${widget.player2Name} wins the series!';
     return "It's a tie series!";
   }
 
@@ -1307,8 +1372,7 @@ class _SeriesScoreboard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
               decoration: const BoxDecoration(
                 color: Colors.black,
-                border: Border(
-                    bottom: BorderSide(color: primaryYellow, width: 2)),
+                border: Border(bottom: BorderSide(color: primaryYellow, width: 2)),
               ),
               child: Center(
                 child: Image.asset(
@@ -1318,7 +1382,6 @@ class _SeriesScoreboard extends StatelessWidget {
                 ),
               ),
             ),
-
             Expanded(
               child: Center(
                 child: Padding(
@@ -1344,7 +1407,7 @@ class _SeriesScoreboard extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '$totalGames-Game Series',
+                          '${widget.totalGames}-Game Series',
                           style: const TextStyle(
                             fontSize: 14,
                             color: Colors.white54,
@@ -1352,20 +1415,14 @@ class _SeriesScoreboard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 28),
-
-                        // Score display
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _ScoreCard(
-                                name: player1Name,
-                                score: score1,
-                                isBlack: true),
+                            _ScoreCard(name: widget.player1Name, score: widget.score1, isBlack: true),
                             Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
                               child: Text(
-                                '$score1 – $score2',
+                                '${widget.score1} – ${widget.score2}',
                                 style: const TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
@@ -1374,19 +1431,12 @@ class _SeriesScoreboard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            _ScoreCard(
-                                name: player2Name,
-                                score: score2,
-                                isBlack: false),
+                            _ScoreCard(name: widget.player2Name, score: widget.score2, isBlack: false),
                           ],
                         ),
-
                         const SizedBox(height: 28),
-
-                        // Winner announcement
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                           decoration: BoxDecoration(
                             color: primaryYellow,
                             borderRadius: BorderRadius.circular(12),
@@ -1402,26 +1452,23 @@ class _SeriesScoreboard extends StatelessWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
-
                         const SizedBox(height: 32),
-
-                        // Buttons
                         _ActionButton(
                           label: 'Play Series Again',
                           color: Colors.green,
-                          onTap: onPlayAgain,
+                          onTap: widget.onPlayAgain,
                         ),
                         const SizedBox(height: 12),
                         _ActionButton(
                           label: 'Change Mode',
                           color: Colors.orange,
-                          onTap: onBackToModeSelect,
+                          onTap: widget.onBackToModeSelect,
                         ),
                         const SizedBox(height: 12),
                         _ActionButton(
                           label: 'Back to Menu',
                           color: Colors.blue,
-                          onTap: onBackToMenu,
+                          onTap: widget.onBackToMenu,
                         ),
                       ],
                     ),
@@ -1429,6 +1476,14 @@ class _SeriesScoreboard extends StatelessWidget {
                 ),
               ),
             ),
+            if (_isBannerAdLoaded && _bannerAd != null)
+              Container(
+                alignment: Alignment.center,
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                color: Colors.black,
+                child: AdWidget(ad: _bannerAd!),
+              ),
           ],
         ),
       ),

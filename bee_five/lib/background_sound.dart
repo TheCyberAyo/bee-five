@@ -8,7 +8,7 @@ class BackgroundSound {
   static BackgroundSound get instance => _instance;
 
   static const String soundEnabledKey = 'bee_five_sound_enabled';
-  static const String _assetPath = 'sounds/Bee_Five_Melody_01.mp3';
+  static const String _assetPath = 'sounds/bee_five_melody.mp3';
 
   final AudioPlayer _player = AudioPlayer();
   bool _initialized = false;

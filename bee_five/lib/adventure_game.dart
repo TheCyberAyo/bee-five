@@ -20,6 +20,7 @@ class _NoScrollbarBehavior extends ScrollBehavior {
 const Color primaryYellow = Color(0xFFFFC30B);
 const Color _turnAnnouncementOrange = Color(0xFFFF9800);
 const Color classicBoardGridColor = Color(0xFF87CEEB);
+const Color countdownBoardGridColor = Color(0xFFE53935);
 const Color classicBoardBackground = Color(0xFF424242);
 const int boardSize = 10;
 
@@ -1266,6 +1267,7 @@ class _AdventureGameState extends State<AdventureGame> {
       (screenSize.width - 46) / boardSize,
       (screenSize.height - 300) / boardSize,
     );
+    final boardGridColor = showStartCountdown ? countdownBoardGridColor : classicBoardGridColor;
 
     // CHANGE 5: showExitDialog calls _backToMenu directly — same synchronous pattern
     void showExitDialog() {
@@ -1524,7 +1526,7 @@ class _AdventureGameState extends State<AdventureGame> {
                             opacity: ((isBlindPlay || temporaryBlindPlay) && gameStarted && gameInitialized) ? 0 : 1,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: classicBoardGridColor,
+                                color: boardGridColor,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: Colors.black, width: 3),
                               ),
@@ -1554,7 +1556,7 @@ class _AdventureGameState extends State<AdventureGame> {
                                                     ? Colors.grey.shade400
                                                     : isMudZone
                                                         ? Colors.brown.shade200
-                                                        : classicBoardGridColor,
+                                                        : boardGridColor,
                                             border: Border.all(
                                               color: isBlindMudZone
                                                   ? Colors.red.shade300

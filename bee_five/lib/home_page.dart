@@ -392,6 +392,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   late AnimationController bee3Controller;
 
   RewardedAd? _rewardedAd;
+  BannerAd? _practiceBannerAd;
+  bool _isPracticeBannerAdLoaded = false;
+  InterstitialAd? _practiceInterstitialAd;
+  int _practiceLaunchCount = 0;
 
   // Persistence key. We also keep the legacy key 'current_game_level' in sync
   // so existing installs don't lose progress across updates.
@@ -531,6 +535,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       }
     });
     _loadRewardedAd();
+    _loadPracticeBannerAd();
+    _loadPracticeInterstitialAd();
   }
 
   @override
@@ -544,7 +550,90 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     bee3Controller.dispose();
     mapScrollController.dispose();
     _rewardedAd?.dispose();
+    _practiceBannerAd?.dispose();
+    _practiceInterstitialAd?.dispose();
     super.dispose();
+  }
+
+  void _loadPracticeBannerAd() {
+    _practiceBannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isPracticeBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          if (mounted) setState(() => _isPracticeBannerAdLoaded = false);
+        },
+      ),
+    )..load();
+  }
+
+  void _loadPracticeInterstitialAd() {
+    InterstitialAd.load(
+      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _practiceInterstitialAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _practiceInterstitialAd = null;
+        },
+      ),
+    );
+  }
+
+  Widget _practiceDialogBanner() {
+    if (!_isPracticeBannerAdLoaded || _practiceBannerAd == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SizedBox(
+        width: _practiceBannerAd!.size.width.toDouble(),
+        height: _practiceBannerAd!.size.height.toDouble(),
+        child: AdWidget(ad: _practiceBannerAd!),
+      ),
+    );
+  }
+
+  void _startPracticeGame({required BuildContext dialogContext, required int timerSeconds}) {
+    _practiceLaunchCount++;
+
+    void startGame() {
+      if (!mounted) return;
+      setState(() {
+        aiDifficulty = selectedDifficulty;
+        aiTimer = timerSeconds;
+        showTimerModal = false;
+        gameMode = GameMode.aiGame;
+      });
+      Navigator.pop(dialogContext);
+    }
+
+    if (_practiceLaunchCount % 6 == 0 && _practiceInterstitialAd != null) {
+      _practiceInterstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          _practiceInterstitialAd = null;
+          _loadPracticeInterstitialAd();
+          startGame();
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          _practiceInterstitialAd = null;
+          _loadPracticeInterstitialAd();
+          startGame();
+        },
+      );
+      _practiceInterstitialAd!.show();
+    } else {
+      startGame();
+    }
   }
 
   @override
@@ -1797,6 +1886,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
+            _practiceDialogBanner(),
           ],
         ),
       ),
@@ -1832,13 +1922,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                setState(() {
-                  aiDifficulty = selectedDifficulty;
-                  aiTimer = 15;
-                  showTimerModal = false;
-                  gameMode = GameMode.aiGame;
-                });
-                Navigator.pop(context);
+                _startPracticeGame(dialogContext: context, timerSeconds: 15);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
@@ -1856,13 +1940,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: () {
-                setState(() {
-                  aiDifficulty = selectedDifficulty;
-                  aiTimer = 0;
-                  showTimerModal = false;
-                  gameMode = GameMode.aiGame;
-                });
-                Navigator.pop(context);
+                _startPracticeGame(dialogContext: context, timerSeconds: 0);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.purple,
@@ -1896,6 +1974,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
+            _practiceDialogBanner(),
           ],
         ),
       ),

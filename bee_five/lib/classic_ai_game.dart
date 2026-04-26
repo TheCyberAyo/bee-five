@@ -60,7 +60,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   int _headerXp = 0;
   int _lastXpDelta = 0;
 
-  // Track "Play Again" clicks for interstitial (show on every 4th click)
+  // Track "Play Again" clicks for interstitial.
+  // Practice mode shows interstitial every 6 completed games.
   int _playAgainCount = 0;
 
   /// Difficulty for classic streak: games 1–2 easy, 3–4 medium, 5–6 hard, then repeat.
@@ -173,10 +174,11 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     );
   }
 
-  // Show interstitial only when "Play Again" is clicked the 4th time
+  // Show interstitial every Nth "Play Again" depending on mode.
   void _onPlayAgainPressed() {
     _playAgainCount++;
-    if (_playAgainCount % 4 == 0 && _interstitialAd != null) {
+    final adFrequency = widget.isClassicStreakMode ? 4 : 6;
+    if (_playAgainCount % adFrequency == 0 && _interstitialAd != null) {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
