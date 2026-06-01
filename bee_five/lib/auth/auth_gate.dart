@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import '../contexts/auth_context.dart';
 import 'sign_in_page.dart';
 import 'sign_up_page.dart';
-import 'forgot_password_page.dart';
-import 'reset_password_page.dart';
 import 'welcome_auth_page.dart';
 import '../splash_screen.dart';
 
@@ -11,8 +9,6 @@ enum AuthScreen {
   welcome,
   signIn,
   signUp,
-  forgotPassword,
-  resetPassword,
 }
 
 class AuthGate extends StatefulWidget {
@@ -48,7 +44,6 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Loading
     if (widget.auth.loading) {
       return const Scaffold(
         backgroundColor: Color(0xFFFFC30B),
@@ -58,21 +53,6 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    // 2. Password recovery flow
-    if (widget.auth.user != null && widget.auth.recoverySessionPending) {
-      return ResetPasswordPage(
-        auth: widget.auth,
-        onBack: () {
-          widget.auth.clearRecoverySessionPending();
-          widget.auth.signOut();
-        },
-        onSuccess: () {
-          widget.auth.clearRecoverySessionPending();
-        },
-      );
-    }
-
-    // 3. Not signed in and not guest → welcome or auth stack
     if (widget.auth.user == null && !widget.auth.isGuest) {
       switch (_screen) {
         case AuthScreen.welcome:
@@ -95,14 +75,6 @@ class _AuthGateState extends State<AuthGate> {
               _signUpOpenedFromWelcome = false;
               _screen = AuthScreen.signUp;
             }),
-            onNavigateToForgotPassword: () =>
-                setState(() => _screen = AuthScreen.forgotPassword),
-            onTrySetNewPassword: () {
-              widget.auth.syncSessionFromClient();
-              if (widget.auth.user != null) {
-                widget.auth.setRecoverySessionPending(true);
-              }
-            },
           );
 
         case AuthScreen.signUp:
@@ -122,28 +94,9 @@ class _AuthGateState extends State<AuthGate> {
             onNavigateToSignIn: () =>
                 setState(() => _screen = AuthScreen.signIn),
           );
-
-        case AuthScreen.forgotPassword:
-          return ForgotPasswordPage(
-            auth: widget.auth,
-            onBack: () =>
-                setState(() => _screen = AuthScreen.signIn),
-            onNavigateToSignIn: () =>
-                setState(() => _screen = AuthScreen.signIn),
-          );
-
-        case AuthScreen.resetPassword:
-          return ResetPasswordPage(
-            auth: widget.auth,
-            onBack: () =>
-                setState(() => _screen = AuthScreen.signIn),
-            onSuccess: () =>
-                setState(() => _screen = AuthScreen.signIn),
-          );
       }
     }
 
-    // 4. Logged in OR guest → splash, then home
     return SplashScreen(auth: widget.auth);
   }
 }

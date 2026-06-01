@@ -10,7 +10,7 @@ Follow these steps in order:
 2. Check it contains both variables:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://hjcpkjpczhmxgugtugyl.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 

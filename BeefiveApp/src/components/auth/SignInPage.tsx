@@ -17,21 +17,19 @@ import { useAuth } from '../../contexts/AuthContext';
 interface SignInPageProps {
   onBack: () => void;
   onNavigateToSignUp: () => void;
-  onNavigateToForgotPassword: () => void;
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_REGEX = /^[a-zA-Z0-9_-]+$/;
 
 export default function SignInPage({
   onBack,
   onNavigateToSignUp,
-  onNavigateToForgotPassword,
 }: SignInPageProps) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [emailTouched, setEmailTouched] = useState(false);
+  const [usernameTouched, setUsernameTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -39,12 +37,15 @@ export default function SignInPage({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const validateEmail = (emailValue: string): string | null => {
-    if (!emailValue.trim()) {
-      return 'Please enter your email address';
+  const validateUsername = (value: string): string | null => {
+    if (!value.trim()) {
+      return 'Please enter your username';
     }
-    if (!EMAIL_REGEX.test(emailValue.trim())) {
-      return 'Please enter a valid email address';
+    if (value.trim().length < 3) {
+      return 'Username must be at least 3 characters';
+    }
+    if (!USERNAME_REGEX.test(value.trim())) {
+      return 'Username can only contain letters, numbers, underscores, and hyphens';
     }
     return null;
   };
@@ -56,40 +57,43 @@ export default function SignInPage({
     return null;
   };
 
-  const emailError = emailTouched ? validateEmail(email) : null;
+  const usernameError = usernameTouched ? validateUsername(username) : null;
   const passwordError = passwordTouched ? validatePassword(password) : null;
 
   const handleSubmit = async () => {
     setError(null);
-    setEmailTouched(true);
+    setUsernameTouched(true);
     setPasswordTouched(true);
 
-    const emailValidationError = validateEmail(email);
-    const passwordValidationError = validatePassword(password);
+    const uErr = validateUsername(username);
+    const pErr = validatePassword(password);
 
-    if (emailValidationError || passwordValidationError) {
-      setError(emailValidationError || passwordValidationError || 'Please check your inputs');
+    if (uErr || pErr) {
+      setError(uErr || pErr || 'Please check your inputs');
       return;
     }
 
     setLoading(true);
 
     try {
-      const { error: signInError } = await signIn(email.trim(), password);
+      const { error: signInError } = await signIn(username.trim(), password);
 
       if (signInError) {
-        let errorMessage = signInError.message || 'Failed to sign in. Please try again.';
-        if (signInError.message?.includes('Invalid login credentials')) {
-          errorMessage = 'Invalid email or password. Please try again.';
-        } else if (signInError.message?.includes('Email not confirmed')) {
-          errorMessage = 'Please check your email and confirm your account before signing in.';
+        const m = signInError.message?.toLowerCase() ?? '';
+        let errorMessage =
+          signInError.message || 'Failed to sign in. Please try again.';
+        if (
+          m.includes('invalid login') ||
+          m.includes('invalid_credentials') ||
+          m.includes('invalid grant')
+        ) {
+          errorMessage = 'Invalid username or password. Please try again.';
         }
         setError(errorMessage);
         setLoading(false);
         return;
       }
 
-      // Success - user will be automatically redirected to menu by parent component
       setLoading(false);
     } catch (err) {
       console.error('Sign in error:', err);
@@ -110,14 +114,6 @@ export default function SignInPage({
     header: {
       marginTop: 20,
       marginBottom: 30,
-    },
-    backButton: {
-      marginBottom: 20,
-    },
-    backButtonText: {
-      fontSize: 16,
-      color: '#FFC30B',
-      fontWeight: '600',
     },
     title: {
       fontSize: 32,
@@ -156,7 +152,7 @@ export default function SignInPage({
     },
     input: {
       borderWidth: 2,
-      borderColor: emailError || passwordError ? '#f44336' : (isDark ? '#444' : '#ddd'),
+      borderColor: usernameError || passwordError ? '#f44336' : isDark ? '#444' : '#ddd',
       borderRadius: 12,
       padding: 14,
       fontSize: 16,
@@ -179,16 +175,6 @@ export default function SignInPage({
       color: '#f44336',
       marginTop: 4,
     },
-    forgotPasswordLink: {
-      alignSelf: 'flex-end',
-      marginTop: -10,
-      marginBottom: 20,
-    },
-    forgotPasswordText: {
-      color: '#FFC30B',
-      fontSize: 14,
-      fontWeight: '600',
-    },
     submitButton: {
       backgroundColor: '#FFC30B',
       borderRadius: 12,
@@ -207,21 +193,6 @@ export default function SignInPage({
       fontSize: 16,
       fontWeight: 'bold',
     },
-    divider: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginVertical: 20,
-    },
-    dividerLine: {
-      flex: 1,
-      height: 1,
-      backgroundColor: isDark ? '#444' : '#ddd',
-    },
-    dividerText: {
-      marginHorizontal: 12,
-      color: isDark ? '#999' : '#666',
-      fontSize: 14,
-    },
     switchAuth: {
       marginTop: 20,
       alignItems: 'center',
@@ -233,6 +204,12 @@ export default function SignInPage({
     switchAuthLink: {
       color: '#FFC30B',
       fontWeight: '600',
+    },
+    backButtonText: {
+      fontSize: 16,
+      color: '#FFC30B',
+      fontWeight: '600',
+      marginBottom: 16,
     },
   });
 
@@ -246,9 +223,12 @@ export default function SignInPage({
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          <TouchableOpacity onPress={onBack}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
           <View style={styles.header}>
             <Text style={styles.title}>🐝 Sign In</Text>
-            <Text style={styles.subtitle}>Welcome back! Sign in to continue playing.</Text>
+            <Text style={styles.subtitle}>Sign in with your BeeFive username.</Text>
           </View>
 
           {error && (
@@ -258,34 +238,28 @@ export default function SignInPage({
           )}
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Username</Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                placeholder="your@email.com"
+                placeholder="your_username"
                 placeholderTextColor={isDark ? '#666' : '#999'}
-                value={email}
+                value={username}
                 onChangeText={(text) => {
-                  setEmail(text);
+                  setUsername(text);
                   setError(null);
                 }}
-                onBlur={() => setEmailTouched(true)}
-                keyboardType="email-address"
+                onBlur={() => setUsernameTouched(true)}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!loading}
               />
             </View>
-            {emailError && <Text style={styles.inputError}>{emailError}</Text>}
+            {usernameError && <Text style={styles.inputError}>{usernameError}</Text>}
           </View>
 
           <View style={styles.inputContainer}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={styles.label}>Password</Text>
-              <TouchableOpacity onPress={onNavigateToForgotPassword} style={styles.forgotPasswordLink}>
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.label}>Password</Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
@@ -313,9 +287,12 @@ export default function SignInPage({
           </View>
 
           <TouchableOpacity
-            style={[styles.submitButton, (loading || !!emailError || !!passwordError) && styles.submitButtonDisabled]}
+            style={[
+              styles.submitButton,
+              (loading || !!usernameError || !!passwordError) && styles.submitButtonDisabled,
+            ]}
             onPress={handleSubmit}
-            disabled={loading || !!emailError || !!passwordError}
+            disabled={loading || !!usernameError || !!passwordError}
           >
             {loading ? (
               <ActivityIndicator color="#000" />
@@ -337,4 +314,3 @@ export default function SignInPage({
     </SafeAreaView>
   );
 }
-

@@ -41,7 +41,7 @@ class AdventureGame extends StatefulWidget {
   State<AdventureGame> createState() => _AdventureGameState();
 }
 
-class _AdventureGameState extends State<AdventureGame> {
+class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserver {
   int currentGame = 1;
   int currentPlayer = 1;
   List<List<int>> board = [];
@@ -93,6 +93,7 @@ class _AdventureGameState extends State<AdventureGame> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     currentGame = widget.initialGame;
     _initializeGame();
     BackgroundSound.instance.startIfEnabled();
@@ -136,7 +137,7 @@ class _AdventureGameState extends State<AdventureGame> {
 
   void _onActionPressed({required bool isContinue}) {
     _actionCount++;
-    if (_actionCount % 8 == 0 && _interstitialAd != null) {
+    if (_actionCount % 6 == 0 && _interstitialAd != null) {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
@@ -171,10 +172,25 @@ class _AdventureGameState extends State<AdventureGame> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _persistProgressBestEffort();
     timer?.cancel();
     _bannerAd?.dispose();
     _interstitialAd?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _persistProgressBestEffort();
+    }
+  }
+
+  void _persistProgressBestEffort() {
+    saveAdventureLevel(currentGame).catchError((_) {});
   }
 
   void _initializeGame() {

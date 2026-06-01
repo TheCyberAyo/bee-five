@@ -303,6 +303,12 @@ Future<void> saveAdventureLevel(int level) async {
     await setLocalAdventureHighestUnlockedLevel(nextHighest);
   }
 
+  // `home_page._loadHighest()` and older code paths still read these legacy keys.
+  // Keep them in sync whenever adventure prefs change so cold starts never regress.
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt(_prefLegacyHighestUnlockedGame, nextHighest);
+  await prefs.setInt(_prefLegacyCurrentGameLevel, safeCurrent);
+
   final userId = supabaseClient?.auth.currentUser?.id;
   if (userId == null) return;
 

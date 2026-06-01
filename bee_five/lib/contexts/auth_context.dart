@@ -2,24 +2,24 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../auth/beefive_internal_auth.dart';
 import '../supabase_client.dart';
 
 /// Same value as `prefUsername` in `dashboard_page.dart` (kept here to avoid circular imports).
 const String _kUserDisplayNamePrefKey = 'user_display_name';
 
-/// Auth state and methods. Same format/order as BeefiveApp AuthContext.
+/// Auth state and methods. Username-first: Supabase stores synthetic `${username}@beefive.app`.
 class AuthContext extends ChangeNotifier {
   User? _user;
   Session? _session;
   bool _loading = true;
-  bool _recoverySessionPending = false;
   bool _isGuest = false;
   StreamSubscription<AuthState>? _authSubscription;
 
   User? get user => _user;
   Session? get session => _session;
   bool get loading => _loading;
-  bool get recoverySessionPending => _recoverySessionPending;
+
   /// Local-only “play without account”; cleared on [signOut] or when a Supabase session exists.
   bool get isGuest => _isGuest;
 
@@ -80,83 +80,57 @@ class AuthContext extends ChangeNotifier {
     });
   }
 
+  /// Sign up with [username], [password], and required [fullName].
+  /// Supabase auth uses a synthetic `${username}@beefive.app` only — never shown as an email field.
+  /// Turn off “Confirm email” for the Email provider in Supabase so users are not blocked on signup.
   Future<AuthResponse> signUp({
-    required String email,
+    required String username,
     required String password,
-    String? username,
+    required String fullName,
+    required String countryCode,
   }) async {
     if (supabaseClient == null) {
-      return AuthResponse(
-        session: null,
-        user: null,
-      );
+      return AuthResponse(session: null, user: null);
     }
 
+    final un = normalizeUsername(username);
+    final email = internalEmailFromUsername(un);
+    final fn = fullName.trim();
+    final country = countryCode.trim().toUpperCase();
+
     return supabaseClient!.auth.signUp(
-      email: email.trim(),
+      email: email,
       password: password,
-      data: {'username': username ?? email.split('@')[0]},
-      emailRedirectTo: 'bee-five://confirm-email',
+      data: <String, dynamic>{
+        'username': un,
+        'full_name': fn,
+        'country_code': country,
+      },
     );
   }
 
-  /// Set session from refresh token (e.g. from email confirm or password reset link).
-  /// Returns null on success, AuthException on failure.
-  Future<AuthException?> setSessionFromRefreshToken(String refreshToken) async {
-    if (supabaseClient == null) return null;
-    try {
-      await supabaseClient!.auth.setSession(refreshToken);
-      return null;
-    } on AuthException catch (e) {
-      return e;
-    }
-  }
-
-  /// Recover session from the password-reset redirect URL (handles both PKCE ?code= and implicit #fragment).
-  /// Returns null on success, AuthException on failure.
-  Future<AuthException?> setSessionFromRecoveryUrl(Uri uri) async {
-    if (supabaseClient == null) return null;
-    try {
-      await supabaseClient!.auth.getSessionFromUrl(uri);
-      return null;
-    } on AuthException catch (e) {
-      return e;
-    }
-  }
-
-  /// Sync _session and _user from Supabase client (e.g. after getSessionFromUrl, before setting recovery flag).
-  /// Ensures AuthGate sees the user when recoverySessionPending is set so ResetPasswordPage is shown.
-  void syncSessionFromClient() {
-    if (supabaseClient == null) return;
-    _session = supabaseClient!.auth.currentSession;
-    _user = _session?.user;
-    if (_user != null) _persistUsernameFromUserToPrefs(_user!);
-    notifyListeners();
-  }
-
-  void setRecoverySessionPending(bool value) {
-    if (_recoverySessionPending == value) return;
-    _recoverySessionPending = value;
-    notifyListeners();
-  }
-
-  void clearRecoverySessionPending() {
-    setRecoverySessionPending(false);
-  }
-
+  /// Sign in with username + password, or pass [email] for flows that already know auth email.
   Future<AuthResponse> signIn({
-    required String email,
     required String password,
+    String? username,
+    String? email,
   }) async {
     if (supabaseClient == null) {
-      return AuthResponse(
-        session: null,
-        user: null,
-      );
+      return AuthResponse(session: null, user: null);
+    }
+
+    final resolvedEmail = (email != null && email.trim().isNotEmpty)
+        ? email.trim()
+        : (username != null && username.trim().isNotEmpty)
+            ? internalEmailFromUsername(username)
+            : null;
+
+    if (resolvedEmail == null || resolvedEmail.isEmpty) {
+      return AuthResponse(session: null, user: null);
     }
 
     return supabaseClient!.auth.signInWithPassword(
-      email: email.trim(),
+      email: resolvedEmail,
       password: password,
     );
   }
@@ -172,45 +146,7 @@ class AuthContext extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<AuthException?> resetPasswordForEmail(String email) async {
-    if (supabaseClient == null) return null;
-    try {
-      await supabaseClient!.auth.resetPasswordForEmail(email.trim());
-      return null;
-    } on AuthException catch (e) {
-      return e;
-    }
-  }
-
-  /// Verify the 6-digit code from the reset email, then returns null on success.
-  /// Call this before updatePassword when using the in-app code flow.
-  Future<AuthException?> verifyOtpForRecovery(String email, String token) async {
-    if (supabaseClient == null) return null;
-    try {
-      await supabaseClient!.auth.verifyOTP(
-        email: email.trim(),
-        token: token.trim(),
-        type: OtpType.recovery,
-      );
-      return null;
-    } on AuthException catch (e) {
-      return e;
-    }
-  }
-
-  Future<AuthException?> updatePassword(String password) async {
-    if (supabaseClient == null) return null;
-    try {
-      await supabaseClient!.auth.updateUser(UserAttributes(password: password));
-      return null;
-    } on AuthException catch (e) {
-      return e;
-    }
-  }
-
   /// Deletes the current user's account via the Supabase Edge Function "delete-user".
-  /// Call this only when the user is signed in. Signs out on success.
-  /// Returns null on success, AuthException on failure (e.g. function not deployed).
   Future<AuthException?> deleteAccount() async {
     if (supabaseClient == null || _user == null) {
       return AuthException('Not signed in or Supabase not configured');

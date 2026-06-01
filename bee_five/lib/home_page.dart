@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -14,6 +17,12 @@ import 'dashboard_page.dart';
 import 'daily_challenge_game.dart';
 import 'game_mode.dart';
 import 'adventure_progress_service.dart';
+import 'screens/school_lobby_screen.dart';
+import 'services/multiplayer_service.dart';
+import 'supabase_client.dart';
+import 'utils/country_data.dart';
+import 'widgets/country_picker_sheet.dart';
+import 'widgets/join_school_dialog.dart';
 import 'xp_service.dart';
 
 // Adventure stages for map background
@@ -347,7 +356,10 @@ class _VolcanoPainter extends CustomPainter {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.initialSchoolLobby});
+
+  /// After first-time join on splash, Home opens then pushes the school lobby.
+  final JoinSchoolOutcome? initialSchoolLobby;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -394,8 +406,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   RewardedAd? _rewardedAd;
   BannerAd? _practiceBannerAd;
   bool _isPracticeBannerAdLoaded = false;
+  BannerAd? _homeBannerAd;
+  bool _isHomeBannerAdLoaded = false;
   InterstitialAd? _practiceInterstitialAd;
   int _practiceLaunchCount = 0;
+
+  /// Cycles map “Watch ads” button background: purple → pink → blue (1s each).
+  Timer? _watchAdsColorTimer;
+  int _watchAdBgIndex = 0;
+  static const List<Color> _watchAdBgColors = [
+    Color(0xFF6A1B9A), // purple
+    Color(0xFFE91E63), // pink
+    Color(0xFF1565C0), // blue
+  ];
 
   // Persistence key. We also keep the legacy key 'current_game_level' in sync
   // so existing installs don't lose progress across updates.
@@ -429,11 +452,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
 
   Future<int> _loadHighest() async {
     final prefs = await SharedPreferences.getInstance();
-    // Read both keys and take the max so we never lose progress regardless of
-    // which key a previous version wrote to.
-    final a = prefs.getInt(_highestGameKey) ?? 1;
-    final b = prefs.getInt('current_game_level') ?? 1;
-    return math.max(a, b);
+    // Take the max across legacy keys and adventure_* keys — saves from
+    // `saveAdventureLevel` only touched adventure_* until legacy sync was added.
+    final legacyHigh = prefs.getInt(_highestGameKey) ?? 1;
+    final legacyCurrent = prefs.getInt('current_game_level') ?? 1;
+    final advHigh = prefs.getInt('adventure_highest_unlocked_level') ?? 1;
+    final advCurrent = prefs.getInt('adventure_current_level') ?? 1;
+    return math.max(math.max(legacyHigh, legacyCurrent), math.max(advHigh, advCurrent));
   }
 
   // ---------------------------------------------------------------------------
@@ -506,6 +531,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _scheduleScrollToCurrentLevel();
     });
+    final lobby = widget.initialSchoolLobby;
+    if (lobby != null && lobby.isSuccess) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => SchoolLobbyScreen(
+              schoolId: lobby.schoolId!,
+              userId: lobby.userId!,
+              username: lobby.username!,
+              elo: lobby.elo!,
+            ),
+          ),
+        );
+      });
+    }
     _connectTalkToUsFocus.addListener(_onConnectTalkToUsFocusChange);
 
     bee1Controller = AnimationController(
@@ -536,7 +577,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     });
     _loadRewardedAd();
     _loadPracticeBannerAd();
+    _loadHomeBannerAd();
     _loadPracticeInterstitialAd();
+
+    _watchAdsColorTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (gameMode != GameMode.menu) return;
+      setState(
+        () => _watchAdBgIndex = (_watchAdBgIndex + 1) % _watchAdBgColors.length,
+      );
+    });
   }
 
   @override
@@ -551,7 +601,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     mapScrollController.dispose();
     _rewardedAd?.dispose();
     _practiceBannerAd?.dispose();
+    _homeBannerAd?.dispose();
     _practiceInterstitialAd?.dispose();
+    _watchAdsColorTimer?.cancel();
     super.dispose();
   }
 
@@ -584,6 +636,34 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           _practiceInterstitialAd = null;
         },
       ),
+    );
+  }
+
+  void _loadHomeBannerAd() {
+    _homeBannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isHomeBannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          if (mounted) setState(() => _isHomeBannerAdLoaded = false);
+        },
+      ),
+    )..load();
+  }
+
+  Widget _homeMenuBanner() {
+    if (!_isHomeBannerAdLoaded || _homeBannerAd == null) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      width: _homeBannerAd!.size.width.toDouble(),
+      height: _homeBannerAd!.size.height.toDouble(),
+      child: AdWidget(ad: _homeBannerAd!),
     );
   }
 
@@ -841,8 +921,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   }
 
   (double, double) _mapVerticalMargins(Size screenSize) {
-    const topOfSpace = 166.0;
-    const bottomOfSpaceFromBottom = 140.0;
+    const topOfSpace = 151.0;
+    const bottomOfSpaceFromBottom = 155.0;
     final availableHeight = screenSize.height - topOfSpace - bottomOfSpaceFromBottom;
     final mapHeight = (screenSize.height - 324) * 0.9;
     final totalMargin = math.max(0.0, availableHeight - mapHeight);
@@ -986,10 +1066,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         ),
 
         Positioned(
-          top: 166 + mapMarginTop,
+          top: 151 + mapMarginTop,
           left: 0,
           right: 0,
-          bottom: 140 + mapMarginBottom,
+          bottom: 155 + mapMarginBottom,
           child: Container(
             decoration: BoxDecoration(
               gradient: const LinearGradient(
@@ -1377,67 +1457,111 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       return const SizedBox.shrink();
     }
 
+    final (mapMarginTop, mapMarginBottom) = _mapVerticalMargins(screenSize);
+    final mapTop = 151.0 + mapMarginTop;
+    final mapBottom = 155.0 + mapMarginBottom;
+    const menuGreen = Color(0xFF43A047);
+    const tourRed = Color(0xFFC62828);
+
     return Stack(
+      clipBehavior: Clip.none,
       children: [
+        // Flyout menu clipped to the same bounds as the scrollable map frame
         Positioned(
-          left: 10,
-          top: 0,
-          bottom: 0,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          top: mapTop,
+          left: 0,
+          right: 0,
+          bottom: mapBottom,
+          child: ClipRect(
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.hardEdge,
               children: [
-                _sideMenuButton(
-                  label: 'Play with a Friend',
-                  iconImagePath: 'assets/homeImagery/play-with-friend.png',
-                  color: primaryYellow,
-                  onPressed: () {
-                    setState(() => gameMode = GameMode.localMultiplayer);
-                  },
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Classic Mode',
-                  iconImagePath: 'assets/homeImagery/classic-mode.png',
-                  color: primaryYellow,
-                  onPressed: () {
-                    setState(() {
-                      isClassicStreakMode = true;
-                      aiDifficulty = 'medium';
-                      aiTimer = 0;
-                      gameMode = GameMode.aiGame;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: _dailyChallengePlayedToday
-                      ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
-                      : 'Daily Challenge',
-                  iconImagePath: 'assets/homeImagery/daily_challenge_icon.png',
-                  color: primaryYellow,
-                  onPressed: _onDailyChallengePressed,
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Gain XPs',
-                  iconImagePath: 'assets/homeImagery/buy_icon.png',
-                  color: primaryYellow,
-                  onPressed: _showGainXPsModal,
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Bee Five Tour',
-                  iconImagePath: 'assets/homeImagery/tour_icon.png',
-                  color: primaryYellow,
-                  onPressed: _showBeeFiveTourModal,
-                ),
-                const SizedBox(height: 12),
-                _sideMenuButton(
-                  label: 'Watch Ad +2 XP',
-                  icon: '🎬',
-                  color: primaryYellow,
-                  onPressed: _showRewardedAd,
+                Positioned.fill(
+                  top: 6,
+                  left: 6,
+                  right: 6,
+                  bottom: 6,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _sideMenuButton(
+                                  label: 'Online Gaming',
+                                  color: menuGreen,
+                                  textColor: Colors.white,
+                                  borderColor: Colors.black,
+                                  onPressed: _openSchoolLobby,
+                                ),
+                                const SizedBox(height: 10),
+                                _sideMenuButton(
+                                  label: 'Local Challenge',
+                                  iconImagePath:
+                                      'assets/homeImagery/play-with-friend.png',
+                                  color: menuGreen,
+                                  textColor: Colors.white,
+                                  borderColor: Colors.black,
+                                  onPressed: () {
+                                    setState(
+                                        () => gameMode = GameMode.localMultiplayer);
+                                  },
+                                ),
+                                const SizedBox(height: 10),
+                                _sideMenuButton(
+                                  label: 'Classic Mode',
+                                  iconImagePath:
+                                      'assets/homeImagery/classic-mode.png',
+                                  color: menuGreen,
+                                  textColor: Colors.white,
+                                  borderColor: Colors.black,
+                                  onPressed: () {
+                                    setState(() {
+                                      isClassicStreakMode = true;
+                                      aiDifficulty = 'medium';
+                                      aiTimer = 0;
+                                      gameMode = GameMode.aiGame;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 10),
+                                _sideMenuButton(
+                                  label: _dailyChallengePlayedToday
+                                      ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
+                                      : 'Daily Challenge',
+                                  iconImagePath:
+                                      'assets/homeImagery/daily_challenge_icon.png',
+                                  color: primaryYellow,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.black,
+                                  onPressed: _onDailyChallengePressed,
+                                ),
+                                const SizedBox(height: 10),
+                                _sideMenuButton(
+                                  label: 'Bee Five Tour',
+                                  iconImagePath:
+                                      'assets/homeImagery/tour_icon.png',
+                                  color: tourRed,
+                                  textColor: Colors.white,
+                                  borderColor: Colors.black,
+                                  onPressed: _showBeeFiveTourModal,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _watchAdsAnimatedCircleButton(),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -1445,7 +1569,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         ),
 
         Positioned(
-          bottom: 140,
+          bottom: 155,
           left: 0,
           right: 0,
           child: Center(
@@ -1457,7 +1581,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 },
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       begin: Alignment.topCenter,
@@ -1500,11 +1624,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         ),
 
         Positioned(
-          bottom: 100,
+          bottom: 95,
           left: 0,
           right: 0,
-          height: 40,
-          child: Container(color: primaryYellow),
+          height: 60,
+          child: Container(
+            color: primaryYellow,
+            alignment: Alignment.center,
+            child: _homeMenuBanner(),
+          ),
         ),
 
         Positioned(
@@ -1512,7 +1640,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           left: 0,
           right: 0,
           child: Container(
-            height: 100,
+            height: 95,
             decoration: BoxDecoration(
               color: Colors.black,
               boxShadow: [
@@ -1523,12 +1651,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 ),
               ],
             ),
-            padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 40),
+            padding: const EdgeInsets.only(top: 0, left: 8, right: 8, bottom: 35),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', active: true, onTap: () {}),
-                _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
+                _bottomNavItem(iconImagePath: 'assets/homeImagery/buy_icon.png', label: 'Gain XPs', onTap: _showGainXPsModal),
                 _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
                 _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
@@ -1592,6 +1720,57 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           },
         ),
       ],
+    );
+  }
+
+  /// Watch ads — compact circle, background cycles purple / pink / blue every 1s.
+  Widget _watchAdsAnimatedCircleButton() {
+    const diameter = 60.0;
+    final bg = _watchAdBgColors[_watchAdBgIndex % _watchAdBgColors.length];
+    return Material(
+      elevation: 4,
+      shape: const CircleBorder(side: BorderSide(color: Colors.black, width: 1.5)),
+      color: bg,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _showRewardedAd,
+        child: SizedBox(
+          width: diameter,
+          height: diameter,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Watch ads',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                    height: 1.05,
+                  ),
+                ),
+                Text(
+                  'to Gain XPs',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                    height: 1.05,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2016,6 +2195,208 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     setState(() => gameMode = GameMode.dailyChallenge);
   }
 
+  Future<void> _openSchoolLobby() async {
+    final auth = context.read<AuthContext>();
+    if (auth.isGuest || auth.user == null) {
+      if (!mounted) {
+        return;
+      }
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: primaryYellow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.black, width: 4),
+          ),
+          title: const Text(
+            'Online Gaming',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+          content: const Text(
+            'Sign in to use Online Gaming. You can join with a school code or choose the default lobby.',
+            style: TextStyle(fontSize: 16, color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final userId = auth.user!.id;
+    try {
+      // Use limit(1) instead of maybeSingle(): PostgREST can return 406 / other errors
+      // for object+json edge cases; duplicate rows would also break maybeSingle.
+      final rows = await Supabase.instance.client
+          .from('mg_profiles')
+          .select('school_id, username, elo')
+          .eq('id', userId)
+          .limit(1);
+
+      if (!mounted) {
+        return;
+      }
+
+      final row = rows.isNotEmpty
+          ? Map<String, dynamic>.from(rows.first as Map)
+          : null;
+
+      final rawSchool = row?['school_id'];
+      final String? schoolId = rawSchool == null
+          ? null
+          : (rawSchool is String
+              ? (rawSchool.trim().isEmpty ? null : rawSchool.trim())
+              : rawSchool.toString().trim().isEmpty
+                  ? null
+                  : rawSchool.toString().trim());
+      if (schoolId == null || schoolId.isEmpty) {
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: primaryYellow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: Colors.black, width: 4),
+            ),
+            title: const Text(
+              'Set up Online Gaming',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+            ),
+            content: const Text(
+              'Your profile is not linked to a school yet. Enter your school join code, or use the default lobby for now.',
+              style: TextStyle(fontSize: 16, color: Colors.black87),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final outcome = await showDialog<JoinSchoolOutcome?>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => const JoinSchoolDialog(),
+                  );
+                  if (!mounted) return;
+                  if (outcome != null && outcome.isSuccess) {
+                    await Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => SchoolLobbyScreen(
+                          schoolId: outcome.schoolId!,
+                          userId: outcome.userId!,
+                          username: outcome.username!,
+                          elo: outcome.elo!,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: const Text(
+                  'Enter school join code',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final outcome = await MultiplayerService().joinDefaultLobby();
+                  if (!mounted) return;
+                  if (outcome.isSuccess) {
+                    await Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => SchoolLobbyScreen(
+                          schoolId: outcome.schoolId!,
+                          userId: outcome.userId!,
+                          username: outcome.username!,
+                          elo: outcome.elo!,
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        outcome.errorMessage ??
+                            'Could not join default lobby right now.',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'Use default lobby',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      final rawName = row?['username'];
+      String displayName = '';
+      if (rawName is String && rawName.trim().isNotEmpty) {
+        displayName = rawName.trim();
+      } else {
+        final meta = auth.user!.userMetadata?['username'];
+        if (meta != null && meta.toString().trim().isNotEmpty) {
+          displayName = meta.toString().trim();
+        } else {
+          final email = auth.user!.email;
+          displayName = (email != null && email.contains('@'))
+              ? email.split('@').first
+              : 'Player';
+        }
+      }
+
+      final eloRaw = row?['elo'];
+      final elo = eloRaw is int
+          ? eloRaw
+          : (eloRaw is num ? eloRaw.toInt() : 1200);
+
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => SchoolLobbyScreen(
+            schoolId: schoolId,
+            userId: userId,
+            username: displayName,
+            elo: elo,
+          ),
+        ),
+      );
+    } on PostgrestException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message.isNotEmpty
+                ? e.message
+                : 'Could not load your lobby profile. Try again.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open Online Gaming. Check your connection.'),
+        ),
+      );
+    }
+  }
+
   void _showGainXPsModal() {
     showDialog(
       context: context,
@@ -2056,7 +2437,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             '• Adventure: Win 2 consecutive levels → +1 XP; lose a level → −1 XP. '
             'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
             '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
-            '• Watch Ad: Watch a short ad → +2 XP (tap "Watch Ad +2 XP" on the home screen).',
+            '• Watch ads: Watch a short ad → +2 XP (tap “Watch Ads to Gain XPs” on the map).',
             style: TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
           ),
@@ -2212,8 +2593,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       context: context,
       builder: (dialogContext) {
         bool soundOn = BackgroundSound.instance.soundEnabled;
+        int countryRefreshKey = 0;
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final auth = context.read<AuthContext>();
             return AlertDialog(
               backgroundColor: primaryYellow,
               shape: RoundedRectangleBorder(
@@ -2269,6 +2652,90 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       ),
                     ],
                   ),
+                  if (auth.user != null &&
+                      !auth.isGuest &&
+                      isSupabaseConfigured) ...[
+                    const SizedBox(height: 20),
+                    const Divider(color: Colors.black54, height: 1),
+                    const SizedBox(height: 16),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Country flag',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FutureBuilder<String?>(
+                      key: ValueKey(countryRefreshKey),
+                      future: MultiplayerService()
+                          .getProfileCountryCode(auth.user!.id),
+                      builder: (context, snapshot) {
+                        final entry =
+                            countryEntryForCode(snapshot.data);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              entry?.labelWithFlag ??
+                                  'Not set — choose your country for online play',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            OutlinedButton(
+                              onPressed: () async {
+                                final picked = await showCountryPickerSheet(
+                                  context,
+                                  initialCode: snapshot.data,
+                                );
+                                if (picked == null || !context.mounted) {
+                                  return;
+                                }
+                                final err = await MultiplayerService()
+                                    .updateProfileCountry(picked);
+                                if (!context.mounted) return;
+                                if (err != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(err),
+                                      backgroundColor: Colors.red.shade700,
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setDialogState(() => countryRefreshKey++);
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.black87,
+                                side: const BorderSide(
+                                  color: Colors.black54,
+                                  width: 2,
+                                ),
+                                minimumSize: const Size(double.infinity, 44),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text(
+                                'Change country',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   const Divider(color: Colors.black54, height: 1),
                   const SizedBox(height: 16),
@@ -2281,6 +2748,92 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                     ),
                   ),
                   const SizedBox(height: 8),
+                  if (context.read<AuthContext>().user != null &&
+                      !context.read<AuthContext>().isGuest) ...[
+                    const Text(
+                      'School lobby — leave the school or default lobby you joined. You can link again later from Online Gaming.',
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: primaryYellow,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              side: const BorderSide(color: Colors.black, width: 4),
+                            ),
+                            title: const Text(
+                              'Leave school lobby?',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                            content: const Text(
+                              'You will be removed from your current school or default lobby. Use Online Gaming to enter a join code again when you want.',
+                              style: TextStyle(fontSize: 15, color: Colors.black87),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text(
+                                  'Leave lobby',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true || !context.mounted) return;
+                        final outcome = await MultiplayerService().leaveSchoolLobby();
+                        if (!context.mounted) return;
+                        final messenger = ScaffoldMessenger.of(context);
+                        if (!outcome.isSuccess) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(outcome.errorMessage ?? 'Could not leave lobby.'),
+                              backgroundColor: Colors.red.shade700,
+                            ),
+                          );
+                          return;
+                        }
+                        Navigator.pop(dialogContext);
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              outcome.unlinkedSchool
+                                  ? 'You left the school lobby. Join again anytime from Online Gaming.'
+                                  : 'You are not linked to a school lobby.',
+                            ),
+                            backgroundColor:
+                                outcome.unlinkedSchool ? Colors.green : Colors.black87,
+                          ),
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.black87,
+                        side: const BorderSide(color: Colors.black54, width: 2),
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'Leave school lobby',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   const Text(
                     'These actions require your password to confirm.',
                     style: TextStyle(fontSize: 14, color: Colors.black54),
@@ -2531,7 +3084,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           setState(() => _headerXp = newXp);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('🎉 +2 XP earned! Well done!'),
+              content: Text('+2 XP earned! Well done!'),
               backgroundColor: Colors.green,
             ),
           );
@@ -2719,7 +3272,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       _policySection('Information We Collect', [
                         'We may collect the following types of information:',
                         '• Non-personal data: Device information, operating system, app version, and general usage statistics',
-                        '• Account information: If you sign up for an account or multiplayer features, we may collect an email address for login and account management purposes',
+                        '• Account information: We collect your full name, username, and password at sign-up; we do not ask for an email address for Bee Five accounts.',
                         '• Game progress: Local game progress and statistics stored on your device',
                         'We do not collect sensitive personal information such as payment details, location data, or contact lists.',
                       ]),
@@ -2796,7 +3349,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', active: true, onTap: () {}),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/buy_icon.png', label: 'Gain XPs', onTap: _showGainXPsModal),
                     _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),
@@ -2932,6 +3485,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                 style: const TextStyle(fontSize: 15, color: Colors.black87),
                               ),
                             ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() => gameMode = GameMode.privacyPolicy);
+                                },
+                                child: const Text(
+                                  'Privacy Policy',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
                             const SizedBox(height: 10),
                             SizedBox(
                               width: double.infinity,
@@ -2982,7 +3551,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/privacy-policy.png', label: 'Privacy Policy', onTap: () => setState(() => gameMode = GameMode.privacyPolicy)),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/buy_icon.png', label: 'Gain XPs', onTap: _showGainXPsModal),
                     _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', active: true, onTap: () {}),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/settings.png', label: 'Settings', onTap: _showSettingsModal),

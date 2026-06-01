@@ -7,7 +7,6 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'supabase_client.dart';
 import 'contexts/auth_context.dart';
 import 'auth/auth_gate.dart';
-import 'auth/deep_link_handler.dart';
 import 'background_sound.dart';
 
 /// Hides scrollbars app-wide (no vertical striped bar on scrollable content).
@@ -22,8 +21,10 @@ class _NoScrollbarScrollBehavior extends ScrollBehavior {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load .env
-  await dotenv.load(fileName: '.env');
+  // Load .env (bundled as asset; app still runs if missing in CI/tests).
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {}
 
   // Initialize Supabase
   await initSupabase();
@@ -88,10 +89,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           useMaterial3: true,
         ),
         home: Consumer<AuthContext>(
-          builder: (context, auth, _) => DeepLinkHandler(
-            auth: auth,
-            child: AuthGate(auth: auth),
-          ),
+          builder: (context, auth, _) => AuthGate(auth: auth),
         ),
       ),
     );

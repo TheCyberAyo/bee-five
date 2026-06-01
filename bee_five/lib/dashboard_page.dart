@@ -3,6 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'adventure_progress_service.dart' show syncAdventureProgress;
 import 'contexts/auth_context.dart';
+import 'models/online_dashboard_stats.dart';
+import 'services/multiplayer_service.dart';
+import 'supabase_client.dart';
+import 'utils/country_data.dart';
 import 'xp_service.dart';
 
 const Color _dashboardPrimaryYellow = Color(0xFFFFC30B);
@@ -37,6 +41,8 @@ class _DashboardPageState extends State<DashboardPage> {
   int _classicBestScore = 0;
   int _loginStreak = 0;
   int _xp = 0;
+  OnlineDashboardStats _onlineStats = OnlineDashboardStats.guest();
+  String _countryCode = '';
   bool _loaded = false;
 
   @override
@@ -97,6 +103,26 @@ class _DashboardPageState extends State<DashboardPage> {
       // Keep local values on sync errors.
     }
 
+    OnlineDashboardStats onlineStats = OnlineDashboardStats.guest();
+    String countryCode = '';
+    if (!auth.isGuest && auth.user != null && isSupabaseConfigured) {
+      onlineStats =
+          await MultiplayerService().fetchOnlineDashboardStats(auth.user!.id);
+      try {
+        final row = await supabaseClient!
+            .from('mg_profiles')
+            .select('country_code')
+            .eq('id', auth.user!.id)
+            .maybeSingle();
+        if (row != null) {
+          final cc = row['country_code']?.toString().trim();
+          if (cc != null && cc.isNotEmpty) {
+            countryCode = cc.toUpperCase();
+          }
+        }
+      } catch (_) {}
+    }
+
     if (!mounted) return;
     setState(() {
       _username = resolvedName;
@@ -104,6 +130,8 @@ class _DashboardPageState extends State<DashboardPage> {
       _classicBestScore = resolvedClassicBestScore;
       _loginStreak = resolvedLoginStreak;
       _xp = resolvedXp;
+      _onlineStats = onlineStats;
+      _countryCode = countryCode;
       _loaded = true;
     });
   }
@@ -181,7 +209,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           const SizedBox(width: 20),
                           Flexible(
                             child: Text(
-                              _username,
+                              usernameWithFlag(_username, _countryCode),
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -243,6 +271,32 @@ class _DashboardPageState extends State<DashboardPage> {
                                 isMobile,
                                 'assets/homeImagery/xp_gem.png',
                               ),
+                              _buildSectionDivider(isMobile),
+                              _buildRow(
+                                'Institution',
+                                _onlineStats.institution,
+                                isMobile,
+                              ),
+                              _buildRow(
+                                'Rank',
+                                _onlineStats.rank,
+                                isMobile,
+                              ),
+                              _buildRow(
+                                'Global ranking',
+                                _onlineStats.globalRanking,
+                                isMobile,
+                              ),
+                              _buildRow(
+                                'Institutional ranking',
+                                _onlineStats.institutionalRanking,
+                                isMobile,
+                              ),
+                              _buildRow(
+                                'Online Win Streak',
+                                '${_onlineStats.onlineWinStreak}',
+                                isMobile,
+                              ),
                             ],
                           ),
                         ),
@@ -294,6 +348,34 @@ class _DashboardPageState extends State<DashboardPage> {
               color: Colors.black,
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  TableRow _buildSectionDivider(bool isMobile) {
+    return TableRow(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.06),
+      ),
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 12 : 20,
+            vertical: isMobile ? 8 : 10,
+          ),
+          child: Text(
+            'Online',
+            style: TextStyle(
+              fontSize: isMobile ? 14 : 15,
+              fontWeight: FontWeight.w800,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.zero,
+          child: SizedBox.shrink(),
         ),
       ],
     );

@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'adventure_progress_service.dart';
 import 'contexts/auth_context.dart';
 import 'home_page.dart';
+import 'services/multiplayer_service.dart';
+import 'widgets/join_school_dialog.dart';
 
 /// Splash flow: Connect 5 demo (6s), then BEE FIVE logo (2s), then Home.
+/// If the logged-in user has no school yet, shows a school join code prompt first.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.auth});
 
@@ -46,27 +50,80 @@ class _SplashScreenState extends State<SplashScreen> {
     });
   }
 
-  /// Splash complete: sync signed-in progress from Supabase, then open Home.
+  /// Splash complete: sync signed-in progress from Supabase,
+  /// check school membership, then open Home.
   Future<void> _goNext() async {
     _timer?.cancel();
     if (!mounted) return;
 
-    // If user is logged in OR guest → go to Home
     if (widget.auth.user != null || widget.auth.isGuest) {
+      // Sync adventure progress for logged-in users
       if (widget.auth.user != null) {
         try {
           await syncAdventureProgress();
         } catch (_) {
           // Still open Home if the network fails; local prefs remain.
         }
+
+        try {
+          await MultiplayerService().syncMgProfileFromAuthMetadata();
+        } catch (_) {}
+
+        if (!mounted) return;
+
+        // Check if user has joined a school yet
+        final hasSchool = await _checkHasSchool();
+
+        if (!mounted) return;
+
+        // Prompt them to join if they haven't — they can skip
+        JoinSchoolOutcome? joinedLobby;
+        if (!hasSchool) {
+          joinedLobby = await showDialog<JoinSchoolOutcome?>(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => const JoinSchoolDialog(),
+          );
+        }
+
+        if (!mounted) return;
+
+        final openLobby =
+            joinedLobby != null && joinedLobby.isSuccess ? joinedLobby : null;
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => HomePage(initialSchoolLobby: openLobby),
+          ),
+        );
+        return;
       }
+
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute<void>(builder: (_) => const HomePage()),
       );
     } else {
-      // Fallback (normally shouldn't happen because AuthGate handles it)
+      // Fallback — normally AuthGate handles this
       Navigator.of(context).pop();
+    }
+  }
+
+  /// Returns true if the current user already has a school_id set.
+  Future<bool> _checkHasSchool() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return true;
+
+      final data = await Supabase.instance.client
+          .from('mg_profiles')
+          .select('school_id')
+          .eq('id', userId)
+          .maybeSingle();
+
+      return data != null && data['school_id'] != null;
+    } catch (_) {
+      return true; // Don't block the app if the check fails
     }
   }
 
@@ -79,17 +136,25 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     if (_step == 0) {
-      return _ConnectFiveDemoScreen();
+      return const _ConnectFiveDemoScreen();
     }
-    return _BeeFiveLogoScreen();
+    return const _BeeFiveLogoScreen();
   }
 }
 
-/// BEE FIVE logo size
+// ════════════════════════════════════════════════════════════
+// BEE FIVE LOGO SIZE
+// ════════════════════════════════════════════════════════════
+
 const _beeFiveLogoSize = 300.0;
 
-/// Connect 5 demo screen
+// ════════════════════════════════════════════════════════════
+// CONNECT 5 DEMO SCREEN
+// ════════════════════════════════════════════════════════════
+
 class _ConnectFiveDemoScreen extends StatefulWidget {
+  const _ConnectFiveDemoScreen();
+
   @override
   State<_ConnectFiveDemoScreen> createState() =>
       _ConnectFiveDemoScreenState();
@@ -152,14 +217,13 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
                             final visible = position >= 0 &&
                                 _controller.value >= threshold;
 
-                            final isBlack =
-                                position >= 0 ? _isBlack[position] : false;
+                            final isBlack = position >= 0
+                                ? _isBlack[position]
+                                : false;
 
                             return Padding(
                               padding: EdgeInsets.only(
-                                right: index < _squareCount - 1
-                                    ? _gap
-                                    : 0,
+                                right: index < _squareCount - 1 ? _gap : 0,
                               ),
                               child: _buildSquare(
                                 hasPiece: visible,
@@ -181,10 +245,7 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
     );
   }
 
-  Widget _buildSquare({
-    required bool hasPiece,
-    required bool isBlack,
-  }) {
+  Widget _buildSquare({required bool hasPiece, required bool isBlack}) {
     return Container(
       width: _squareSize,
       height: _squareSize,
@@ -211,8 +272,13 @@ class _ConnectFiveDemoScreenState extends State<_ConnectFiveDemoScreen>
   }
 }
 
-/// Logo screen
+// ════════════════════════════════════════════════════════════
+// BEE FIVE LOGO SCREEN
+// ════════════════════════════════════════════════════════════
+
 class _BeeFiveLogoScreen extends StatelessWidget {
+  const _BeeFiveLogoScreen();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -230,8 +296,7 @@ class _BeeFiveLogoScreen extends StatelessWidget {
                 child: Image.asset(
                   'assets/BEE-FIVE.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) =>
-                      const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
               const SizedBox(height: 16),

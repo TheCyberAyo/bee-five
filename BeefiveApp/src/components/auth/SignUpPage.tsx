@@ -14,28 +14,29 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import { normalizeUsername } from '../../utils/internalAuthEmail';
 
 interface SignUpPageProps {
   onBack: () => void;
   onNavigateToSignIn: () => void;
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]+$/;
+const PASSWORD_LETTER = /[A-Za-z]/;
 
 export default function SignUpPage({
   onBack,
   onNavigateToSignIn,
 }: SignUpPageProps) {
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [emailTouched, setEmailTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
+  const [fullNameTouched, setFullNameTouched] = useState(false);
   const [usernameTouched, setUsernameTouched] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -44,12 +45,12 @@ export default function SignUpPage({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const validateEmail = (emailValue: string): string | null => {
-    if (!emailValue.trim()) {
-      return 'Please enter your email address';
+  const validateFullName = (value: string): string | null => {
+    if (!value.trim()) {
+      return 'Please enter your full name';
     }
-    if (!EMAIL_REGEX.test(emailValue.trim())) {
-      return 'Please enter a valid email address';
+    if (value.trim().length < 2) {
+      return 'Full name must be at least 2 characters';
     }
     return null;
   };
@@ -71,8 +72,11 @@ export default function SignUpPage({
     if (!passwordValue) {
       return 'Please enter a password';
     }
-    if (passwordValue.length < 6) {
-      return 'Password must be at least 6 characters';
+    if (passwordValue.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (!PASSWORD_LETTER.test(passwordValue)) {
+      return 'Password must include at least one letter';
     }
     return null;
   };
@@ -87,7 +91,7 @@ export default function SignUpPage({
     return null;
   };
 
-  const emailError = emailTouched ? validateEmail(email) : null;
+  const fullNameError = fullNameTouched ? validateFullName(fullName) : null;
   const usernameError = usernameTouched ? validateUsername(username) : null;
   const passwordError = passwordTouched ? validatePassword(password) : null;
   const confirmPasswordError = confirmPasswordTouched
@@ -96,24 +100,24 @@ export default function SignUpPage({
 
   const handleSubmit = async () => {
     setError(null);
-    setEmailTouched(true);
+    setFullNameTouched(true);
     setUsernameTouched(true);
     setPasswordTouched(true);
     setConfirmPasswordTouched(true);
 
-    const emailValidationError = validateEmail(email);
+    const fullNameValidationError = validateFullName(fullName);
     const usernameValidationError = validateUsername(username);
     const passwordValidationError = validatePassword(password);
     const confirmPasswordValidationError = validateConfirmPassword(password, confirmPassword);
 
     if (
-      emailValidationError ||
+      fullNameValidationError ||
       usernameValidationError ||
       passwordValidationError ||
       confirmPasswordValidationError
     ) {
       setError(
-        emailValidationError ||
+        fullNameValidationError ||
           usernameValidationError ||
           passwordValidationError ||
           confirmPasswordValidationError ||
@@ -125,39 +129,35 @@ export default function SignUpPage({
     setLoading(true);
 
     try {
-      const { data, error: signUpError } = await signUp(email.trim(), password, username.trim());
+      const un = normalizeUsername(username);
+      const { error: signUpError } = await signUp(un, password, fullName.trim());
 
       if (signUpError) {
+        const m = signUpError.message?.toLowerCase() ?? '';
         let errorMessage = signUpError.message || 'Failed to sign up. Please try again.';
         if (
-          signUpError.message?.toLowerCase().includes('username') ||
-          signUpError.message?.toLowerCase().includes('duplicate') ||
-          signUpError.message?.toLowerCase().includes('unique')
+          m.includes('already registered') ||
+          m.includes('user already') ||
+          m.includes('duplicate') ||
+          m.includes('unique')
         ) {
-          errorMessage = 'Username is already taken. Please choose another.';
-        } else if (signUpError.message?.includes('User already registered')) {
-          errorMessage = 'An account with this email already exists. Please sign in instead.';
+          errorMessage = 'That username is already taken. Please choose another.';
+        } else if (m.includes('password')) {
+          errorMessage =
+            'Password is too weak. Use at least 8 characters and include a letter.';
         }
         setError(errorMessage);
         setLoading(false);
         return;
       }
 
-      // Success
       setLoading(false);
-      Alert.alert(
-        'Account Created!',
-        'Please check your email to confirm your account before signing in.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate back to sign in
-              onNavigateToSignIn();
-            },
-          },
-        ]
-      );
+      Alert.alert('Account created', 'You can sign in with your username and password.', [
+        {
+          text: 'OK',
+          onPress: () => onNavigateToSignIn(),
+        },
+      ]);
     } catch (err) {
       console.error('Sign up error:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
@@ -223,11 +223,12 @@ export default function SignUpPage({
     },
     input: {
       borderWidth: 2,
-      borderColor: emailError || passwordError || usernameError || confirmPasswordError
-        ? '#f44336'
-        : isDark
-        ? '#444'
-        : '#ddd',
+      borderColor:
+        fullNameError || passwordError || usernameError || confirmPasswordError
+          ? '#f44336'
+          : isDark
+            ? '#444'
+            : '#ddd',
       borderRadius: 12,
       padding: 14,
       fontSize: 16,
@@ -282,6 +283,13 @@ export default function SignUpPage({
     },
   });
 
+  const hasFieldErrors = !!(
+    fullNameError ||
+    passwordError ||
+    usernameError ||
+    confirmPasswordError
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -297,7 +305,9 @@ export default function SignUpPage({
               <Text style={styles.backButtonText}>← Back to Sign In</Text>
             </TouchableOpacity>
             <Text style={styles.title}>🐝 Sign Up</Text>
-            <Text style={styles.subtitle}>Create an account to save your progress and compete with friends!</Text>
+            <Text style={styles.subtitle}>
+              Create an account with your name and a unique username.
+            </Text>
           </View>
 
           {error && (
@@ -305,6 +315,27 @@ export default function SignUpPage({
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Full name</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Your full name"
+                placeholderTextColor={isDark ? '#666' : '#999'}
+                value={fullName}
+                onChangeText={(text) => {
+                  setFullName(text);
+                  setError(null);
+                }}
+                onBlur={() => setFullNameTouched(true)}
+                autoCapitalize="words"
+                autoCorrect={false}
+                editable={!loading}
+              />
+            </View>
+            {fullNameError && <Text style={styles.inputError}>{fullNameError}</Text>}
+          </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Username</Text>
@@ -325,31 +356,11 @@ export default function SignUpPage({
               />
             </View>
             {usernameError && <Text style={styles.inputError}>{usernameError}</Text>}
-            {!usernameError && usernameTouched && username.trim().length >= 3 && (
-              <Text style={[styles.inputError, { color: '#4CAF50' }]}>✓ Username available</Text>
+            {!usernameError && (
+              <Text style={[styles.inputError, { color: isDark ? '#888' : '#666' }]}>
+                Saved lowercase; letters, numbers, _, -
+              </Text>
             )}
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                placeholder="your@email.com"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  setError(null);
-                }}
-                onBlur={() => setEmailTouched(true)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-              />
-            </View>
-            {emailError && <Text style={styles.inputError}>{emailError}</Text>}
           </View>
 
           <View style={styles.inputContainer}>
@@ -378,8 +389,10 @@ export default function SignUpPage({
               </TouchableOpacity>
             </View>
             {passwordError && <Text style={styles.inputError}>{passwordError}</Text>}
-            {!passwordError && passwordTouched && password.length >= 6 && (
-              <Text style={[styles.inputError, { color: '#4CAF50' }]}>✓ Password is valid</Text>
+            {!passwordError && (
+              <Text style={[styles.inputError, { color: isDark ? '#888' : '#666' }]}>
+                At least 8 characters with one letter
+              </Text>
             )}
           </View>
 
@@ -405,36 +418,18 @@ export default function SignUpPage({
                 style={styles.passwordToggle}
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
               >
-                <Text style={styles.passwordToggleText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                <Text style={styles.passwordToggleText}>
+                  {showConfirmPassword ? 'Hide' : 'Show'}
+                </Text>
               </TouchableOpacity>
             </View>
             {confirmPasswordError && <Text style={styles.inputError}>{confirmPasswordError}</Text>}
-            {!confirmPasswordError &&
-              confirmPasswordTouched &&
-              confirmPassword &&
-              password === confirmPassword && (
-                <Text style={[styles.inputError, { color: '#4CAF50' }]}>✓ Passwords match</Text>
-              )}
           </View>
 
           <TouchableOpacity
-            style={[
-              styles.submitButton,
-              (loading ||
-                !!emailError ||
-                !!passwordError ||
-                !!usernameError ||
-                !!confirmPasswordError) &&
-                styles.submitButtonDisabled,
-            ]}
+            style={[styles.submitButton, (loading || hasFieldErrors) && styles.submitButtonDisabled]}
             onPress={handleSubmit}
-            disabled={
-              loading ||
-              !!emailError ||
-              !!passwordError ||
-              !!usernameError ||
-              !!confirmPasswordError
-            }
+            disabled={loading || hasFieldErrors}
           >
             {loading ? (
               <ActivityIndicator color="#000" />
@@ -456,4 +451,3 @@ export default function SignUpPage({
     </SafeAreaView>
   );
 }
-

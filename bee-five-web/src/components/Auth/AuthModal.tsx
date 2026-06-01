@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
 import { isUsernameAvailable } from '../../services/usernameService';
 
 interface AuthModalProps {
@@ -13,8 +11,9 @@ interface AuthModalProps {
 
 export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
+  const [loginUsername, setLoginUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -22,20 +21,17 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const { signUp, signIn, signInWithProvider, user } = useAuth();
-  
-  // Store callbacks in refs to avoid dependency array issues
+
   const onCloseRef = useRef(onClose);
   const onSuccessRef = useRef(onSuccess);
-  
+
   useEffect(() => {
     onCloseRef.current = onClose;
     onSuccessRef.current = onSuccess;
   }, [onClose, onSuccess]);
 
-  // Close modal when user successfully signs in
   useEffect(() => {
     if (user) {
-      // User is signed in, close immediately
       setIsClosing(true);
       setLoading(false);
       const timer = setTimeout(() => {
@@ -46,7 +42,6 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     }
   }, [user]);
 
-  // Check username availability when user types (debounced)
   useEffect(() => {
     if (!isSignUp || !username.trim() || username.trim().length < 3) {
       setUsernameError(null);
@@ -57,10 +52,10 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     const checkTimer = setTimeout(async () => {
       setCheckingUsername(true);
       setUsernameError(null);
-      
+
       try {
         const result = await isUsernameAvailable(username.trim());
-        
+
         if (!result.available) {
           setUsernameError(result.error || 'Username is already taken');
         } else {
@@ -68,25 +63,27 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         }
       } catch (error) {
         console.error('Error checking username:', error);
-        // Don't set error on check failure - let user try to submit
         setUsernameError(null);
       } finally {
         setCheckingUsername(false);
       }
-    }, 500); // Debounce for 500ms
+    }, 500);
 
     return () => {
       clearTimeout(checkTimer);
-      // Reset checking state if component unmounts or username changes
       setCheckingUsername(false);
     };
   }, [username, isSignUp]);
 
-  // Early return if closing or user exists - don't render anything
-  // IMPORTANT: This must be AFTER all hooks are called
   if (isClosing || user) {
     return null;
   }
+
+  const validatePasswordStrength = (pwd: string): string | null => {
+    if (pwd.length < 8) return 'Password must be at least 8 characters';
+    if (!/[A-Za-z]/.test(pwd)) return 'Password must include at least one letter';
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,14 +92,24 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
     try {
       if (isSignUp) {
-        // Require username for signup
+        const trimmedFullName = fullName.trim();
+        if (!trimmedFullName) {
+          setError('Please enter your full name');
+          setLoading(false);
+          return;
+        }
+        if (trimmedFullName.length < 2) {
+          setError('Full name must be at least 2 characters');
+          setLoading(false);
+          return;
+        }
+
         if (!username.trim()) {
           setError('Please enter a username');
           setLoading(false);
           return;
         }
 
-        // Validate username format
         const usernameRegex = /^[a-zA-Z0-9_-]+$/;
         if (!usernameRegex.test(username.trim())) {
           setError('Username can only contain letters, numbers, underscores, and hyphens');
@@ -116,107 +123,72 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           return;
         }
 
-        // If username already has an error from debounced check, don't proceed
         if (usernameError) {
           setError(usernameError);
           setLoading(false);
           return;
         }
-        
-        // Skip username check on submit - let database handle validation
-        // This prevents hanging and improves UX
-        console.log('Attempting sign up...');
-        
-        // Sign up with username (database will catch duplicates)
-        const { error, data } = await signUp(email, password, username.trim());
-        
-        if (error) {
-          console.error('Sign up error:', error);
-          // Check if error is about duplicate username
-          if (error.message?.toLowerCase().includes('username') || 
-              error.message?.toLowerCase().includes('duplicate') ||
-              error.message?.toLowerCase().includes('unique')) {
-            setError('Username is already taken. Please choose another.');
+
+        const pwdErr = validatePasswordStrength(password);
+        if (pwdErr) {
+          setError(pwdErr);
+          setLoading(false);
+          return;
+        }
+
+        const { error: signErr } = await signUp(username.trim(), password, trimmedFullName);
+
+        if (signErr) {
+          const m = signErr.message?.toLowerCase() ?? '';
+          if (
+            m.includes('already registered') ||
+            m.includes('user already') ||
+            m.includes('duplicate')
+          ) {
+            setError('That username is already taken. Please choose another.');
+          } else if (m.includes('password')) {
+            setError('Password is too weak. Use at least 8 characters and include a letter.');
           } else {
-            setError(error.message || 'Failed to sign up. Please try again.');
+            setError(signErr.message || 'Failed to sign up. Please try again.');
           }
           setLoading(false);
           return;
         }
 
-        console.log('Sign up successful!');
-
-        // Sign up successful - handle success
         setError(null);
-        
-        // Update profile with username (after trigger creates it)
-        if (data?.user?.id && supabase) {
-          const supabaseClient = supabase; // Store in local variable for closure
-          const userId = data.user.id;
-          // Try to update profile immediately
-          setTimeout(async () => {
-            if (!supabaseClient) return;
-            try {
-              const { error: updateError } = await supabaseClient
-                .from('user_profiles')
-                .update({ username: username.trim() })
-                .eq('id', userId);
-              
-              if (updateError) {
-                console.warn('Could not update username immediately:', updateError);
-                // Retry a few times
-                let retries = 0;
-                const retryUpdate = async () => {
-                  if (retries >= 3 || !supabaseClient) return;
-                  retries++;
-                  setTimeout(async () => {
-                    if (!supabaseClient) return;
-                    const { error: retryError } = await supabaseClient
-                      .from('user_profiles')
-                      .update({ username: username.trim() })
-                      .eq('id', userId);
-                    if (retryError && retries < 3) {
-                      retryUpdate();
-                    }
-                  }, 500);
-                };
-                retryUpdate();
-              }
-            } catch (err) {
-              console.warn('Error updating profile:', err);
-            }
-          }, 1000);
-        }
-        
         setLoading(false);
-        
-        // Show success message
-        alert('Please check your email to confirm your account!');
-        
-        // Close modal after sign up (even if email confirmation is required)
         setIsClosing(true);
         setTimeout(() => {
           onCloseRef.current();
           onSuccessRef.current?.();
         }, 100);
-        
       } else {
-        const { error } = await signIn(email, password);
+        if (!loginUsername.trim()) {
+          setError('Please enter your username');
+          setLoading(false);
+          return;
+        }
+
+        const { error } = await signIn(loginUsername.trim(), password);
         if (error) {
-          setError(error.message || 'Failed to sign in');
+          const m = error.message?.toLowerCase() ?? '';
+          if (
+            m.includes('invalid login') ||
+            m.includes('invalid_credentials') ||
+            m.includes('invalid grant')
+          ) {
+            setError('Invalid username or password. Please try again.');
+          } else {
+            setError(error.message || 'Failed to sign in');
+          }
           setLoading(false);
           setIsClosing(false);
         } else {
-          // Success - close modal immediately
           setError(null);
           setIsClosing(true);
           setLoading(false);
-          
-          // Call onClose immediately to update parent state
           onCloseRef.current();
           onSuccessRef.current?.();
-          
-          // Also ensure it closes after a brief moment
           setTimeout(() => {
             onCloseRef.current();
             onSuccessRef.current?.();
@@ -235,7 +207,6 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     setError(null);
     try {
       await signInWithProvider(provider);
-      // Provider sign-in redirects, so we don't need to handle success here
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : `Failed to sign in with ${provider}`);
     }
@@ -319,6 +290,41 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   fontWeight: 'bold',
                 }}
               >
+                Full name <span style={{ color: '#f44336' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  setError(null);
+                }}
+                required
+                minLength={2}
+                autoComplete="name"
+                placeholder="Your full name"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: '2px solid #ddd',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          )}
+
+          {isSignUp && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#333',
+                  fontWeight: 'bold',
+                }}
+              >
                 Username <span style={{ color: '#f44336' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
@@ -332,41 +338,74 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   placeholder="Choose a username"
                   required
                   minLength={3}
+                  autoComplete="username"
                   style={{
                     width: '100%',
                     padding: '0.75rem',
                     borderRadius: '8px',
-                    border: `2px solid ${usernameError ? '#f44336' : (checkingUsername ? '#FFC30B' : '#ddd')}`,
+                    border: `2px solid ${usernameError ? '#f44336' : checkingUsername ? '#FFC30B' : '#ddd'}`,
                     fontSize: '1rem',
                     boxSizing: 'border-box',
                   }}
                 />
                 {checkingUsername && (
-                  <div style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#FFC30B',
-                    fontSize: '0.9rem'
-                  }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#FFC30B',
+                      fontSize: '0.9rem',
+                    }}
+                  >
                     Checking...
                   </div>
                 )}
               </div>
               {usernameError ? (
-                <div style={{ fontSize: '0.8rem', color: '#f44336', marginTop: '0.25rem' }}>
-                  {usernameError}
-                </div>
+                <div style={{ fontSize: '0.8rem', color: '#f44336', marginTop: '0.25rem' }}>{usernameError}</div>
               ) : username.trim().length >= 3 && !checkingUsername ? (
-                <div style={{ fontSize: '0.8rem', color: '#4CAF50', marginTop: '0.25rem' }}>
-                  ✓ Username available
-                </div>
+                <div style={{ fontSize: '0.8rem', color: '#4CAF50', marginTop: '0.25rem' }}>✓ Username available</div>
               ) : (
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
-                  This will be your display name (3+ characters, letters, numbers, _, -)
+                  3+ characters; letters, numbers, _, - · stored lowercase
                 </div>
               )}
+            </div>
+          )}
+
+          {!isSignUp && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#333',
+                  fontWeight: 'bold',
+                }}
+              >
+                Username
+              </label>
+              <input
+                type="text"
+                value={loginUsername}
+                onChange={(e) => {
+                  setLoginUsername(e.target.value);
+                  setError(null);
+                }}
+                required
+                autoComplete="username"
+                placeholder="Your BeeFive username"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: '2px solid #ddd',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+              />
             </div>
           )}
 
@@ -379,61 +418,16 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                 fontWeight: 'bold',
               }}
             >
-              Email
+              Password
             </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="your@email.com"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '2px solid #ddd',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label
-                style={{
-                  display: 'block',
-                  color: '#333',
-                  fontWeight: 'bold',
-                }}
-              >
-                Password
-              </label>
-              {!isSignUp && (
-                <Link
-                  href="/auth/forgot-password"
-                  onClick={onClose}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#FFC30B',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    fontSize: '0.85rem',
-                    fontWeight: 'normal',
-                  }}
-                >
-                  Forgot Password?
-                </Link>
-              )}
-            </div>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••"
-              minLength={6}
+              minLength={isSignUp ? 8 : 6}
+              autoComplete={isSignUp ? 'new-password' : 'current-password'}
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -443,6 +437,11 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                 boxSizing: 'border-box',
               }}
             />
+            {isSignUp && (
+              <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
+                At least 8 characters with one letter
+              </div>
+            )}
           </div>
 
           <button
@@ -470,6 +469,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
           <button
+            type="button"
             onClick={() => handleProviderSignIn('google')}
             style={{
               flex: 1,
@@ -490,6 +490,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             <span>🔍</span> Google
           </button>
           <button
+            type="button"
             onClick={() => handleProviderSignIn('github')}
             style={{
               flex: 1,
@@ -513,9 +514,11 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
         <div style={{ textAlign: 'center', marginTop: '1rem' }}>
           <button
+            type="button"
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);
+              setPassword('');
             }}
             style={{
               background: 'none',
@@ -533,4 +536,3 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     </div>
   );
 }
-

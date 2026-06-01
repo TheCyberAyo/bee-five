@@ -1,16 +1,19 @@
 import { supabase } from '../lib/supabase';
+import {
+  INTERNAL_EMAIL_DOMAIN,
+  internalEmailFromUsername,
+  normalizeUsername,
+} from '../lib/internalAuthEmail';
 
 export interface UserProfile {
   id: string;
-  email: string | null;
   username: string | null;
+  full_name: string | null;
+  school: string | null;
+  elo: number;
   created_at: string;
-  updated_at: string;
 }
 
-/**
- * Load user profile from database
- */
 export async function loadUserProfile(userId: string): Promise<UserProfile | null> {
   if (!supabase) {
     console.warn('Supabase is not configured');
@@ -18,30 +21,23 @@ export async function loadUserProfile(userId: string): Promise<UserProfile | nul
   }
 
   try {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
 
     if (error) {
       console.error('Error loading profile:', error);
       return null;
     }
 
-    return data;
+    return data as UserProfile;
   } catch (error) {
     console.error('Error loading profile:', error);
     return null;
   }
 }
 
-/**
- * Update user profile (username)
- */
 export async function updateUserProfile(
   userId: string,
-  updates: { username?: string; email?: string }
+  updates: { username?: string; full_name?: string | null; school?: string | null }
 ): Promise<{ success: boolean; error?: string }> {
   if (!supabase) {
     console.warn('Supabase is not configured');
@@ -49,27 +45,39 @@ export async function updateUserProfile(
   }
 
   try {
-    // If updating username, check if it's available
-    if (updates.username) {
+    const nextUsername = updates.username?.trim();
+
+    if (nextUsername) {
+      const normalized = normalizeUsername(nextUsername);
       const { data: existing } = await supabase
-        .from('user_profiles')
-        .select('username')
-        .eq('username', updates.username.trim())
+        .from('profiles')
+        .select('id')
+        .eq('username', normalized)
         .neq('id', userId)
         .limit(1);
 
       if (existing && existing.length > 0) {
         return { success: false, error: 'Username is already taken' };
       }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user?.email?.toLowerCase().endsWith(`@${INTERNAL_EMAIL_DOMAIN}`)) {
+        const newEmail = internalEmailFromUsername(normalized);
+        const { error: authErr } = await supabase.auth.updateUser({ email: newEmail });
+        if (authErr) {
+          return { success: false, error: authErr.message || 'Could not update login identifier' };
+        }
+      }
+
+      updates = { ...updates, username: normalized };
     }
 
-    const { error } = await supabase
-      .from('user_profiles')
-      .update(updates)
-      .eq('id', userId);
+    const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
 
     if (error) {
-      // Check for unique constraint violation
       if (error.code === '23505' || error.message.includes('unique')) {
         return { success: false, error: 'Username is already taken' };
       }
@@ -86,4 +94,3 @@ export async function updateUserProfile(
     };
   }
 }
-

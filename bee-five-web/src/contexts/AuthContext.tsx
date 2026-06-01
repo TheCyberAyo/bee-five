@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthResponse, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAuthEmail';
 import { loadUserProfile, UserProfile } from '../services/profileService';
 
 type SignUpResult = {
@@ -15,8 +16,9 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, username?: string) => Promise<SignUpResult>;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (username: string, password: string, fullName: string) => Promise<SignUpResult>;
+  /** Pass username, or a full email (e.g. re-auth with `user.email`). */
+  signIn: (identifier: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   signInWithProvider: (provider: 'google' | 'github') => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -91,7 +93,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, username?: string): Promise<SignUpResult> => {
+  const signUp = async (
+    username: string,
+    password: string,
+    fullName: string
+  ): Promise<SignUpResult> => {
     if (!supabase) {
       return {
         data: { user: null, session: null },
@@ -102,38 +108,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } as AuthError,
       };
     }
-    
-    // Get the redirect URL - use environment variable if set, otherwise use window.location.origin
-    // This ensures email confirmation links work on mobile devices
-    const getRedirectUrl = () => {
-      if (typeof window === 'undefined') return undefined;
-      
-      // Check for configured site URL (for production)
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-      if (siteUrl && siteUrl.startsWith('http')) {
-        return `${siteUrl}/auth/callback`;
-      }
-      
-      // Fall back to window.location.origin (for local development)
-      return `${window.location.origin}/auth/callback`;
-    };
-    
+
+    const un = normalizeUsername(username);
+    const email = internalEmailFromUsername(un);
+    const fn = fullName.trim();
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          username: username || email.split('@')[0],
+          username: un,
+          full_name: fn,
         },
-        emailRedirectTo: getRedirectUrl(),
       },
     });
-    
-    // Return both data and error so the caller can check if user was created
+
     return { data, error };
   };
 
-  const signIn = async (email: string, password: string): Promise<{ error: AuthError | null }> => {
+  const signIn = async (
+    identifier: string,
+    password: string
+  ): Promise<{ error: AuthError | null }> => {
     if (!supabase) {
       return {
         error: {
@@ -143,6 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } as AuthError,
       };
     }
+    const trimmed = identifier.trim();
+    const email = trimmed.includes('@') ? trimmed : internalEmailFromUsername(trimmed);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,

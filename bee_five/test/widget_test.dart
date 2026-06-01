@@ -1,30 +1,36 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:bee_five/main.dart';
+import 'package:bee_five/utils/country_data.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('countryCodeToFlagEmoji', () {
+    test('maps ZA to South African flag', () {
+      expect(countryCodeToFlagEmoji('ZA'), '🇿🇦');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('maps US to US flag', () {
+      expect(countryCodeToFlagEmoji('us'), '🇺🇸');
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('returns empty for invalid code', () {
+      expect(countryCodeToFlagEmoji(''), isEmpty);
+      expect(countryCodeToFlagEmoji('123'), isEmpty);
+    });
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  group('usernameWithFlag', () {
+    test('appends flag after username', () {
+      expect(usernameWithFlag('Ayo', 'ZA'), 'Ayo 🇿🇦');
+    });
+
+    test('returns username alone when no country', () {
+      expect(usernameWithFlag('Ayo', null), 'Ayo');
+    });
+  });
+
+  group('filterCountries', () {
+    test('finds by name fragment', () {
+      final results = filterCountries('south af');
+      expect(results.any((c) => c.code == 'ZA'), isTrue);
+    });
   });
 }

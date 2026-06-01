@@ -2,11 +2,10 @@ name: bee_five
 description: "Bee Five game app."
 publish_to: 'none'
 
-version: 1.0.1+20
+version: 1.4.0+25
 
 environment:
   sdk: ^3.10.7
-
 dependencies:
   flutter:
     sdk: flutter
@@ -19,6 +18,7 @@ dependencies:
   provider: ^6.1.2
   app_links: ^6.3.2
   google_mobile_ads: ^7.0.0
+  uuid: ^4.0.0
 
 dev_dependencies:
   flutter_test:

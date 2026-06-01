@@ -10,7 +10,6 @@ import {
   Dimensions,
   useColorScheme,
   Animated,
-  Linking,
   Alert,
   AppState,
   Image,
@@ -24,11 +23,8 @@ import AdventureGame from './AdventureGame';
 import PrivacyPolicy from './PrivacyPolicy';
 import SignInPage from './auth/SignInPage';
 import SignUpPage from './auth/SignUpPage';
-import ForgotPasswordPage from './auth/ForgotPasswordPage';
-import ResetPasswordPage from './auth/ResetPasswordPage';
 import SplashScreen from './SplashScreen';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
 import { loadAdventureProgress } from '../services/progressService';
 import { playAppMelody, stopAppMelody, pauseAppMelody, resumeAppMelody, loadSoundSettings, getSoundEnabled, setSoundEnabled } from '../utils/audioPlayer';
 import { showExitConfirmation } from '../utils/exitConfirmation';
@@ -66,8 +62,6 @@ type GameMode =
   | 'contact-us'
   | 'sign-in'
   | 'sign-up'
-  | 'forgot-password'
-  | 'reset-password'
   | 'splash';
 
 export default function SimpleWelcome() {
@@ -243,108 +237,6 @@ export default function SimpleWelcome() {
       prevUserRef.current = userId;
     }
   }, [user, loading, gameMode, hasShownSplash]);
-
-  // Handle deep links for email confirmation and password reset
-  useEffect(() => {
-    const handleDeepLink = async (event: { url: string }) => {
-      try {
-        if (!event.url || typeof event.url !== 'string') {
-          return;
-        }
-
-        // Parse deep link URL manually (React Native doesn't have full URL API)
-        // Format: beefive://confirm-email#access_token=...&refresh_token=...&type=signup
-        // or: beefive://reset-password#access_token=...&refresh_token=...&type=recovery
-        
-        // Check if this is a beefive:// deep link
-        if (!event.url.startsWith('beefive://')) {
-          return;
-        }
-
-        // Extract the path and hash
-        const urlWithoutScheme = event.url.replace('beefive://', '');
-        const hashIndex = urlWithoutScheme.indexOf('#');
-        const path = hashIndex >= 0 ? urlWithoutScheme.substring(0, hashIndex) : urlWithoutScheme;
-        const hash = hashIndex >= 0 ? urlWithoutScheme.substring(hashIndex + 1) : '';
-
-        // Parse hash parameters manually
-        const hashParams: Record<string, string> = {};
-        if (hash) {
-          hash.split('&').forEach((param) => {
-            const [key, value] = param.split('=');
-            if (key && value) {
-              hashParams[key] = decodeURIComponent(value);
-            }
-          });
-        }
-
-        const accessToken = hashParams['access_token'];
-        const refreshToken = hashParams['refresh_token'];
-        const type = hashParams['type'];
-
-        // Handle email confirmation
-        if (path === 'confirm-email' || path.startsWith('confirm-email/')) {
-          if (type === 'signup' && accessToken && refreshToken && supabase) {
-            // Set the session with the confirmation tokens
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-
-            if (sessionError) {
-              console.error('Failed to confirm email:', sessionError);
-              Alert.alert(
-                'Confirmation Failed',
-                'Failed to confirm your email. Please try again or request a new confirmation email.',
-                [{ text: 'OK' }]
-              );
-              return;
-            }
-
-            // Success - email confirmed
-            Alert.alert(
-              'Email Confirmed!',
-              'Your email has been successfully confirmed. You can now sign in.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Navigate to sign in if not already there
-                    if (gameMode !== 'sign-in') {
-                      setGameMode('sign-in');
-                    }
-                  },
-                },
-              ]
-            );
-          }
-        }
-        // Handle password reset (already handled in ResetPasswordPage, but we can handle initial navigation here)
-        else if (path === 'reset-password' || path.startsWith('reset-password/')) {
-          // Navigate to reset password page if not already there
-          if (gameMode !== 'reset-password') {
-            setGameMode('reset-password');
-          }
-        }
-      } catch (err) {
-        console.error('Deep link handling error:', err);
-      }
-    };
-
-    // Listen for deep links
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    // Also check if app was opened with a deep link (when app was closed)
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleDeepLink({ url });
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [gameMode]);
 
   // Handle Android back button - exit app confirmation when on menu
   useEffect(() => {
@@ -804,14 +696,11 @@ export default function SimpleWelcome() {
     return (
       <SignInPage
         onBack={() => {
-          // Only allow going back if user is logged in
           if (user) {
             setGameMode('menu');
           }
-          // Otherwise, stay on sign in (user must authenticate)
         }}
         onNavigateToSignUp={() => setGameMode('sign-up')}
-        onNavigateToForgotPassword={() => setGameMode('forgot-password')}
       />
     );
   }
@@ -822,26 +711,6 @@ export default function SimpleWelcome() {
       <SignUpPage
         onBack={() => setGameMode('menu')}
         onNavigateToSignIn={() => setGameMode('sign-in')}
-      />
-    );
-  }
-
-  // Handle Forgot Password mode
-  if (gameMode === 'forgot-password') {
-    return (
-      <ForgotPasswordPage
-        onBack={() => setGameMode('menu')}
-        onNavigateToSignIn={() => setGameMode('sign-in')}
-      />
-    );
-  }
-
-  // Handle Reset Password mode
-  if (gameMode === 'reset-password') {
-    return (
-      <ResetPasswordPage
-        onBack={() => setGameMode('menu')}
-        onSuccess={() => setGameMode('sign-in')}
       />
     );
   }

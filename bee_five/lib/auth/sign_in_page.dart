@@ -1,25 +1,20 @@
 import 'package:flutter/material.dart';
 import '../adventure_progress_service.dart';
 import '../contexts/auth_context.dart';
+import '../services/multiplayer_service.dart';
 import '../supabase_client.dart';
 
-/// Sign-in page. Same format and order as BeefiveApp SignInPage.
+/// Sign-in with BeeFive username + password (no email field for users).
 class SignInPage extends StatefulWidget {
   const SignInPage({
     super.key,
     required this.auth,
     required this.onNavigateToSignUp,
-    required this.onNavigateToForgotPassword,
-    required this.onTrySetNewPassword,
-    this.onBackToWelcome,
+    required this.onBackToWelcome,
   });
 
   final AuthContext auth;
   final VoidCallback onNavigateToSignUp;
-  final VoidCallback onNavigateToForgotPassword;
-  /// Call when user taps "Set new password"; auth will sync session and may show reset page.
-  final VoidCallback onTrySetNewPassword;
-  /// When set (e.g. opened from the welcome choice screen), shows a back control to return there.
   final VoidCallback? onBackToWelcome;
 
   @override
@@ -28,28 +23,32 @@ class SignInPage extends StatefulWidget {
 
 class _SignInPageState extends State<SignInPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
   String? _error;
   bool _loading = false;
   bool _obscurePassword = true;
 
-  static final _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+  static final _usernameRegex = RegExp(r'^[a-zA-Z0-9_-]+$');
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
+  String? _validateUsername(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Please enter your email address';
+      return 'Please enter your username';
     }
-    if (!_emailRegex.hasMatch(value.trim())) {
-      return 'Please enter a valid email address';
+    final t = value.trim();
+    if (t.length < 3) {
+      return 'Username must be at least 3 characters';
+    }
+    if (!_usernameRegex.hasMatch(t)) {
+      return 'Username can only contain letters, numbers, underscores, and hyphens';
     }
     return null;
   }
@@ -74,7 +73,8 @@ class _SignInPageState extends State<SignInPage> {
 
     if (!isSupabaseConfigured) {
       setState(() {
-        _error = 'Supabase is not configured. Please add SUPABASE_URL and SUPABASE_ANON_KEY to .env';
+        _error =
+            'Supabase is not configured. Please add SUPABASE_URL and SUPABASE_ANON_KEY to .env';
         _loading = false;
       });
       return;
@@ -82,43 +82,37 @@ class _SignInPageState extends State<SignInPage> {
 
     try {
       final response = await widget.auth.signIn(
-        email: _emailController.text.trim(),
+        username: _usernameController.text,
         password: _passwordController.text,
       );
 
       if (!mounted) return;
 
       if (response.session != null || response.user != null) {
-        // Merge device + cloud progress before Splash/Home so the map reflects saved state.
         try {
           await syncAdventureProgress();
         } catch (_) {}
+        try {
+          await MultiplayerService().syncMgProfileFromAuthMetadata();
+        } catch (_) {}
         if (!mounted) return;
-        // Success - AuthGate will auto-navigate to Splash then Home
+        setState(() => _loading = false);
         return;
       }
 
-      String errMsg = 'Failed to sign in. Please try again.';
-      final ex = response;
-      if (ex.toString().contains('Invalid login credentials')) {
-        errMsg = 'Invalid email or password. Please try again.';
-      } else if (ex.toString().contains('Email not confirmed')) {
-        errMsg =
-            'Please check your email and confirm your account before signing in.';
-      }
       setState(() {
-        _error = errMsg;
+        _error =
+            'Invalid username or password. Please try again.';
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      String errMsg = 'Failed to sign in. Please try again.';
-      final s = e.toString();
-      if (s.contains('Invalid login credentials')) {
-        errMsg = 'Invalid email or password. Please try again.';
-      } else if (s.contains('Email not confirmed')) {
-        errMsg =
-            'Please check your email and confirm your account before signing in.';
+      final s = e.toString().toLowerCase();
+      String errMsg = 'Invalid username or password. Please try again.';
+      if (s.contains('invalid login') ||
+          s.contains('invalid_credentials') ||
+          s.contains('invalid_grant')) {
+        errMsg = 'Invalid username or password. Please try again.';
       }
       setState(() {
         _error = errMsg;
@@ -147,8 +141,7 @@ class _SignInPageState extends State<SignInPage> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton(
-                      onPressed:
-                          _loading ? null : widget.onBackToWelcome,
+                      onPressed: _loading ? null : widget.onBackToWelcome,
                       child: const Text(
                         '← Back',
                         style: TextStyle(
@@ -171,7 +164,7 @@ class _SignInPageState extends State<SignInPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Welcome back! Sign in to continue playing.',
+                  'Welcome back! Sign in with your BeeFive username.',
                   style: TextStyle(
                     fontSize: 16,
                     color: isDark ? Colors.grey : Colors.black87,
@@ -196,20 +189,21 @@ class _SignInPageState extends State<SignInPage> {
                   const SizedBox(height: 20),
                 ],
                 TextFormField(
-                  controller: _emailController,
+                  controller: _usernameController,
                   decoration: InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'your@email.com',
+                    labelText: 'Username',
+                    hintText: 'your_username',
+                    helperText: 'Same username you chose at sign up',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
                     fillColor: isDark ? const Color(0xFF2a2a2a) : null,
                   ),
-                  keyboardType: TextInputType.emailAddress,
+                  textCapitalization: TextCapitalization.none,
                   autocorrect: false,
                   enabled: !_loading,
-                  validator: _validateEmail,
+                  validator: _validateUsername,
                   onChanged: (_) => setState(() => _error = null),
                 ),
                 const SizedBox(height: 20),
@@ -228,8 +222,8 @@ class _SignInPageState extends State<SignInPage> {
                           setState(() => _obscurePassword = !_obscurePassword),
                       child: Text(
                         _obscurePassword ? 'Show' : 'Hide',
-                        style: TextStyle(
-                          color: const Color(0xFFFFC30B),
+                        style: const TextStyle(
+                          color: Color(0xFFFFC30B),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -241,26 +235,7 @@ class _SignInPageState extends State<SignInPage> {
                   validator: _validatePassword,
                   onChanged: (_) => setState(() => _error = null),
                 ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: _loading ? null : widget.onNavigateToForgotPassword,
-                        child: const Text(
-                          'Forgot Password?',
-                          style: TextStyle(
-                            color: Color(0xFFFFC30B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 28),
                 SizedBox(
                   height: 52,
                   child: ElevatedButton(

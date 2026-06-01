@@ -20,9 +20,13 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
   username TEXT UNIQUE NOT NULL,
+  full_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Existing deployments: add column without recreating the table
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
 
 -- Step 2: Create adventure_progress table (stores adventure game progress)
 CREATE TABLE IF NOT EXISTS adventure_progress (
@@ -95,11 +99,12 @@ CREATE POLICY "Users can insert own progress" ON adventure_progress
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (id, email, username)
+  INSERT INTO public.user_profiles (id, email, username, full_name)
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'username', SPLIT_PART(NEW.email, '@', 1))
+    COALESCE(NEW.raw_user_meta_data->>'username', SPLIT_PART(NEW.email, '@', 1)),
+    NULLIF(TRIM(COALESCE(NEW.raw_user_meta_data->>'full_name', '')), '')
   );
   RETURN NEW;
 END;
