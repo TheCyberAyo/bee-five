@@ -1,0 +1,311 @@
+/// ISO 3166-1 alpha-2 country entry for signup and display.
+class CountryEntry {
+  const CountryEntry(this.code, this.name);
+
+  final String code;
+  final String name;
+
+  String get flagEmoji => countryCodeToFlagEmoji(code);
+
+  String get labelWithFlag => '$flagEmoji $name';
+}
+
+/// Regional-indicator flag emoji from a two-letter country code (e.g. ZA → 🇿🇦).
+/// Works for any valid A–Z ISO code, not only entries in [kSignupCountries].
+String countryCodeToFlagEmoji(String? code) {
+  if (code == null) return '';
+  final upper = code.trim().toUpperCase();
+  if (upper.length != 2) return '';
+  final a = upper.codeUnitAt(0);
+  final b = upper.codeUnitAt(1);
+  if (a < 65 || a > 90 || b < 65 || b > 90) return '';
+  return String.fromCharCodes([0x1F1E6 + a - 65, 0x1F1E6 + b - 65]);
+}
+
+/// e.g. "Ayo 🇿🇦" — flag after the username.
+String usernameWithFlag(String username, String? countryCode) {
+  final name = username.trim().isEmpty ? 'Player' : username.trim();
+  final flag = countryCodeToFlagEmoji(countryCode);
+  if (flag.isEmpty) return name;
+  return '$name $flag';
+}
+
+/// All nations / territories with ISO 3166-1 alpha-2 codes, sorted by name.
+const List<CountryEntry> kSignupCountries = [
+  CountryEntry('AF', 'Afghanistan'),
+  CountryEntry('AX', 'Åland Islands'),
+  CountryEntry('AL', 'Albania'),
+  CountryEntry('DZ', 'Algeria'),
+  CountryEntry('AS', 'American Samoa'),
+  CountryEntry('AD', 'Andorra'),
+  CountryEntry('AO', 'Angola'),
+  CountryEntry('AI', 'Anguilla'),
+  CountryEntry('AQ', 'Antarctica'),
+  CountryEntry('AG', 'Antigua and Barbuda'),
+  CountryEntry('AR', 'Argentina'),
+  CountryEntry('AM', 'Armenia'),
+  CountryEntry('AW', 'Aruba'),
+  CountryEntry('AU', 'Australia'),
+  CountryEntry('AT', 'Austria'),
+  CountryEntry('AZ', 'Azerbaijan'),
+  CountryEntry('BS', 'Bahamas'),
+  CountryEntry('BH', 'Bahrain'),
+  CountryEntry('BD', 'Bangladesh'),
+  CountryEntry('BB', 'Barbados'),
+  CountryEntry('BY', 'Belarus'),
+  CountryEntry('BE', 'Belgium'),
+  CountryEntry('BZ', 'Belize'),
+  CountryEntry('BJ', 'Benin'),
+  CountryEntry('BM', 'Bermuda'),
+  CountryEntry('BT', 'Bhutan'),
+  CountryEntry('BO', 'Bolivia'),
+  CountryEntry('BQ', 'Bonaire, Sint Eustatius and Saba'),
+  CountryEntry('BA', 'Bosnia and Herzegovina'),
+  CountryEntry('BW', 'Botswana'),
+  CountryEntry('BV', 'Bouvet Island'),
+  CountryEntry('BR', 'Brazil'),
+  CountryEntry('IO', 'British Indian Ocean Territory'),
+  CountryEntry('BN', 'Brunei'),
+  CountryEntry('BG', 'Bulgaria'),
+  CountryEntry('BF', 'Burkina Faso'),
+  CountryEntry('BI', 'Burundi'),
+  CountryEntry('CV', 'Cabo Verde'),
+  CountryEntry('KH', 'Cambodia'),
+  CountryEntry('CM', 'Cameroon'),
+  CountryEntry('CA', 'Canada'),
+  CountryEntry('KY', 'Cayman Islands'),
+  CountryEntry('CF', 'Central African Republic'),
+  CountryEntry('TD', 'Chad'),
+  CountryEntry('CL', 'Chile'),
+  CountryEntry('CN', 'China'),
+  CountryEntry('CX', 'Christmas Island'),
+  CountryEntry('CC', 'Cocos (Keeling) Islands'),
+  CountryEntry('CO', 'Colombia'),
+  CountryEntry('KM', 'Comoros'),
+  CountryEntry('CG', 'Congo'),
+  CountryEntry('CD', 'Congo (DRC)'),
+  CountryEntry('CK', 'Cook Islands'),
+  CountryEntry('CR', 'Costa Rica'),
+  CountryEntry('CI', 'Côte d\'Ivoire'),
+  CountryEntry('HR', 'Croatia'),
+  CountryEntry('CU', 'Cuba'),
+  CountryEntry('CW', 'Curaçao'),
+  CountryEntry('CY', 'Cyprus'),
+  CountryEntry('CZ', 'Czechia'),
+  CountryEntry('DK', 'Denmark'),
+  CountryEntry('DJ', 'Djibouti'),
+  CountryEntry('DM', 'Dominica'),
+  CountryEntry('DO', 'Dominican Republic'),
+  CountryEntry('EC', 'Ecuador'),
+  CountryEntry('EG', 'Egypt'),
+  CountryEntry('SV', 'El Salvador'),
+  CountryEntry('GQ', 'Equatorial Guinea'),
+  CountryEntry('ER', 'Eritrea'),
+  CountryEntry('EE', 'Estonia'),
+  CountryEntry('SZ', 'Eswatini'),
+  CountryEntry('ET', 'Ethiopia'),
+  CountryEntry('FK', 'Falkland Islands'),
+  CountryEntry('FO', 'Faroe Islands'),
+  CountryEntry('FJ', 'Fiji'),
+  CountryEntry('FI', 'Finland'),
+  CountryEntry('FR', 'France'),
+  CountryEntry('GF', 'French Guiana'),
+  CountryEntry('PF', 'French Polynesia'),
+  CountryEntry('TF', 'French Southern Territories'),
+  CountryEntry('GA', 'Gabon'),
+  CountryEntry('GM', 'Gambia'),
+  CountryEntry('GE', 'Georgia'),
+  CountryEntry('DE', 'Germany'),
+  CountryEntry('GH', 'Ghana'),
+  CountryEntry('GI', 'Gibraltar'),
+  CountryEntry('GR', 'Greece'),
+  CountryEntry('GL', 'Greenland'),
+  CountryEntry('GD', 'Grenada'),
+  CountryEntry('GP', 'Guadeloupe'),
+  CountryEntry('GU', 'Guam'),
+  CountryEntry('GT', 'Guatemala'),
+  CountryEntry('GG', 'Guernsey'),
+  CountryEntry('GN', 'Guinea'),
+  CountryEntry('GW', 'Guinea-Bissau'),
+  CountryEntry('GY', 'Guyana'),
+  CountryEntry('HT', 'Haiti'),
+  CountryEntry('HM', 'Heard Island and McDonald Islands'),
+  CountryEntry('VA', 'Holy See'),
+  CountryEntry('HN', 'Honduras'),
+  CountryEntry('HK', 'Hong Kong'),
+  CountryEntry('HU', 'Hungary'),
+  CountryEntry('IS', 'Iceland'),
+  CountryEntry('IN', 'India'),
+  CountryEntry('ID', 'Indonesia'),
+  CountryEntry('IR', 'Iran'),
+  CountryEntry('IQ', 'Iraq'),
+  CountryEntry('IE', 'Ireland'),
+  CountryEntry('IM', 'Isle of Man'),
+  CountryEntry('IL', 'Israel'),
+  CountryEntry('IT', 'Italy'),
+  CountryEntry('JM', 'Jamaica'),
+  CountryEntry('JP', 'Japan'),
+  CountryEntry('JE', 'Jersey'),
+  CountryEntry('JO', 'Jordan'),
+  CountryEntry('KZ', 'Kazakhstan'),
+  CountryEntry('KE', 'Kenya'),
+  CountryEntry('KI', 'Kiribati'),
+  CountryEntry('KP', 'North Korea'),
+  CountryEntry('KR', 'South Korea'),
+  CountryEntry('KW', 'Kuwait'),
+  CountryEntry('KG', 'Kyrgyzstan'),
+  CountryEntry('LA', 'Laos'),
+  CountryEntry('LV', 'Latvia'),
+  CountryEntry('LB', 'Lebanon'),
+  CountryEntry('LS', 'Lesotho'),
+  CountryEntry('LR', 'Liberia'),
+  CountryEntry('LY', 'Libya'),
+  CountryEntry('LI', 'Liechtenstein'),
+  CountryEntry('LT', 'Lithuania'),
+  CountryEntry('LU', 'Luxembourg'),
+  CountryEntry('MO', 'Macao'),
+  CountryEntry('MG', 'Madagascar'),
+  CountryEntry('MW', 'Malawi'),
+  CountryEntry('MY', 'Malaysia'),
+  CountryEntry('MV', 'Maldives'),
+  CountryEntry('ML', 'Mali'),
+  CountryEntry('MT', 'Malta'),
+  CountryEntry('MH', 'Marshall Islands'),
+  CountryEntry('MQ', 'Martinique'),
+  CountryEntry('MR', 'Mauritania'),
+  CountryEntry('MU', 'Mauritius'),
+  CountryEntry('YT', 'Mayotte'),
+  CountryEntry('MX', 'Mexico'),
+  CountryEntry('FM', 'Micronesia'),
+  CountryEntry('MD', 'Moldova'),
+  CountryEntry('MC', 'Monaco'),
+  CountryEntry('MN', 'Mongolia'),
+  CountryEntry('ME', 'Montenegro'),
+  CountryEntry('MS', 'Montserrat'),
+  CountryEntry('MA', 'Morocco'),
+  CountryEntry('MZ', 'Mozambique'),
+  CountryEntry('MM', 'Myanmar'),
+  CountryEntry('NA', 'Namibia'),
+  CountryEntry('NR', 'Nauru'),
+  CountryEntry('NP', 'Nepal'),
+  CountryEntry('NL', 'Netherlands'),
+  CountryEntry('NC', 'New Caledonia'),
+  CountryEntry('NZ', 'New Zealand'),
+  CountryEntry('NI', 'Nicaragua'),
+  CountryEntry('NE', 'Niger'),
+  CountryEntry('NG', 'Nigeria'),
+  CountryEntry('NU', 'Niue'),
+  CountryEntry('NF', 'Norfolk Island'),
+  CountryEntry('MK', 'North Macedonia'),
+  CountryEntry('MP', 'Northern Mariana Islands'),
+  CountryEntry('NO', 'Norway'),
+  CountryEntry('OM', 'Oman'),
+  CountryEntry('PK', 'Pakistan'),
+  CountryEntry('PW', 'Palau'),
+  CountryEntry('PS', 'Palestine'),
+  CountryEntry('PA', 'Panama'),
+  CountryEntry('PG', 'Papua New Guinea'),
+  CountryEntry('PY', 'Paraguay'),
+  CountryEntry('PE', 'Peru'),
+  CountryEntry('PH', 'Philippines'),
+  CountryEntry('PN', 'Pitcairn'),
+  CountryEntry('PL', 'Poland'),
+  CountryEntry('PT', 'Portugal'),
+  CountryEntry('PR', 'Puerto Rico'),
+  CountryEntry('QA', 'Qatar'),
+  CountryEntry('RE', 'Réunion'),
+  CountryEntry('RO', 'Romania'),
+  CountryEntry('RU', 'Russia'),
+  CountryEntry('RW', 'Rwanda'),
+  CountryEntry('BL', 'Saint Barthélemy'),
+  CountryEntry('SH', 'Saint Helena'),
+  CountryEntry('KN', 'Saint Kitts and Nevis'),
+  CountryEntry('LC', 'Saint Lucia'),
+  CountryEntry('MF', 'Saint Martin'),
+  CountryEntry('PM', 'Saint Pierre and Miquelon'),
+  CountryEntry('VC', 'Saint Vincent and the Grenadines'),
+  CountryEntry('WS', 'Samoa'),
+  CountryEntry('SM', 'San Marino'),
+  CountryEntry('ST', 'Sao Tome and Principe'),
+  CountryEntry('SA', 'Saudi Arabia'),
+  CountryEntry('SN', 'Senegal'),
+  CountryEntry('RS', 'Serbia'),
+  CountryEntry('SC', 'Seychelles'),
+  CountryEntry('SL', 'Sierra Leone'),
+  CountryEntry('SG', 'Singapore'),
+  CountryEntry('SX', 'Sint Maarten'),
+  CountryEntry('SK', 'Slovakia'),
+  CountryEntry('SI', 'Slovenia'),
+  CountryEntry('SB', 'Solomon Islands'),
+  CountryEntry('SO', 'Somalia'),
+  CountryEntry('ZA', 'South Africa'),
+  CountryEntry('GS', 'South Georgia and the South Sandwich Islands'),
+  CountryEntry('SS', 'South Sudan'),
+  CountryEntry('ES', 'Spain'),
+  CountryEntry('LK', 'Sri Lanka'),
+  CountryEntry('SD', 'Sudan'),
+  CountryEntry('SR', 'Suriname'),
+  CountryEntry('SJ', 'Svalbard and Jan Mayen'),
+  CountryEntry('SE', 'Sweden'),
+  CountryEntry('CH', 'Switzerland'),
+  CountryEntry('SY', 'Syria'),
+  CountryEntry('TW', 'Taiwan'),
+  CountryEntry('TJ', 'Tajikistan'),
+  CountryEntry('TZ', 'Tanzania'),
+  CountryEntry('TH', 'Thailand'),
+  CountryEntry('TL', 'Timor-Leste'),
+  CountryEntry('TG', 'Togo'),
+  CountryEntry('TK', 'Tokelau'),
+  CountryEntry('TO', 'Tonga'),
+  CountryEntry('TT', 'Trinidad and Tobago'),
+  CountryEntry('TN', 'Tunisia'),
+  CountryEntry('TR', 'Turkey'),
+  CountryEntry('TM', 'Turkmenistan'),
+  CountryEntry('TC', 'Turks and Caicos Islands'),
+  CountryEntry('TV', 'Tuvalu'),
+  CountryEntry('UG', 'Uganda'),
+  CountryEntry('UA', 'Ukraine'),
+  CountryEntry('AE', 'United Arab Emirates'),
+  CountryEntry('GB', 'United Kingdom'),
+  CountryEntry('US', 'United States'),
+  CountryEntry('UM', 'United States Minor Outlying Islands'),
+  CountryEntry('UY', 'Uruguay'),
+  CountryEntry('UZ', 'Uzbekistan'),
+  CountryEntry('VU', 'Vanuatu'),
+  CountryEntry('VE', 'Venezuela'),
+  CountryEntry('VN', 'Vietnam'),
+  CountryEntry('VG', 'Virgin Islands (British)'),
+  CountryEntry('VI', 'Virgin Islands (U.S.)'),
+  CountryEntry('WF', 'Wallis and Futuna'),
+  CountryEntry('EH', 'Western Sahara'),
+  CountryEntry('YE', 'Yemen'),
+  CountryEntry('ZM', 'Zambia'),
+  CountryEntry('ZW', 'Zimbabwe'),
+];
+
+CountryEntry? countryEntryForCode(String? code) {
+  if (code == null || code.trim().isEmpty) return null;
+  final upper = code.trim().toUpperCase();
+  for (final c in kSignupCountries) {
+    if (c.code == upper) return c;
+  }
+  if (countryCodeToFlagEmoji(upper).isNotEmpty) {
+    return CountryEntry(upper, upper);
+  }
+  return null;
+}
+
+/// Alias for readability at call sites.
+CountryEntry? countryByCode(String? code) => countryEntryForCode(code);
+
+List<CountryEntry> filterCountries(String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return kSignupCountries;
+  return kSignupCountries
+      .where(
+        (c) =>
+            c.name.toLowerCase().contains(q) ||
+            c.code.toLowerCase().contains(q),
+      )
+      .toList();
+}

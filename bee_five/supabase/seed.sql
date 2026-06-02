@@ -1,0 +1,1 @@
+-- Optional: add seed data for local `supabase db reset`. Migrations already seed schools.

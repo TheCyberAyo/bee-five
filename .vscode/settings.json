@@ -1,0 +1,8 @@
+{
+  "deno.enablePaths": ["bee_five/supabase/functions"],
+  "deno.lint": true,
+  "deno.unstable": true,
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  }
+}
