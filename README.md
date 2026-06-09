@@ -52,7 +52,7 @@ Real-time matchmaking lobby system
 🌐 Website: https://www.beefiveweb.com</br>
 📱 Google Play: (Insert link here)</br>
 
-**Future Improvements**
+**Future Improvements** </br>
 Chat between players</br>
-Enhanced anti-cheat system
+Enhanced anti-cheat system </br>
 Push notifications on mobile
