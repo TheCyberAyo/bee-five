@@ -1,14 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'adventure_progress_service.dart';
 import 'contexts/auth_context.dart';
 import 'home_page.dart';
 import 'services/multiplayer_service.dart';
-import 'widgets/join_school_dialog.dart';
 
 /// Splash flow: Connect 5 demo (6s), then BEE FIVE logo (2s), then Home.
-/// If the logged-in user has no school yet, shows a school join code prompt first.
+/// School / default lobby setup happens when the player opens Live Matches.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.auth});
 
@@ -50,14 +48,12 @@ class _SplashScreenState extends State<SplashScreen> {
     });
   }
 
-  /// Splash complete: sync signed-in progress from Supabase,
-  /// check school membership, then open Home.
+  /// Splash complete: sync signed-in progress from Supabase, then open Home.
   Future<void> _goNext() async {
     _timer?.cancel();
     if (!mounted) return;
 
     if (widget.auth.user != null || widget.auth.isGuest) {
-      // Sync adventure progress for logged-in users
       if (widget.auth.user != null) {
         try {
           await syncAdventureProgress();
@@ -70,60 +66,14 @@ class _SplashScreenState extends State<SplashScreen> {
         } catch (_) {}
 
         if (!mounted) return;
-
-        // Check if user has joined a school yet
-        final hasSchool = await _checkHasSchool();
-
-        if (!mounted) return;
-
-        // Prompt them to join if they haven't — they can skip
-        JoinSchoolOutcome? joinedLobby;
-        if (!hasSchool) {
-          joinedLobby = await showDialog<JoinSchoolOutcome?>(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => const JoinSchoolDialog(),
-          );
-        }
-
-        if (!mounted) return;
-
-        final openLobby =
-            joinedLobby != null && joinedLobby.isSuccess ? joinedLobby : null;
-
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(
-            builder: (_) => HomePage(initialSchoolLobby: openLobby),
-          ),
-        );
-        return;
       }
 
-      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(builder: (_) => const HomePage()),
       );
     } else {
       // Fallback — normally AuthGate handles this
       Navigator.of(context).pop();
-    }
-  }
-
-  /// Returns true if the current user already has a school_id set.
-  Future<bool> _checkHasSchool() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return true;
-
-      final data = await Supabase.instance.client
-          .from('mg_profiles')
-          .select('school_id')
-          .eq('id', userId)
-          .maybeSingle();
-
-      return data != null && data['school_id'] != null;
-    } catch (_) {
-      return true; // Don't block the app if the check fails
     }
   }
 

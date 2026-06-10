@@ -9,12 +9,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../ads/multiplayer_ad_constants.dart';
+import '../head_to_head_series.dart';
 import '../services/multiplayer_service.dart';
 import '../xp_service.dart';
 import '../simple_game.dart' show primaryYellow;
 import '../theme/bee_five_multiplayer_theme.dart';
+import '../widgets/challenge_dialog.dart';
 import '../widgets/online_bee_five_board.dart';
 
 class MatchScreen extends StatefulWidget {
@@ -49,20 +52,29 @@ class MatchScreen extends StatefulWidget {
 
 class _MatchScreenState extends State<MatchScreen> {
   final _service = MultiplayerService();
+  final _uuid = const Uuid();
   final GlobalKey<OnlineBeeFiveBoardState> _boardKey =
       GlobalKey<OnlineBeeFiveBoardState>();
 
   late StreamSubscription<Map<String, dynamic>> _gameEventSub;
   late StreamSubscription<Map<String, dynamic>> _matchOverSub;
+  StreamSubscription<Map<String, dynamic>>? _rematchChallengeSub;
+  StreamSubscription<Map<String, dynamic>>? _rematchChallengeResponseSub;
+  StreamSubscription<Map<String, dynamic>>? _rematchMatchStartSub;
 
   bool _matchEnded = false;
   bool _waitingDrawConfirm = false;
+  bool _rematchHandled = false;
+  bool _showingRematchDialog = false;
 
   /// No moves played — skip interstitial / “completed match” counter on exit.
   bool _voidNoMovesEnd = false;
 
   /// Prior recorded H2H games; null until loaded from [mg_matches].
   int? _priorMatchCount;
+
+  /// Series wins (resets when either player reaches [headToHeadSeriesResetAt]).
+  HeadToHeadSeriesScore? _seriesScore;
 
   BannerAd? _matchBannerAd;
   bool _isMatchBannerLoaded = false;
@@ -106,17 +118,28 @@ class _MatchScreenState extends State<MatchScreen> {
       ),
     );
     _joinMatch();
-    unawaited(_loadPriorMatchCount());
+    unawaited(_loadMatchHeaderData());
   }
 
-  Future<void> _loadPriorMatchCount() async {
-    final n = await _service.countCompletedMatchesBetween(
+  Future<void> _loadMatchHeaderData() async {
+    final results = await Future.wait([
+      _service.countCompletedMatchesBetween(widget.myId, widget.opponentId),
+      _service.fetchHeadToHeadSeriesScore(widget.myId, widget.opponentId),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _priorMatchCount = results[0] as int;
+      _seriesScore = results[1] as HeadToHeadSeriesScore;
+    });
+  }
+
+  Future<void> _refreshHeadToHeadSeriesScore() async {
+    final score = await _service.fetchHeadToHeadSeriesScore(
       widget.myId,
       widget.opponentId,
     );
-    if (mounted) {
-      setState(() => _priorMatchCount = n);
-    }
+    if (!mounted) return;
+    setState(() => _seriesScore = score);
   }
 
   void _loadMatchBannerAd() {
@@ -215,6 +238,7 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Future<void> _onBackToSchoolLobbyFromEndDialog() async {
+    _cancelRematchListeners();
     Navigator.pop(context);
     final skipCompletedMatchCount = _voidNoMovesEnd;
     if (!skipCompletedMatchCount) {
@@ -225,6 +249,182 @@ class _MatchScreenState extends State<MatchScreen> {
       return;
     }
     Navigator.pop(context);
+  }
+
+  void _cancelRematchListeners() {
+    _rematchChallengeSub?.cancel();
+    _rematchChallengeSub = null;
+    _rematchChallengeResponseSub?.cancel();
+    _rematchChallengeResponseSub = null;
+    _rematchMatchStartSub?.cancel();
+    _rematchMatchStartSub = null;
+  }
+
+  void _beginRematchPhase() {
+    _cancelRematchListeners();
+    _rematchChallengeSub = _service.onChallenge.listen(_onIncomingRematchChallenge);
+    _rematchChallengeResponseSub =
+        _service.onChallengeResponse.listen(_onRematchChallengeResponse);
+    _rematchMatchStartSub = _service.onMatchStart.listen(_onRematchMatchStart);
+  }
+
+  Future<void> _onIncomingRematchChallenge(Map<String, dynamic> payload) async {
+    if (!_matchEnded || _rematchHandled || !mounted || _showingRematchDialog) {
+      return;
+    }
+    if (payload['from_id']?.toString() != widget.opponentId) {
+      return;
+    }
+
+    _showingRematchDialog = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => ChallengeDialog(
+        isRematch: true,
+        fromUsername: widget.opponentUsername,
+        fromElo: int.tryParse(payload['from_elo']?.toString() ?? '') ??
+            widget.myElo,
+        onAccept: () async {
+          Navigator.pop(dialogCtx);
+          final matchId = _service.matchIdForChallengeAccept(
+            opponentId: widget.opponentId,
+            theirMatchId: payload['match_id']?.toString() ?? '',
+          );
+          await _service.respondToChallenge(
+            matchId: matchId,
+            challengerId: widget.opponentId,
+            accepted: true,
+            responderId: widget.myId,
+            responderUsername: widget.myUsername,
+          );
+          _openRematch(matchId);
+        },
+        onDecline: () async {
+          Navigator.pop(dialogCtx);
+          await _service.respondToChallenge(
+            matchId: payload['match_id']?.toString() ?? '',
+            challengerId: widget.opponentId,
+            accepted: false,
+            responderId: widget.myId,
+            responderUsername: widget.myUsername,
+          );
+        },
+      ),
+    );
+    _showingRematchDialog = false;
+  }
+
+  void _onRematchChallengeResponse(Map<String, dynamic> payload) {
+    if (!_matchEnded || _rematchHandled || !mounted) {
+      return;
+    }
+    if (payload['responder_id']?.toString() != widget.opponentId) {
+      return;
+    }
+
+    if (payload['accepted'] == true) {
+      _openRematch(payload['match_id']?.toString() ?? '');
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${widget.opponentUsername} declined the rematch'),
+      ),
+    );
+  }
+
+  void _onRematchMatchStart(Map<String, dynamic> payload) {
+    if (!_matchEnded || _rematchHandled || !mounted) {
+      return;
+    }
+    if (payload['opponent_id']?.toString() != widget.opponentId) {
+      return;
+    }
+    _openRematch(payload['match_id']?.toString() ?? '');
+  }
+
+  void _openRematch(String matchId) {
+    if (!mounted || matchId.isEmpty || _rematchHandled) {
+      return;
+    }
+    _rematchHandled = true;
+    _cancelRematchListeners();
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => MatchScreen(
+          matchId: matchId,
+          myId: widget.myId,
+          myUsername: widget.myUsername,
+          myElo: widget.myElo,
+          opponentId: widget.opponentId,
+          opponentUsername: widget.opponentUsername,
+          lobbyBeeFiveXp: widget.lobbyBeeFiveXp,
+          restoreSearchingWhenLeaving: widget.restoreSearchingWhenLeaving,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onRematchPressed() async {
+    if (!_matchEnded || _rematchHandled) {
+      return;
+    }
+
+    Navigator.of(context, rootNavigator: true).pop();
+
+    await ensureXpInitialized();
+    final xp = await getXp();
+    await _service.setIdle(
+      userId: widget.myId,
+      username: widget.myUsername,
+      elo: widget.myElo,
+      beeFiveXp: xp,
+    );
+
+    final matchId = _service.matchIdForOutgoingChallenge(
+      widget.opponentId,
+      _uuid.v4(),
+    );
+    await _service.sendChallenge(
+      fromId: widget.myId,
+      fromUsername: widget.myUsername,
+      fromElo: widget.myElo,
+      fromBeeFiveXp: xp,
+      toId: widget.opponentId,
+      matchId: matchId,
+    );
+
+    if (!mounted || _rematchHandled) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Rematch sent to ${widget.opponentUsername}…'),
+      ),
+    );
+  }
+
+  List<Widget> _matchEndDialogActions() {
+    return [
+      ElevatedButton(
+        onPressed: () => unawaited(_onRematchPressed()),
+        style: BeeFiveMultiplayerTheme.primaryBlackButton,
+        child: const Text('Rematch'),
+      ),
+      TextButton(
+        onPressed: () {
+          unawaited(_onBackToSchoolLobbyFromEndDialog());
+        },
+        child: const Text(
+          'Back to School Lobby',
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
+        ),
+      ),
+    ];
   }
 
   Future<void> _joinMatch() async {
@@ -253,7 +453,13 @@ class _MatchScreenState extends State<MatchScreen> {
     if (disconnect) {
       final wid = payload['winner_id'] as String?;
       if (wid != null) {
-        unawaited(_finishMatchEnd(winnerId: wid, submitToServer: true));
+        // Only the connected player who detected the drop submits to the server.
+        unawaited(
+          _finishMatchEnd(
+            winnerId: wid,
+            submitToServer: wid == widget.myId,
+          ),
+        );
       }
       return;
     }
@@ -283,6 +489,7 @@ class _MatchScreenState extends State<MatchScreen> {
     // Normal win: opponent already invoked submit-match; show result only.
     setState(() => _matchEnded = true);
     _service.leaveMatch();
+    unawaited(_refreshHeadToHeadSeriesScore());
     if (mounted) {
       _showResultDialog(
         wid,
@@ -343,6 +550,7 @@ class _MatchScreenState extends State<MatchScreen> {
     }
 
     await _service.leaveMatch();
+    await _refreshHeadToHeadSeriesScore();
     if (mounted) {
       _showDrawDialog(result);
     }
@@ -392,12 +600,18 @@ class _MatchScreenState extends State<MatchScreen> {
     }
 
     await _service.leaveMatch();
+    if (submitToServer && hadMoves) {
+      await _refreshHeadToHeadSeriesScore();
+    }
     if (mounted) {
       if (submitToServer && !hadMoves) {
         _voidNoMovesEnd = true;
         _showVoidNoMovesDialog();
       } else {
-        _showResultDialog(winnerId, result);
+        final resolvedWinner = result?['duplicate'] == true
+            ? (result?['winner_id']?.toString() ?? winnerId)
+            : winnerId;
+        _showResultDialog(resolvedWinner, result);
       }
     }
   }
@@ -435,6 +649,8 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   void _showDrawDialog(Map<String, dynamic> payload) {
+    _beginRematchPhase();
+
     final d1 = payload['player1Change'];
     final d2 = payload['player2Change'];
     final mine = widget.myId == _p1Id ? d1 : d2;
@@ -459,17 +675,7 @@ class _MatchScreenState extends State<MatchScreen> {
               : 'Match drawn.',
           style: const TextStyle(color: Colors.black87, fontSize: 16),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              unawaited(_onBackToSchoolLobbyFromEndDialog());
-            },
-            child: const Text(
-              'Back to School Lobby',
-              style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
+        actions: _matchEndDialogActions(),
       ),
     );
   }
@@ -486,6 +692,8 @@ class _MatchScreenState extends State<MatchScreen> {
     if (!mounted) {
       return;
     }
+
+    _beginRematchPhase();
 
     final iWon = winnerId == widget.myId;
     int? eloChange;
@@ -538,23 +746,14 @@ class _MatchScreenState extends State<MatchScreen> {
             ],
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              unawaited(_onBackToSchoolLobbyFromEndDialog());
-            },
-            child: const Text(
-              'Back to School Lobby',
-              style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
+        actions: _matchEndDialogActions(),
       ),
     );
   }
 
   @override
   void dispose() {
+    _cancelRematchListeners();
     _gameEventSub.cancel();
     _matchOverSub.cancel();
     _matchBannerAd?.dispose();
@@ -709,6 +908,8 @@ class _MatchScreenState extends State<MatchScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 6),
+                _buildSeriesWinsLabel(_p1Id),
                 const SizedBox(height: 4),
                 Text(
                   _seatSubtitle(
@@ -759,6 +960,8 @@ class _MatchScreenState extends State<MatchScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 6),
+                _buildSeriesWinsLabel(_p2Id),
                 const SizedBox(height: 4),
                 Text(
                   _seatSubtitle(
@@ -773,6 +976,31 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSeriesWinsLabel(String playerId) {
+    final wins = _seriesScore?.winsFor(playerId);
+    return Column(
+      children: [
+        Text(
+          wins == null ? '—' : '$wins',
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            color: Colors.black,
+            height: 1,
+          ),
+        ),
+        const Text(
+          'series wins',
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.black54,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 

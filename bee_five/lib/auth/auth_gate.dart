@@ -40,6 +40,17 @@ class _AuthGateState extends State<AuthGate> {
         _signUpOpenedFromWelcome = false;
       });
     }
+
+    if (oldWidget.auth.isGuest &&
+        !widget.auth.isGuest &&
+        widget.auth.user == null &&
+        !widget.auth.loading) {
+      final forSignUp = widget.auth.takeOpenSignUpAfterLeaveGuest();
+      setState(() {
+        _screen = forSignUp ? AuthScreen.signUp : AuthScreen.signIn;
+        _signUpOpenedFromWelcome = forSignUp;
+      });
+    }
   }
 
   @override

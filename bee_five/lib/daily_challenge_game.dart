@@ -111,7 +111,6 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
   bool showWinModal = false;
   String winMessage = '';
   int _headerXp = 0;
-  int _xpEarned = 0;
   bool _resultRecorded = false;
   bool _showRulesOverlay = true;
 
@@ -231,7 +230,6 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     if (_resultRecorded) return;
     _resultRecorded = true;
     setDailyChallengeResult(won).then((newXp) {
-      if (won) _xpEarned = xpDailyChallengeWin;
       if (mounted) setState(() => _headerXp = newXp);
     });
   }
@@ -515,7 +513,7 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
     rules.addAll([
       '• You play as Yellow; the AI plays as Black.',
       '• Get 5 in a row (horizontal, vertical, or diagonal) to win.',
-      '• One game per day — win for +3 XP!',
+      '• One game per day — your result is saved.',
     ]);
     return rules;
   }
@@ -729,13 +727,6 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (_xpEarned > 0) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        '+$_xpEarned XP',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
-                      ),
-                    ],
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () => widget.onBackToMenu(),

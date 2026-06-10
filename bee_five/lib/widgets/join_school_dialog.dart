@@ -5,7 +5,10 @@ import '../services/multiplayer_service.dart';
 ///
 /// Pops with [JoinSchoolOutcome] on successful join, or `null` if skipped.
 class JoinSchoolDialog extends StatefulWidget {
-  const JoinSchoolDialog({super.key});
+  const JoinSchoolDialog({super.key, this.allowSkip = true});
+
+  /// When false (Live Matches setup), the player must join a school or default lobby.
+  final bool allowSkip;
 
   @override
   State<JoinSchoolDialog> createState() => _JoinSchoolDialogState();
@@ -118,13 +121,14 @@ class _JoinSchoolDialogState extends State<JoinSchoolDialog> {
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
-        TextButton(
-          onPressed: _loading ? null : () => Navigator.pop<JoinSchoolOutcome?>(context),
-          child: const Text(
-            'Skip for now',
-            style: TextStyle(color: Colors.grey),
+        if (widget.allowSkip)
+          TextButton(
+            onPressed: _loading ? null : () => Navigator.pop<JoinSchoolOutcome?>(context),
+            child: const Text(
+              'Skip for now',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
-        ),
         ElevatedButton(
           onPressed: _loading ? null : _submit,
           style: ElevatedButton.styleFrom(

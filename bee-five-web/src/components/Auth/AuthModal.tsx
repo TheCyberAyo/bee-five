@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, validateUsername } from '../../lib/internalAuthEmail';
 import { isUsernameAvailable } from '../../services/usernameService';
 
 interface AuthModalProps {
@@ -43,8 +44,15 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   }, [user]);
 
   useEffect(() => {
-    if (!isSignUp || !username.trim() || username.trim().length < 3) {
+    if (!isSignUp || !username.trim()) {
       setUsernameError(null);
+      setCheckingUsername(false);
+      return;
+    }
+
+    const formatError = validateUsername(username);
+    if (formatError) {
+      setUsernameError(formatError);
       setCheckingUsername(false);
       return;
     }
@@ -104,21 +112,9 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           return;
         }
 
-        if (!username.trim()) {
-          setError('Please enter a username');
-          setLoading(false);
-          return;
-        }
-
-        const usernameRegex = /^[a-zA-Z0-9_-]+$/;
-        if (!usernameRegex.test(username.trim())) {
-          setError('Username can only contain letters, numbers, underscores, and hyphens');
-          setLoading(false);
-          return;
-        }
-
-        if (username.trim().length < 3) {
-          setError('Username must be at least 3 characters');
+        const usernameFormatError = validateUsername(username);
+        if (usernameFormatError) {
+          setError(usernameFormatError);
           setLoading(false);
           return;
         }
@@ -337,7 +333,8 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   }}
                   placeholder="Choose a username"
                   required
-                  minLength={3}
+                  minLength={MIN_USERNAME_LENGTH}
+                  maxLength={MAX_USERNAME_LENGTH}
                   autoComplete="username"
                   style={{
                     width: '100%',
@@ -365,11 +362,13 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               </div>
               {usernameError ? (
                 <div style={{ fontSize: '0.8rem', color: '#f44336', marginTop: '0.25rem' }}>{usernameError}</div>
-              ) : username.trim().length >= 3 && !checkingUsername ? (
+              ) : username.trim().length >= MIN_USERNAME_LENGTH &&
+                username.trim().length <= MAX_USERNAME_LENGTH &&
+                !checkingUsername ? (
                 <div style={{ fontSize: '0.8rem', color: '#4CAF50', marginTop: '0.25rem' }}>✓ Username available</div>
               ) : (
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
-                  3+ characters; letters, numbers, _, - · stored lowercase
+                  {MIN_USERNAME_LENGTH}–{MAX_USERNAME_LENGTH} characters; letters, numbers, _, - · stored lowercase
                 </div>
               )}
             </div>

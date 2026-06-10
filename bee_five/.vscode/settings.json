@@ -1,5 +1,7 @@
 {
   "deno.enablePaths": ["supabase/functions"],
+  "deno.config": "supabase/functions/deno.json",
+  "deno.importMap": "supabase/functions/deno.json",
   "deno.lint": true,
   "deno.unstable": true,
   "[typescript]": {

@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noImplicitAny": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "files": ["deno.d.ts", "index.ts"],
+  "exclude": []
+}

@@ -17,13 +17,58 @@ import 'dashboard_page.dart';
 import 'daily_challenge_game.dart';
 import 'game_mode.dart';
 import 'adventure_progress_service.dart';
+import 'navigation/async_match_navigation.dart';
+import 'screens/match_screen.dart';
 import 'screens/school_lobby_screen.dart';
+import 'services/async_game_service.dart';
+import 'services/global_async_game_session.dart';
+import 'services/global_lobby_session.dart';
 import 'services/multiplayer_service.dart';
 import 'supabase_client.dart';
 import 'utils/country_data.dart';
 import 'widgets/country_picker_sheet.dart';
 import 'widgets/join_school_dialog.dart';
 import 'xp_service.dart';
+
+/// Contact email for Connect messages and privacy policy (Connect UI hides this).
+const String _contactEmail = 'ndamaseayongezwa@gmail.com';
+
+/// Row in the home-header async inbox (active match or pending invite).
+class _AsyncInboxItem {
+  const _AsyncInboxItem.match({
+    required this.match,
+    required this.opponentUsername,
+    required this.isMyTurn,
+    this.turnTimeLabel,
+  }) : challenge = null;
+
+  const _AsyncInboxItem.invite({
+    required this.challenge,
+    required this.opponentUsername,
+  })  : match = null,
+        isMyTurn = false,
+        turnTimeLabel = null;
+
+  final AsyncMatchRow? match;
+  final AsyncChallengeRow? challenge;
+  final String opponentUsername;
+  final bool isMyTurn;
+  final String? turnTimeLabel;
+
+  bool get needsResponse => challenge != null || isMyTurn;
+
+  String get subtitle {
+    if (challenge != null) return 'Invited you — tap to respond';
+    if (isMyTurn) {
+      final clock = turnTimeLabel;
+      if (clock != null && clock.isNotEmpty) {
+        return 'Your turn · $clock';
+      }
+      return 'Your turn · 24h clock';
+    }
+    return 'Tap to view · waiting for their move';
+  }
+}
 
 // Adventure stages for map background
 class AdventureStage {
@@ -356,10 +401,7 @@ class _VolcanoPainter extends CustomPainter {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.initialSchoolLobby});
-
-  /// After first-time join on splash, Home opens then pushes the school lobby.
-  final JoinSchoolOutcome? initialSchoolLobby;
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -396,6 +438,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   final GlobalKey _connectTalkToUsKey = GlobalKey();
   final FocusNode _connectTalkToUsFocus = FocusNode();
   int? _headerXp;
+  List<_AsyncInboxItem> _asyncInbox = [];
   bool _dailyChallengePlayedToday = false;
   bool? _dailyChallengeWon;
 
@@ -410,6 +453,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   bool _isHomeBannerAdLoaded = false;
   InterstitialAd? _practiceInterstitialAd;
   int _practiceLaunchCount = 0;
+
+  final _multiplayerService = MultiplayerService();
+  late final GlobalLobbySession _globalLobby = GlobalLobbySession(
+    service: _multiplayerService,
+    onOpenMatch: _openOnlineMatchFromLobby,
+  );
+  late final GlobalAsyncGameSession _globalAsync = GlobalAsyncGameSession(
+    onOpenMatch: _openAsyncMatchFromLobby,
+    onTurnsChanged: () {
+      if (mounted) unawaited(_loadAsyncInbox());
+    },
+  );
 
   /// Cycles map “Watch ads” button background: purple → pink → blue (1s each).
   Timer? _watchAdsColorTimer;
@@ -531,22 +586,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _scheduleScrollToCurrentLevel();
     });
-    final lobby = widget.initialSchoolLobby;
-    if (lobby != null && lobby.isSuccess) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => SchoolLobbyScreen(
-              schoolId: lobby.schoolId!,
-              userId: lobby.userId!,
-              username: lobby.username!,
-              elo: lobby.elo!,
-            ),
-          ),
-        );
-      });
-    }
     _connectTalkToUsFocus.addListener(_onConnectTalkToUsFocusChange);
 
     bee1Controller = AnimationController(
@@ -587,6 +626,402 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         () => _watchAdBgIndex = (_watchAdBgIndex + 1) % _watchAdBgColors.length,
       );
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncGlobalLobbyPresence();
+    });
+  }
+
+  void _syncGlobalLobbyPresence() {
+    if (!mounted) return;
+    final auth = context.read<AuthContext>();
+    if (auth.isGuest || auth.user == null) return;
+    _globalLobby.updateContexts(
+      dialogContext: context,
+      snackContext: context,
+    );
+    _globalAsync.updateContext(context);
+    unawaited(_globalLobby.startIfEligible());
+    unawaited(_globalAsync.startIfEligible());
+    unawaited(_loadAsyncInbox());
+  }
+
+  Future<String> _usernameForUser(String userId) async {
+    try {
+      final row = await Supabase.instance.client
+          .from('mg_profiles')
+          .select('username')
+          .eq('id', userId)
+          .maybeSingle();
+      final name = row?['username']?.toString().trim();
+      if (name != null && name.isNotEmpty) return name;
+    } catch (_) {}
+    return 'Player';
+  }
+
+  Future<void> _loadAsyncInbox() async {
+    if (!mounted) return;
+    final auth = context.read<AuthContext>();
+    final uid = auth.user?.id;
+    if (uid == null || auth.isGuest) {
+      setState(() => _asyncInbox = []);
+      return;
+    }
+
+    final invites =
+        await AsyncGameService.instance.fetchPendingChallengesForMe();
+    final matches = await AsyncGameService.instance.fetchActiveMatchesForMe();
+
+    final items = <_AsyncInboxItem>[];
+
+    for (final invite in invites) {
+      final name = invite.challengerUsername ??
+          await _usernameForUser(invite.challengerId);
+      items.add(
+        _AsyncInboxItem.invite(
+          challenge: invite,
+          opponentUsername: name,
+        ),
+      );
+    }
+
+    for (final match in matches) {
+      final oppId = match.opponentIdFor(uid);
+      final name = await _usernameForUser(oppId);
+      final myTurn = match.seatFor(uid) == match.currentSeat;
+      items.add(
+        _AsyncInboxItem.match(
+          match: match,
+          opponentUsername: name,
+          isMyTurn: myTurn,
+          turnTimeLabel: myTurn
+              ? AsyncGameService.formatTurnTimeLeft(match.timeLeft)
+              : null,
+        ),
+      );
+    }
+
+    items.sort((a, b) {
+      if (a.needsResponse != b.needsResponse) {
+        return a.needsResponse ? -1 : 1;
+      }
+      if (a.challenge != null && b.challenge == null) return -1;
+      if (a.challenge == null && b.challenge != null) return 1;
+      if (a.isMyTurn != b.isMyTurn) return a.isMyTurn ? -1 : 1;
+      return a.opponentUsername.compareTo(b.opponentUsername);
+    });
+
+    if (!mounted) return;
+    setState(() => _asyncInbox = items);
+  }
+
+  Future<void> _showAsyncInboxSheet() async {
+    await _loadAsyncInbox();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: primaryYellow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Colors.black, width: 3),
+      ),
+      builder: (sheetCtx) {
+        final needsAction =
+            _asyncInbox.where((e) => e.needsResponse).length;
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Multi-day games',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    if (needsAction > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.black),
+                        ),
+                        child: Text(
+                          '$needsAction to respond',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_asyncInbox.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Text(
+                      'No active games or invitations right now.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 15, height: 1.35),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _asyncInbox.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (_, index) {
+                        final item = _asyncInbox[index];
+                        return Material(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              Navigator.pop(sheetCtx);
+                              unawaited(_onAsyncInboxItemTap(item));
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.black,
+                                  width: item.needsResponse ? 2 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: const Color(0xFF2c2c2c),
+                                    child: Text(
+                                      item.opponentUsername.isNotEmpty
+                                          ? item.opponentUsername[0]
+                                              .toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                        color: primaryYellow,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.opponentUsername,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          item.subtitle,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: item.needsResponse
+                                                ? Colors.black87
+                                                : Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: Colors.black87,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _onAsyncInboxItemTap(_AsyncInboxItem item) async {
+    if (item.challenge != null) {
+      await _respondToAsyncInvite(item.challenge!, item.opponentUsername);
+      return;
+    }
+    final match = item.match;
+    if (match == null) return;
+    _openAsyncMatch(
+      matchId: match.id,
+      opponentId: match.opponentIdFor(context.read<AuthContext>().user!.id),
+      opponentUsername: item.opponentUsername,
+      match: match,
+    );
+  }
+
+  Future<void> _respondToAsyncInvite(
+    AsyncChallengeRow challenge,
+    String challengerName,
+  ) async {
+    final accept = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: primaryYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.black, width: 3),
+        ),
+        title: Text(
+          challengerName,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Invited you to a multi-day Bee Five match. Accept to start playing — '
+          'each move is saved when you tap Save Move.',
+          style: TextStyle(fontSize: 15, height: 1.35),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Decline'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text(
+              'Accept',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || accept == null) return;
+
+    try {
+      if (accept) {
+        final matchId =
+            await AsyncGameService.instance.acceptAsyncChallenge(challenge.id);
+        _openAsyncMatch(
+          matchId: matchId,
+          opponentId: challenge.challengerId,
+          opponentUsername: challengerName,
+        );
+      } else {
+        await AsyncGameService.instance.declineAsyncChallenge(challenge.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Declined challenge from $challengerName')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) unawaited(_loadAsyncInbox());
+    }
+  }
+
+  void _openAsyncMatch({
+    required String matchId,
+    required String opponentId,
+    required String opponentUsername,
+    AsyncMatchRow? match,
+  }) {
+    final auth = context.read<AuthContext>();
+    if (auth.user == null) return;
+    openAsyncMatch(
+      context,
+      matchId: matchId,
+      myId: auth.user!.id,
+      myUsername: _globalLobby.username ?? 'Player',
+      opponentId: opponentId,
+      opponentUsername: opponentUsername,
+      match: match,
+    ).then((_) {
+      if (mounted) unawaited(_loadAsyncInbox());
+    });
+  }
+
+  void _openAsyncMatchFromLobby({
+    required String matchId,
+    required String opponentId,
+    required String opponentUsername,
+  }) {
+    _openAsyncMatch(
+      matchId: matchId,
+      opponentId: opponentId,
+      opponentUsername: opponentUsername,
+    );
+  }
+
+  void _openOnlineMatchFromLobby({
+    required String matchId,
+    required String opponentId,
+    required String opponentUsername,
+  }) {
+    final userId = _globalLobby.userId;
+    final username = _globalLobby.username;
+    if (userId == null || username == null) return;
+
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => MatchScreen(
+          matchId: matchId,
+          myId: userId,
+          myUsername: username,
+          myElo: _globalLobby.elo,
+          opponentId: opponentId,
+          opponentUsername: opponentUsername,
+          lobbyBeeFiveXp: _globalLobby.lobbyBeeFiveXp,
+          restoreSearchingWhenLeaving: false,
+        ),
+      ),
+    ).then((_) {
+      if (!mounted) return;
+      unawaited(_globalLobby.restoreIdleAfterMatch());
+    });
   }
 
   @override
@@ -604,6 +1039,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     _homeBannerAd?.dispose();
     _practiceInterstitialAd?.dispose();
     _watchAdsColorTimer?.cancel();
+    _globalLobby.dispose();
+    _globalAsync.dispose();
     super.dispose();
   }
 
@@ -725,6 +1162,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _saveHighest(highestUnlockedGame);
+    }
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_loadAsyncInbox());
     }
   }
 
@@ -969,6 +1409,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             child: Stack(
               alignment: Alignment.center,
               children: [
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _buildHeaderAsyncTurnIndicator(isMobile),
+                  ),
+                ),
                 Center(
                   child: Image.asset(
                     'assets/BEE-FIVE.png',
@@ -1052,9 +1500,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       fontWeight: FontWeight.w600,
                     ),
                     children: const [
-                      TextSpan(text: 'Connect 5', style: TextStyle(color: Colors.red)),
-                      TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
                       TextSpan(text: 'Outthink', style: TextStyle(color: Colors.orange)),
+                      TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
+                      TextSpan(text: 'Connect 5', style: TextStyle(color: Colors.red)),
                       TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
                       TextSpan(text: 'Win', style: TextStyle(color: Colors.green)),
                     ],
@@ -1424,6 +1872,67 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     startAdventure();
   }
 
+  Widget _buildHeaderAsyncTurnIndicator(bool isMobile) {
+    final auth = context.read<AuthContext>();
+    if (auth.isGuest || auth.user == null) {
+      return const SizedBox.shrink();
+    }
+
+    final iconSize = isMobile ? 40.0 : 48.0;
+    final badgeCount = _asyncInbox.length;
+    final needsActionCount =
+        _asyncInbox.where((e) => e.needsResponse).length;
+
+    return GestureDetector(
+      onTap: _showAsyncInboxSheet,
+      child: SizedBox(
+        width: iconSize,
+        height: iconSize,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Transform.translate(
+              offset: Offset(0, isMobile ? 4 : 5),
+              child: Image.asset(
+                'assets/homeImagery/bee_bell_icon.png',
+                width: iconSize,
+                height: iconSize,
+                fit: BoxFit.contain,
+                errorBuilder: (_, Object error, StackTrace? stackTrace) =>
+                    Icon(Icons.notifications, color: primaryYellow, size: iconSize),
+              ),
+            ),
+          if (badgeCount > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                decoration: BoxDecoration(
+                  color: needsActionCount > 0 ? Colors.red : Colors.black87,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  badgeCount > 9 ? '9+' : '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeaderXpGem(bool isMobile) {
     final size = isMobile ? 28.0 : 32.0;
     return Padding(
@@ -1495,7 +2004,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _sideMenuButton(
-                                  label: 'Online Gaming',
+                                  label: 'Live Matches',
                                   color: menuGreen,
                                   textColor: Colors.white,
                                   borderColor: Colors.black,
@@ -2195,36 +2704,81 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     setState(() => gameMode = GameMode.dailyChallenge);
   }
 
+  void _showLiveMatchesAccountRequired() {
+    final auth = context.read<AuthContext>();
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: primaryYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Colors.black, width: 4),
+        ),
+        title: const Text(
+          'Live Matches',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+        ),
+        content: const Text(
+          'You need to sign in or sign up to play Live Matches.',
+          style: TextStyle(fontSize: 16, color: Colors.black87),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              auth.leaveGuestMode(forSignUp: true);
+            },
+            child: const Text(
+              'Sign Up',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              auth.leaveGuestMode();
+            },
+            child: const Text(
+              'Sign In',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSchoolLobbyScreen({
+    required String schoolId,
+    required String userId,
+    required String username,
+    required int elo,
+  }) async {
+    await _globalLobby.refreshLobbyPresence();
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SchoolLobbyScreen(
+          schoolId: schoolId,
+          userId: userId,
+          username: username,
+          elo: elo,
+        ),
+      ),
+    );
+    _syncGlobalLobbyPresence();
+  }
+
   Future<void> _openSchoolLobby() async {
     final auth = context.read<AuthContext>();
     if (auth.isGuest || auth.user == null) {
-      if (!mounted) {
-        return;
-      }
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: primaryYellow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.black, width: 4),
-          ),
-          title: const Text(
-            'Online Gaming',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
-          ),
-          content: const Text(
-            'Sign in to use Online Gaming. You can join with a school code or choose the default lobby.',
-            style: TextStyle(fontSize: 16, color: Colors.black87),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      if (!mounted) return;
+      _showLiveMatchesAccountRequired();
       return;
     }
 
@@ -2255,89 +2809,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                   ? null
                   : rawSchool.toString().trim());
       if (schoolId == null || schoolId.isEmpty) {
-        showDialog<void>(
+        final outcome = await showDialog<JoinSchoolOutcome?>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: primaryYellow,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Colors.black, width: 4),
-            ),
-            title: const Text(
-              'Set up Online Gaming',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
-            ),
-            content: const Text(
-              'Your profile is not linked to a school yet. Enter your school join code, or use the default lobby for now.',
-              style: TextStyle(fontSize: 16, color: Colors.black87),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  final outcome = await showDialog<JoinSchoolOutcome?>(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => const JoinSchoolDialog(),
-                  );
-                  if (!mounted) return;
-                  if (outcome != null && outcome.isSuccess) {
-                    await Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (_) => SchoolLobbyScreen(
-                          schoolId: outcome.schoolId!,
-                          userId: outcome.userId!,
-                          username: outcome.username!,
-                          elo: outcome.elo!,
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: const Text(
-                  'Enter school join code',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  final outcome = await MultiplayerService().joinDefaultLobby();
-                  if (!mounted) return;
-                  if (outcome.isSuccess) {
-                    await Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (_) => SchoolLobbyScreen(
-                          schoolId: outcome.schoolId!,
-                          userId: outcome.userId!,
-                          username: outcome.username!,
-                          elo: outcome.elo!,
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        outcome.errorMessage ??
-                            'Could not join default lobby right now.',
-                      ),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Use default lobby',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
+          barrierDismissible: false,
+          builder: (_) => const JoinSchoolDialog(allowSkip: false),
         );
+        if (!mounted) return;
+        if (outcome != null && outcome.isSuccess) {
+          await _openSchoolLobbyScreen(
+            schoolId: outcome.schoolId!,
+            userId: outcome.userId!,
+            username: outcome.username!,
+            elo: outcome.elo!,
+          );
+        }
         return;
       }
 
@@ -2362,15 +2847,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           ? eloRaw
           : (eloRaw is num ? eloRaw.toInt() : 1200);
 
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => SchoolLobbyScreen(
-            schoolId: schoolId,
-            userId: userId,
-            username: displayName,
-            elo: elo,
-          ),
-        ),
+      await _openSchoolLobbyScreen(
+        schoolId: schoolId,
+        userId: userId,
+        username: displayName,
+        elo: elo,
       );
     } on PostgrestException catch (e) {
       if (!mounted) {
@@ -2391,7 +2872,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not open Online Gaming. Check your connection.'),
+          content: Text('Could not open Live Matches. Check your connection.'),
         ),
       );
     }
@@ -2431,12 +2912,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         content: const SingleChildScrollView(
           child: Text(
             'How to gain XPs in Bee Five:\n\n'
-            '• Login: +2 XP per calendar day (once per day).\n\n'
             '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
             '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
             '• Adventure: Win 2 consecutive levels → +1 XP; lose a level → −1 XP. '
             'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
-            '• Daily Challenge: Win today\'s challenge → +3 XP (once per day).\n\n'
             '• Watch ads: Watch a short ad → +2 XP (tap “Watch Ads to Gain XPs” on the map).',
             style: TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
@@ -2507,7 +2986,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
               ),
               SizedBox(height: 4),
               Text(
-                'One challenge per day: same Bee Five rules with a fixed daily puzzle (e.g. Beat the Clock, Obstacle Course, Blitz, Speed Round). Play once per day. Winning the Daily Challenge awards +3 XP and is the only way to earn XP from a single daily attempt — great for building your total and comparing with others.',
+                'One challenge per day: same Bee Five rules with a fixed daily puzzle (e.g. Beat the Clock, Obstacle Course, Blitz, Speed Round). Play once per day to test yourself — your win/loss is saved but does not award XP.',
                 style: TextStyle(fontSize: 15, color: Colors.black87),
               ),
             ],
@@ -2751,7 +3230,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                   if (context.read<AuthContext>().user != null &&
                       !context.read<AuthContext>().isGuest) ...[
                     const Text(
-                      'School lobby — leave the school or default lobby you joined. You can link again later from Online Gaming.',
+                      'School lobby — leave the school or default lobby you joined. You can link again later from Live Matches.',
                       style: TextStyle(fontSize: 14, color: Colors.black54),
                     ),
                     const SizedBox(height: 10),
@@ -2775,7 +3254,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                               ),
                             ),
                             content: const Text(
-                              'You will be removed from your current school or default lobby. Use Online Gaming to enter a join code again when you want.',
+                              'You will be removed from your current school or default lobby. Use Live Matches to enter a join code again when you want.',
                               style: TextStyle(fontSize: 15, color: Colors.black87),
                             ),
                             actions: [
@@ -2806,12 +3285,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                           );
                           return;
                         }
+                        _globalLobby.onLeftSchoolLobby();
                         Navigator.pop(dialogContext);
                         messenger.showSnackBar(
                           SnackBar(
                             content: Text(
                               outcome.unlinkedSchool
-                                  ? 'You left the school lobby. Join again anytime from Online Gaming.'
+                                  ? 'You left the school lobby. Join again anytime from Live Matches.'
                                   : 'You are not linked to a school lobby.',
                             ),
                             backgroundColor:
@@ -3308,7 +3788,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       ]),
                       _policySection('Contact Us', [
                         'If you have any questions about this Privacy Policy, wish to exercise your rights, or need to contact us regarding your personal data, please reach out to us:',
-                        'Email: admin@mindgrind.co.za',
+                        'Email: $_contactEmail',
                         'Developer: ayongezwa',
                         'App: Bee Five',
                         'We will respond to your inquiry within 30 days.',
@@ -3509,7 +3989,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                   final body = _talkToUsController.text.trim();
                                   if (body.isEmpty) return;
                                   final uri = Uri.parse(
-                                    'mailto:admin@mindgrind.co.za?body=${Uri.encodeComponent(body)}',
+                                    'mailto:$_contactEmail?body=${Uri.encodeComponent(body)}',
                                   );
                                   try {
                                     await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -3523,7 +4003,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
-                                child: const Text('Send to admin@mindgrind.co.za'),
+                                child: const Text('Send Message'),
                               ),
                             ),
                           ],

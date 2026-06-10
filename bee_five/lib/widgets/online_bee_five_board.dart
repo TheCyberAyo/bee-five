@@ -27,6 +27,16 @@ String onlineMatchPlayer2Id(String a, String b) =>
 int onlineMatchFirstSeat(int completedMatchCount) =>
     completedMatchCount.isEven ? 1 : 2;
 
+/// When both players challenge each other, pick one shared match id (lower user id
+/// keeps the match id from their outgoing challenge).
+String canonicalMutualMatchId({
+  required String myId,
+  required String opponentId,
+  required String myMatchId,
+  required String theirMatchId,
+}) =>
+    myId.compareTo(opponentId) < 0 ? myMatchId : theirMatchId;
+
 class OnlineBeeFiveBoard extends StatefulWidget {
   const OnlineBeeFiveBoard({
     super.key,

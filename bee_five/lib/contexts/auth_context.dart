@@ -14,6 +14,7 @@ class AuthContext extends ChangeNotifier {
   Session? _session;
   bool _loading = true;
   bool _isGuest = false;
+  bool _openSignUpAfterLeaveGuest = false;
   StreamSubscription<AuthState>? _authSubscription;
 
   User? get user => _user;
@@ -32,6 +33,21 @@ class AuthContext extends ChangeNotifier {
     if (_isGuest) return;
     _isGuest = true;
     notifyListeners();
+  }
+
+  /// Leave guest mode so the auth gate can show sign-in / sign-up (e.g. from Live Matches).
+  void leaveGuestMode({bool forSignUp = false}) {
+    if (!_isGuest) return;
+    _isGuest = false;
+    _openSignUpAfterLeaveGuest = forSignUp;
+    notifyListeners();
+  }
+
+  /// One-shot flag read by [AuthGate] after [leaveGuestMode].
+  bool takeOpenSignUpAfterLeaveGuest() {
+    final openSignUp = _openSignUpAfterLeaveGuest;
+    _openSignUpAfterLeaveGuest = false;
+    return openSignUp;
   }
 
   static void _persistUsernameFromUserToPrefs(User user) {

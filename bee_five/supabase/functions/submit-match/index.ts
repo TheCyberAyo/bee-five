@@ -1,3 +1,5 @@
+/// <reference path="./deno.d.ts" />
+
 // ============================================================
 // FILE: supabase/functions/submit-match/index.ts
 // PURPOSE: Server-side gap-based ELO (30-point brackets, two's)
@@ -11,9 +13,18 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+type MgProfile = {
+  id: string;
+  elo: number;
+  school_id: string | null;
+  wins: number;
+  losses: number;
+  win_streak?: number | null;
+};
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
 async function touchPlayersActivity(playerIds: string[]) {
@@ -93,6 +104,56 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Prevent double-recording when both clients report a result (e.g. network flap).
+  const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: recentRows } = await supabase
+    .from("mg_matches")
+    .select(
+      "winner_id, player1_id, player2_id, player1_elo_change, player2_elo_change, created_at",
+    )
+    .or(
+      `and(player1_id.eq.${player1_id},player2_id.eq.${player2_id}),and(player1_id.eq.${player2_id},player2_id.eq.${player1_id})`,
+    )
+    .gte("created_at", recentCutoff)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const recent = recentRows?.[0];
+  if (recent) {
+    if (draw) {
+      return new Response(
+        JSON.stringify({
+          isDraw: true,
+          duplicate: true,
+          player1Change: recent.player1_elo_change ?? 0,
+          player2Change: recent.player2_elo_change ?? 0,
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const recordedWinner = recent.winner_id as string | null;
+    if (recordedWinner) {
+      const winnerIsP1 = recordedWinner === player1_id;
+      const winnerChange = winnerIsP1
+        ? (recent.player1_elo_change as number)
+        : (recent.player2_elo_change as number);
+      const loserChange = winnerIsP1
+        ? (recent.player2_elo_change as number)
+        : (recent.player1_elo_change as number);
+      return new Response(
+        JSON.stringify({
+          isDraw: false,
+          duplicate: true,
+          winner_id: recordedWinner,
+          winnerChange,
+          loserChange,
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }
+
   const { data: players, error } = await supabase
     .from("mg_profiles")
     .select("id, elo, school_id, wins, losses, win_streak")
@@ -104,8 +165,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  const p1 = players.find((p) => p.id === player1_id)!;
-  const p2 = players.find((p) => p.id === player2_id)!;
+  const p1 = players.find((p: MgProfile) => p.id === player1_id)!;
+  const p2 = players.find((p: MgProfile) => p.id === player2_id)!;
 
   if (draw) {
     const { p1: d1, p2: d2 } = eloDrawChanges(p1.elo, p2.elo);
@@ -149,8 +210,8 @@ Deno.serve(async (req) => {
     );
   }
 
-  const winner = players.find((p) => p.id === winner_id)!;
-  const loser = players.find((p) => p.id !== winner_id)!;
+  const winner = players.find((p: MgProfile) => p.id === winner_id)!;
+  const loser = players.find((p: MgProfile) => p.id !== winner_id)!;
 
   const { winnerChange, loserChange } = eloWinChanges(winner.elo, loser.elo);
 

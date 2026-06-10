@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/beefive_internal_auth.dart';
 import '../contexts/auth_context.dart';
@@ -40,7 +41,6 @@ class _SignUpPageState extends State<SignUpPage> {
   bool _obscureConfirm = true;
   String? _selectedCountryCode = 'ZA';
 
-  static final _usernameRegex = RegExp(r'^[a-zA-Z0-9_-]+$');
   static final _passwordLetterRegex = RegExp(r'[A-Za-z]');
 
   @override
@@ -58,19 +58,6 @@ class _SignUpPageState extends State<SignUpPage> {
     }
     if (value.trim().length < 2) {
       return 'Full name must be at least 2 characters';
-    }
-    return null;
-  }
-
-  String? _validateUsername(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Please enter a username';
-    }
-    if (value.trim().length < 3) {
-      return 'Username must be at least 3 characters';
-    }
-    if (!_usernameRegex.hasMatch(value.trim())) {
-      return 'Username can only contain letters, numbers, underscores, and hyphens';
     }
     return null;
   }
@@ -353,7 +340,7 @@ class _SignUpPageState extends State<SignUpPage> {
                     labelText: 'Username',
                     hintText: 'Choose a username',
                     helperText:
-                        'Letters, numbers, underscores, hyphens · saved lowercase',
+                        '$kMinUsernameLength–$kMaxUsernameLength characters · letters, numbers, _, - · saved lowercase',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -363,7 +350,11 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                   autocorrect: false,
                   enabled: !_loading,
-                  validator: _validateUsername,
+                  maxLength: kMaxUsernameLength,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(kMaxUsernameLength),
+                  ],
+                  validator: validateUsername,
                   onChanged: (_) => setState(() => _error = null),
                 ),
                 const SizedBox(height: 20),

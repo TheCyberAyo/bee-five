@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { normalizeUsername } from '../lib/internalAuthEmail';
+import { normalizeUsername, validateUsername } from '../lib/internalAuthEmail';
 
 export async function isUsernameAvailable(username: string): Promise<{ available: boolean; error?: string }> {
   if (!supabase) {
@@ -7,16 +7,9 @@ export async function isUsernameAvailable(username: string): Promise<{ available
     return { available: true };
   }
 
-  if (!username || username.trim().length < 3) {
-    return { available: false, error: 'Username must be at least 3 characters' };
-  }
-
-  const usernameRegex = /^[a-zA-Z0-9_-]+$/;
-  if (!usernameRegex.test(username.trim())) {
-    return {
-      available: false,
-      error: 'Username can only contain letters, numbers, underscores, and hyphens',
-    };
+  const formatError = validateUsername(username);
+  if (formatError) {
+    return { available: false, error: formatError };
   }
 
   try {

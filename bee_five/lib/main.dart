@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -28,6 +29,12 @@ Future<void> main() async {
 
   // Initialize Supabase
   await initSupabase();
+
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // Tests/CI without google-services; push registration is skipped elsewhere.
+  }
 
   // Initialize AdMob
   await MobileAds.instance.initialize();

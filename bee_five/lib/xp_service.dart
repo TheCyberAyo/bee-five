@@ -11,9 +11,6 @@ const String _prefLoginStreak = 'login_streak';
 /// Default XP for new users.
 const int defaultXp = 10;
 
-/// XP awarded per calendar day of logging in.
-const int xpPerLoginDay = 2;
-
 /// XP for 3 consecutive wins in classic game.
 const int xpClassicThreeWins = 2;
 
@@ -31,9 +28,6 @@ const int xpAdventureFirstLevelComplete = 1;
 
 /// XP for completing a multiple-of-10 adventure level.
 const int xpAdventureMultipleOf10 = 5;
-
-/// XP for winning the daily challenge (once per day).
-const int xpDailyChallengeWin = 3;
 
 /// School lobby multiplayer: win / loss delta (loss uses [removeXp], clamped at 0).
 const int xpSchoolLobbyMatchDelta = 1;
@@ -89,8 +83,7 @@ Future<void> ensureXpInitialized() async {
   }
 }
 
-/// Call when app is opened (e.g. home page init). Adds +2 XP per calendar day
-/// of login and updates streak.
+/// Call when app is opened (e.g. home page init). Updates login streak only.
 Future<void> onAppOpen() async {
   final prefs = await SharedPreferences.getInstance();
   await ensureXpInitialized();
@@ -99,9 +92,8 @@ Future<void> onAppOpen() async {
   final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   final last = prefs.getString(_prefLastLoginDate);
 
-  if (last == today) return; // Already counted today
+  if (last == today) return;
 
-  int xp = prefs.getInt(_prefUserXp) ?? defaultXp;
   int streak = prefs.getInt(_prefLoginStreak) ?? 0;
 
   if (last == null) {
@@ -120,8 +112,6 @@ Future<void> onAppOpen() async {
     }
   }
 
-  xp += xpPerLoginDay;
-  await prefs.setInt(_prefUserXp, xp);
   await prefs.setInt(_prefLoginStreak, streak);
   await prefs.setString(_prefLastLoginDate, today);
   scheduleProgressCloudSync();
@@ -263,14 +253,13 @@ Future<(bool playedToday, bool? won)> getDailyChallengeStatus() async {
   return (true, won);
 }
 
-/// Daily challenge: call when the user finishes today's challenge. Awards +3 XP if [won].
+/// Daily challenge: call when the user finishes today's challenge. Records result only.
 Future<int> setDailyChallengeResult(bool won) async {
   final prefs = await SharedPreferences.getInstance();
   final now = DateTime.now();
   final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   await prefs.setString(_prefDailyChallengeDate, today);
   await prefs.setBool(_prefDailyChallengeWon, won);
-  if (won) return await addXp(xpDailyChallengeWin);
   scheduleProgressCloudSync();
   return await getXp();
 }

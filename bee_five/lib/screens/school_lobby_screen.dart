@@ -13,15 +13,14 @@ import 'package:uuid/uuid.dart';
 
 import '../ads/multiplayer_ad_constants.dart';
 import '../models/player_presence.dart';
+import '../services/async_game_service.dart';
 import '../services/multiplayer_service.dart';
+import '../navigation/async_match_navigation.dart';
 import '../utils/country_data.dart';
 import '../utils/player_rank.dart';
 import '../xp_service.dart';
 import '../simple_game.dart' show primaryYellow;
 import '../theme/bee_five_multiplayer_theme.dart';
-import '../widgets/challenge_dialog.dart';
-import 'match_screen.dart';
-
 class SchoolLobbyScreen extends StatefulWidget {
   final String schoolId;
   final String? schoolName;
@@ -47,6 +46,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
   static const double _kLeaderboardRowExtent = 36;
   static const double _kNameFontSize = 14;
   static const double _kCellFontSize = 12.5;
+  static const int _kChallengeColumnFlex = 2;
   static const EdgeInsets _kLeaderboardListPadding =
       EdgeInsets.fromLTRB(4, 0, 4, 0);
 
@@ -70,6 +70,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
 
   List<Map<String, dynamic>> _globalSearchResults = [];
   List<Map<String, dynamic>> _institutionalSearchResults = [];
+  List<AsyncMatchRow> _asyncMatches = [];
   bool _globalSearchLoading = false;
   bool _institutionalSearchLoading = false;
   Timer? _globalSearchDebounce;
@@ -78,8 +79,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
   int? _myInstitutionalRank;
 
   late StreamSubscription _playersSub;
-  late StreamSubscription _challengeSub;
-  late StreamSubscription _challengeResponseSub;
   StreamSubscription<List<Map<String, dynamic>>>? _globalLeaderboardSub;
   StreamSubscription<List<Map<String, dynamic>>>? _institutionalLeaderboardSub;
 
@@ -146,7 +145,96 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
     _loadLobbyBannerAd();
     unawaited(_resolveInstitutionAndSchools());
     unawaited(_loadMyRankingStats());
+    unawaited(_loadAsyncMatches());
     _initLobby();
+  }
+
+  Future<void> _loadAsyncMatches() async {
+    final rows = await AsyncGameService.instance.fetchActiveMatchesForMe();
+    if (!mounted) return;
+    setState(() => _asyncMatches = rows);
+  }
+
+  Future<void> _openAsyncMatch(AsyncMatchRow match) async {
+    final oppId = match.opponentIdFor(widget.userId);
+    String oppName = 'Player';
+    try {
+      final row = await Supabase.instance.client
+          .from('mg_profiles')
+          .select('username')
+          .eq('id', oppId)
+          .maybeSingle();
+      final n = row?['username']?.toString().trim();
+      if (n != null && n.isNotEmpty) oppName = n;
+    } catch (_) {}
+
+    if (!mounted) return;
+    await openAsyncMatch(
+      context,
+      matchId: match.id,
+      myId: widget.userId,
+      myUsername: widget.username,
+      opponentId: oppId,
+      opponentUsername: oppName,
+      match: match,
+    );
+    await _loadAsyncMatches();
+  }
+
+  Future<void> _sendAsyncChallenge(String opponentId, String opponentName) async {
+    // Async challenges only from Global Rankings or Institutional Ranking lists.
+    if (_selectedTab != 1 && _selectedTab != 2) return;
+
+    try {
+      await AsyncGameService.instance.sendAsyncChallenge(opponentId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Multi-day challenge sent to $opponentName. '
+            'They can respond when ready — each player has 24 hours per turn.',
+          ),
+        ),
+      );
+    } on AsyncGameException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
+  }
+
+  Widget _buildAsyncMatchesBanner() {
+    if (_asyncMatches.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Multi-day matches',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
+          ..._asyncMatches.map((m) {
+            final myTurn = m.seatFor(widget.userId) == m.currentSeat;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: OutlinedButton(
+                onPressed: () => _openAsyncMatch(m),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black,
+                  side: const BorderSide(color: Colors.black, width: 2),
+                ),
+                child: Text(
+                  myTurn ? 'Your turn — resume async match' : 'Waiting — async match',
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadMyRankingStats() async {
@@ -341,34 +429,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
       setState(() => _institutionalLeaderboard = rows);
     });
 
-    _challengeSub = _service.onChallenge.listen((payload) {
-      if (!mounted) return;
-      final route = ModalRoute.of(context);
-      if (route != null && !route.isCurrent) return;
-      _showIncomingChallenge(payload);
-    });
-
-    _challengeResponseSub = _service.onChallengeResponse.listen((payload) {
-      if (!mounted) return;
-      final route = ModalRoute.of(context);
-      if (route != null && !route.isCurrent) return;
-      if (payload['accepted'] == true) {
-        _navigateToMatch(
-          matchId: payload['match_id'],
-          opponentId: payload['responder_id'],
-          opponentUsername: payload['responder_username'],
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${payload['responder_username']} declined your challenge',
-            ),
-          ),
-        );
-      }
-    });
-
     await ensureXpInitialized();
     _myLobbyXp = await getXp();
 
@@ -404,7 +464,10 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
       return;
     }
 
-    final matchId = _uuid.v4();
+    final matchId = _service.matchIdForOutgoingChallenge(
+      player.userId,
+      _uuid.v4(),
+    );
     await _service.sendChallenge(
       fromId: widget.userId,
       fromUsername: widget.username,
@@ -421,76 +484,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
     }
   }
 
-  void _showIncomingChallenge(Map<String, dynamic> payload) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => ChallengeDialog(
-        fromUsername: payload['from_username'],
-        fromElo: payload['from_elo'],
-        onAccept: () async {
-          Navigator.pop(context);
-          await _service.respondToChallenge(
-            matchId: payload['match_id'],
-            challengerId: payload['from_id'],
-            accepted: true,
-            responderId: widget.userId,
-            responderUsername: widget.username,
-          );
-          _navigateToMatch(
-            matchId: payload['match_id'],
-            opponentId: payload['from_id'],
-            opponentUsername: payload['from_username'],
-          );
-        },
-        onDecline: () async {
-          Navigator.pop(context);
-          await _service.respondToChallenge(
-            matchId: payload['match_id'],
-            challengerId: payload['from_id'],
-            accepted: false,
-            responderId: widget.userId,
-            responderUsername: widget.username,
-          );
-        },
-      ),
-    );
-  }
-
-  void _navigateToMatch({
-    required String matchId,
-    required String opponentId,
-    required String opponentUsername,
-  }) {
-    Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MatchScreen(
-          matchId: matchId,
-          myId: widget.userId,
-          myUsername: widget.username,
-          myElo: widget.elo,
-          opponentId: opponentId,
-          opponentUsername: opponentUsername,
-          lobbyBeeFiveXp: _myLobbyXp,
-          restoreSearchingWhenLeaving: false,
-        ),
-      ),
-    ).then((_) async {
-      if (!mounted) return;
-      await ensureXpInitialized();
-      final x = await getXp();
-      if (!mounted) return;
-      setState(() => _myLobbyXp = x);
-      await _service.setIdle(
-        userId: widget.userId,
-        username: widget.username,
-        elo: widget.elo,
-        beeFiveXp: x,
-      );
-    });
-  }
-
   @override
   void dispose() {
     _usernameSearchController.dispose();
@@ -501,12 +494,9 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
     _globalScrollController.dispose();
     _institutionalScrollController.dispose();
     _playersSub.cancel();
-    _challengeSub.cancel();
-    _challengeResponseSub.cancel();
     _globalLeaderboardSub?.cancel();
     _institutionalLeaderboardSub?.cancel();
     _lobbyBannerAd?.dispose();
-    _service.leaveLobby();
     super.dispose();
   }
 
@@ -582,6 +572,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
       ),
       body: Column(
         children: [
+          if (!_isLoading) _buildAsyncMatchesBanner(),
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -779,6 +770,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
       int listIndex,
     ) buildCells,
     required String emptyMessage,
+    Widget? Function(Map<String, dynamic> profile)? trailingForRow,
   }) {
     if (players.isEmpty) {
       return Center(
@@ -803,6 +795,8 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
           row: p,
           flex: flex,
           cells: buildCells(p, index),
+          trailing: trailingForRow?.call(p),
+          showChallengeColumn: trailingForRow != null,
         );
       },
     );
@@ -985,7 +979,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             child: const Text(
-                              'Challenge',
+                              'Live',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
@@ -1017,6 +1011,8 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
     required Map<String, dynamic> row,
     required List<Widget> cells,
     required List<int> flex,
+    Widget? trailing,
+    bool showChallengeColumn = false,
   }) {
     final isMe = _rowIsMe(row);
     return SizedBox(
@@ -1055,6 +1051,14 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             const SizedBox(width: 4),
             for (var i = 0; i < cells.length; i++)
               Expanded(flex: flex[i], child: cells[i]),
+            if (showChallengeColumn)
+              Expanded(
+                flex: _kChallengeColumnFlex,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: trailing ?? const SizedBox.shrink(),
+                ),
+              ),
           ],
         ),
       ),
@@ -1092,6 +1096,30 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
     );
   }
 
+  Widget? _asyncChallengeTrailing(Map<String, dynamic> profile) {
+    if (_rowIsMe(profile)) return null;
+    final opponentId = profile['id']?.toString();
+    if (opponentId == null || opponentId.isEmpty) return null;
+    final name = profile['username']?.toString() ?? 'Player';
+    return TextButton(
+      onPressed: () => _sendAsyncChallenge(opponentId, name),
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.green,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: const Text(
+        'Long-game',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+          color: Colors.green,
+        ),
+      ),
+    );
+  }
+
   Widget _buildGlobalRankingsTab() {
     final searching = _globalSearchController.text.trim().isNotEmpty;
     final players =
@@ -1123,8 +1151,15 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             elo: widget.elo,
           ),
         _buildTableHeader(
-          const ['Global Rank', 'Username', 'Institution', 'Rank', 'ELO'],
-          flex: const [1, 3, 2, 2, 1],
+          const [
+            'Global Rank',
+            'Username',
+            'Institution',
+            'Rank',
+            'ELO',
+            'Challenge',
+          ],
+          flex: const [1, 3, 2, 2, 1, _kChallengeColumnFlex],
         ),
         Expanded(
           child: _buildLeaderboardList(
@@ -1132,6 +1167,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             players: players,
             flex: const [3, 2, 2, 1],
             emptyMessage: searching ? 'No players found' : 'No ranked players yet',
+            trailingForRow: _asyncChallengeTrailing,
             buildCells: (p, _) {
               final username = p['username']?.toString() ?? 'Player';
               final elo = _profileElo(p);
@@ -1185,8 +1221,15 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             elo: widget.elo,
           ),
         _buildTableHeader(
-          const ['Local Rank', 'Username', 'Rank', 'ELO', 'XPs'],
-          flex: const [1, 3, 2, 1, 1],
+          const [
+            'Local Rank',
+            'Username',
+            'Rank',
+            'ELO',
+            'XPs',
+            'Challenge',
+          ],
+          flex: const [1, 3, 2, 1, 1, _kChallengeColumnFlex],
         ),
         Expanded(
           child: _buildLeaderboardList(
@@ -1196,6 +1239,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             emptyMessage: searching
                 ? 'No players found'
                 : 'No ranked players at your institution yet',
+            trailingForRow: _asyncChallengeTrailing,
             buildCells: (p, _) {
               final username = p['username']?.toString() ?? 'Player';
               final elo = _profileElo(p);

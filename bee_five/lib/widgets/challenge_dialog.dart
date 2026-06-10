@@ -15,6 +15,9 @@ class ChallengeDialog extends StatelessWidget {
   /// When set, Accept is disabled and this message is shown (e.g. 0 XP).
   final String? acceptBlockedReason;
 
+  /// Rematch offer after a live game (vs school-lobby challenge).
+  final bool isRematch;
+
   const ChallengeDialog({
     super.key,
     required this.fromUsername,
@@ -22,14 +25,15 @@ class ChallengeDialog extends StatelessWidget {
     required this.onAccept,
     required this.onDecline,
     this.acceptBlockedReason,
+    this.isRematch = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return BeeFiveMultiplayerTheme.yellowDialog(
-      title: const Text(
-        'School lobby challenge',
-        style: TextStyle(
+      title: Text(
+        isRematch ? 'Rematch' : 'School lobby challenge',
+        style: const TextStyle(
           fontWeight: FontWeight.bold,
           color: Colors.black,
         ),
@@ -38,7 +42,9 @@ class ChallengeDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '$fromUsername wants to play (from your school lobby).',
+            isRematch
+                ? '$fromUsername wants a rematch.'
+                : '$fromUsername wants to play (from your school lobby).',
             style: const TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
           ),

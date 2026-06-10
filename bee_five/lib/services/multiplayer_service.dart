@@ -5,8 +5,9 @@
 //
 // HOW TO USE:
 //   1. Call MultiplayerService() — it's a singleton
-//   2. Call joinLobby() when player enters the school lobby screen
-//   3. Call leaveLobby() when player leaves the lobby screen
+//   2. Call joinLobbyFromCurrentProfile() when Home opens (signed in + school)
+//   3. Call joinLobby() again from the school lobby screen to refresh presence
+//   4. Call leaveLobby() on sign-out / leave school (not when leaving lobby UI)
 //   4. Call joinMatch() when a match starts
 //   5. Call leaveMatch() when a match ends
 // ============================================================
@@ -17,9 +18,12 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth/beefive_internal_auth.dart';
+import '../head_to_head_series.dart';
 import '../models/online_dashboard_stats.dart';
 import '../models/player_presence.dart';
 import '../utils/country_data.dart';
+import '../widgets/online_bee_five_board.dart' show canonicalMutualMatchId;
+import '../xp_service.dart';
 
 /// Result of [MultiplayerService.joinSchool] for navigation after a successful join.
 class JoinSchoolOutcome {
@@ -55,6 +59,23 @@ class JoinSchoolOutcome {
         username: username,
         elo: elo,
       );
+}
+
+/// Cached identity after [MultiplayerService.joinLobby] / [joinLobbyFromCurrentProfile].
+class LobbyIdentity {
+  final String userId;
+  final String username;
+  final int elo;
+  final int beeFiveXp;
+  final String schoolId;
+
+  const LobbyIdentity({
+    required this.userId,
+    required this.username,
+    required this.elo,
+    required this.beeFiveXp,
+    required this.schoolId,
+  });
 }
 
 /// Result of [MultiplayerService.leaveSchoolLobby].
@@ -157,9 +178,17 @@ class MultiplayerService {
 
   RealtimeChannel? _lobbyChannel;
   RealtimeChannel? _matchChannel;
+  Timer? _opponentDisconnectTimer;
+  String? _matchOpponentId;
+
+  static const Duration _opponentDisconnectGrace = Duration(seconds: 12);
 
   String? _lobbyInstitutionName;
   String? _lobbyCountryCode;
+  LobbyIdentity? _lobbyIdentity;
+
+  /// Outgoing live challenges: opponent user id → match id we proposed.
+  final Map<String, String> _pendingOutgoingChallenges = {};
 
   // ── Stream controllers (your UI listens to these) ────────
   final _onlinePlayersController =
@@ -172,6 +201,8 @@ class MultiplayerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final _matchOverController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final _matchStartController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<List<PlayerPresence>> get onlinePlayers =>
       _onlinePlayersController.stream;
@@ -180,6 +211,38 @@ class MultiplayerService {
       _challengeResponseController.stream;
   Stream<Map<String, dynamic>> get onGameEvent => _gameEventController.stream;
   Stream<Map<String, dynamic>> get onMatchOver => _matchOverController.stream;
+  Stream<Map<String, dynamic>> get onMatchStart => _matchStartController.stream;
+
+  LobbyIdentity? get lobbyIdentity => _lobbyIdentity;
+
+  bool hasPendingChallengeTo(String opponentId) =>
+      _pendingOutgoingChallenges.containsKey(opponentId);
+
+  /// Reuse an in-flight challenge id so simultaneous invites share one room.
+  String matchIdForOutgoingChallenge(String opponentId, String proposedMatchId) {
+    return _pendingOutgoingChallenges[opponentId] ?? proposedMatchId;
+  }
+
+  /// Prefer the shared room id when accepting someone you also challenged.
+  String matchIdForChallengeAccept({
+    required String opponentId,
+    required String theirMatchId,
+  }) {
+    final mine = _pendingOutgoingChallenges[opponentId];
+    if (mine == null || mine.isEmpty) return theirMatchId;
+    final myId = _lobbyIdentity?.userId;
+    if (myId == null || myId.isEmpty) return theirMatchId;
+    return canonicalMutualMatchId(
+      myId: myId,
+      opponentId: opponentId,
+      myMatchId: mine,
+      theirMatchId: theirMatchId,
+    );
+  }
+
+  void _clearPendingChallengeTo(String opponentId) {
+    _pendingOutgoingChallenges.remove(opponentId);
+  }
 
   // ════════════════════════════════════════════════════════
   // LOBBY — join when entering the school lobby screen
@@ -223,6 +286,13 @@ class MultiplayerService {
 
     // [schoolId] kept for API compatibility; presence is global for all institutions.
     _lobbyChannel = _client.channel('lobby:$universalLobbyChannelKey');
+    _lobbyIdentity = LobbyIdentity(
+      userId: userId,
+      username: username,
+      elo: elo,
+      beeFiveXp: beeFiveXp,
+      schoolId: schoolId,
+    );
 
     unawaited(touchAccountActivity());
 
@@ -231,9 +301,8 @@ class MultiplayerService {
       event: 'challenge',
       callback: (payload) {
         final data = _unwrapChallengePayload(payload);
-        if (data['to_id']?.toString() == userId) {
-          _challengeController.add(data);
-        }
+        if (data['to_id']?.toString() != userId) return;
+        _handleIncomingChallengeBroadcast(data, userId: userId, username: username);
       },
     );
 
@@ -242,9 +311,19 @@ class MultiplayerService {
       event: 'challenge_response',
       callback: (payload) {
         final data = _unwrapChallengeResponsePayload(payload);
-        if (data['challenger_id']?.toString() == userId) {
-          _challengeResponseController.add(data);
+        if (data['challenger_id']?.toString() != userId) return;
+        if (data['accepted'] == true) {
+          final responderId = data['responder_id']?.toString();
+          if (responderId != null && responderId.isNotEmpty) {
+            _clearPendingChallengeTo(responderId);
+          }
+        } else {
+          final responderId = data['responder_id']?.toString();
+          if (responderId != null && responderId.isNotEmpty) {
+            _clearPendingChallengeTo(responderId);
+          }
         }
+        _challengeResponseController.add(data);
       },
     );
 
@@ -308,6 +387,119 @@ class MultiplayerService {
     }
     _lobbyInstitutionName = null;
     _lobbyCountryCode = null;
+    _lobbyIdentity = null;
+    _pendingOutgoingChallenges.clear();
+  }
+
+  void _handleIncomingChallengeBroadcast(
+    Map<String, dynamic> data, {
+    required String userId,
+    required String username,
+  }) {
+    final fromId = data['from_id']?.toString() ?? '';
+    if (fromId.isEmpty) return;
+
+    final theirMatchId = data['match_id']?.toString() ?? '';
+    final myPendingMatchId = _pendingOutgoingChallenges[fromId];
+    if (myPendingMatchId != null &&
+        myPendingMatchId.isNotEmpty &&
+        theirMatchId.isNotEmpty) {
+      final canonical = canonicalMutualMatchId(
+        myId: userId,
+        opponentId: fromId,
+        myMatchId: myPendingMatchId,
+        theirMatchId: theirMatchId,
+      );
+      _clearPendingChallengeTo(fromId);
+
+      if (userId.compareTo(fromId) < 0) {
+        unawaited(
+          _autoAcceptMutualChallenge(
+            matchId: canonical,
+            challengerId: fromId,
+            challengerUsername: data['from_username']?.toString() ?? 'Player',
+            responderId: userId,
+            responderUsername: username,
+          ),
+        );
+      }
+      return;
+    }
+
+    _challengeController.add(data);
+  }
+
+  Future<void> _autoAcceptMutualChallenge({
+    required String matchId,
+    required String challengerId,
+    required String challengerUsername,
+    required String responderId,
+    required String responderUsername,
+  }) async {
+    await respondToChallenge(
+      matchId: matchId,
+      challengerId: challengerId,
+      accepted: true,
+      responderId: responderId,
+      responderUsername: responderUsername,
+    );
+    _matchStartController.add({
+      'match_id': matchId,
+      'opponent_id': challengerId,
+      'opponent_username': challengerUsername,
+    });
+  }
+
+  /// Join the universal lobby using the signed-in user's [mg_profiles] row.
+  /// Returns false when not signed in or not linked to a school.
+  Future<bool> joinLobbyFromCurrentProfile() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      final rows = List<Map<String, dynamic>>.from(
+        await _client
+            .from('mg_profiles')
+            .select('school_id, username, elo, country_code, mg_schools(name)')
+            .eq('id', user.id)
+            .limit(1),
+      );
+      if (rows.isEmpty) return false;
+
+      final row = rows.first;
+      final rawSchool = row['school_id'];
+      final String? schoolId = rawSchool == null
+          ? null
+          : (rawSchool is String
+              ? (rawSchool.trim().isEmpty ? null : rawSchool.trim())
+              : rawSchool.toString().trim().isEmpty
+                  ? null
+                  : rawSchool.toString().trim());
+      if (schoolId == null || schoolId.isEmpty) return false;
+
+      final rawName = row['username']?.toString().trim();
+      final username =
+          (rawName != null && rawName.isNotEmpty) ? rawName : 'Player';
+      final elo = _parseProfileInt(row['elo'], fallback: 1200);
+      final institution = institutionNameFromProfileRow(row);
+      final cc = row['country_code']?.toString().trim();
+
+      await ensureXpInitialized();
+      final beeFiveXp = await getXp();
+
+      await joinLobby(
+        schoolId: schoolId,
+        userId: user.id,
+        username: username,
+        elo: elo,
+        beeFiveXp: beeFiveXp,
+        institutionName: institution,
+        countryCode: cc,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Clears the signed-in user's [mg_profiles.school_id] and drops lobby/match realtime channels.
@@ -429,6 +621,9 @@ class MultiplayerService {
     required String toId,
     required String matchId,
   }) async {
+    final resolvedMatchId = matchIdForOutgoingChallenge(toId, matchId);
+    _pendingOutgoingChallenges[toId] = resolvedMatchId;
+
     await _lobbyChannel?.sendBroadcastMessage(
       event: 'challenge',
       payload: {
@@ -437,7 +632,7 @@ class MultiplayerService {
         'from_elo': fromElo,
         'from_xp': fromBeeFiveXp,
         'to_id': toId,
-        'match_id': matchId,
+        'match_id': resolvedMatchId,
       },
     );
   }
@@ -450,10 +645,19 @@ class MultiplayerService {
     required String responderId,
     required String responderUsername,
   }) async {
+    final resolvedMatchId = accepted
+        ? matchIdForChallengeAccept(
+            opponentId: challengerId,
+            theirMatchId: matchId,
+          )
+        : matchId;
+
+    _clearPendingChallengeTo(challengerId);
+
     await _lobbyChannel?.sendBroadcastMessage(
       event: 'challenge_response',
       payload: {
-        'match_id': matchId,
+        'match_id': resolvedMatchId,
         'challenger_id': challengerId,
         'accepted': accepted,
         'responder_id': responderId,
@@ -465,6 +669,36 @@ class MultiplayerService {
   // ════════════════════════════════════════════════════════
   // MATCH — join when both players enter the match screen
   // ════════════════════════════════════════════════════════
+  bool _isOpponentPresentOnMatchChannel(String opponentId) {
+    final ch = _matchChannel;
+    if (ch == null) return false;
+    final state = ch.presenceState();
+    return state.expand((single) => single.presences).any((p) {
+      final payload = Map<String, dynamic>.from(p.payload as Map);
+      return payload['user_id']?.toString() == opponentId;
+    });
+  }
+
+  void _cancelOpponentDisconnectTimer() {
+    _opponentDisconnectTimer?.cancel();
+    _opponentDisconnectTimer = null;
+  }
+
+  void _scheduleOpponentDisconnectWin({
+    required String userId,
+    required String opponentId,
+  }) {
+    _cancelOpponentDisconnectTimer();
+    _opponentDisconnectTimer = Timer(_opponentDisconnectGrace, () {
+      if (_matchChannel == null || _matchOpponentId != opponentId) return;
+      if (_isOpponentPresentOnMatchChannel(opponentId)) return;
+      _matchOverController.add({
+        'winner_id': userId,
+        'reason': 'opponent_disconnected',
+      });
+    });
+  }
+
   Future<void> joinMatch({
     required String matchId,
     required String userId,
@@ -472,6 +706,7 @@ class MultiplayerService {
   }) async {
     await leaveMatch();
 
+    _matchOpponentId = opponentId;
     _matchChannel = _client.channel('match:$matchId');
 
     // ── Listen for game events from opponent ─────────────
@@ -495,15 +730,25 @@ class MultiplayerService {
       },
     );
 
-    // ── Detect opponent disconnect ───────────────────────
+    // ── Detect opponent disconnect (grace period avoids flaky-network double wins)
+    void onOpponentPresenceMaybeReturned() {
+      if (_isOpponentPresentOnMatchChannel(opponentId)) {
+        _cancelOpponentDisconnectTimer();
+      }
+    }
+
+    _matchChannel!.onPresenceSync((_) => onOpponentPresenceMaybeReturned());
+    _matchChannel!.onPresenceJoin((_) => onOpponentPresenceMaybeReturned());
     _matchChannel!.onPresenceLeave((RealtimePresenceLeavePayload payload) {
-      final opponentLeft = payload.leftPresences
-          .any((p) => p.payload['user_id'] == opponentId);
+      final opponentLeft = payload.leftPresences.any((p) {
+        final raw = Map<String, dynamic>.from(p.payload as Map);
+        return raw['user_id']?.toString() == opponentId;
+      });
       if (opponentLeft) {
-        _matchOverController.add({
-          'winner_id': userId,
-          'reason': 'opponent_disconnected',
-        });
+        _scheduleOpponentDisconnectWin(
+          userId: userId,
+          opponentId: opponentId,
+        );
       }
     });
 
@@ -532,6 +777,8 @@ class MultiplayerService {
   }
 
   Future<void> leaveMatch() async {
+    _cancelOpponentDisconnectTimer();
+    _matchOpponentId = null;
     if (_matchChannel != null) {
       await _matchChannel!.untrack();
       await _client.removeChannel(_matchChannel!);
@@ -626,6 +873,10 @@ class MultiplayerService {
     return data;
   }
 
+  static String _headToHeadOrFilter(String userA, String userB) =>
+      'and(player1_id.eq.$userA,player2_id.eq.$userB),'
+      'and(player1_id.eq.$userB,player2_id.eq.$userA)';
+
   /// Recorded games between two users (either orientation in [mg_matches]).
   Future<int> countCompletedMatchesBetween(String userA, String userB) async {
     if (userA == userB) return 0;
@@ -633,14 +884,40 @@ class MultiplayerService {
       final result = await _client
           .from('mg_matches')
           .select('id')
-          .or(
-            'and(player1_id.eq.$userA,player2_id.eq.$userB),'
-            'and(player1_id.eq.$userB,player2_id.eq.$userA)',
-          )
+          .or(_headToHeadOrFilter(userA, userB))
           .count(CountOption.exact);
       return result.count;
     } catch (_) {
       return 0;
+    }
+  }
+
+  /// Wins in the current head-to-head series (resets when either side reaches 100).
+  Future<HeadToHeadSeriesScore> fetchHeadToHeadSeriesScore(
+    String userA,
+    String userB,
+  ) async {
+    if (userA == userB) return HeadToHeadSeriesScore.empty;
+    try {
+      final rows = List<Map<String, dynamic>>.from(
+        await _client
+            .from('mg_matches')
+            .select('winner_id, created_at')
+            .or(_headToHeadOrFilter(userA, userB))
+            .order('created_at', ascending: true),
+      );
+      return computeHeadToHeadSeriesScore(
+        userA: userA,
+        userB: userB,
+        matchesOldestFirst: rows,
+      );
+    } catch (_) {
+      return HeadToHeadSeriesScore(
+        player1Id: userA.compareTo(userB) < 0 ? userA : userB,
+        player2Id: userA.compareTo(userB) < 0 ? userB : userA,
+        player1Wins: 0,
+        player2Wins: 0,
+      );
     }
   }
 
@@ -1331,5 +1608,6 @@ class MultiplayerService {
     _challengeResponseController.close();
     _gameEventController.close();
     _matchOverController.close();
+    _matchStartController.close();
   }
 }
