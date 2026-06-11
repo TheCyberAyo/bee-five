@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/beefive_internal_auth.dart';
+import '../services/push_notification_service.dart';
 import '../supabase_client.dart';
 
 /// Same value as `prefUsername` in `dashboard_page.dart` (kept here to avoid circular imports).
@@ -73,6 +74,7 @@ class AuthContext extends ChangeNotifier {
     if (_user != null) {
       _isGuest = false;
       _persistUsernameFromUserToPrefs(_user!);
+      unawaited(PushNotificationService.instance.registerIfNeeded());
     }
     _loading = false;
     notifyListeners();
@@ -83,6 +85,7 @@ class AuthContext extends ChangeNotifier {
         _user = null;
         _loading = false;
         _isGuest = false;
+        PushNotificationService.instance.stop();
       } else {
         _session = data.session;
         _user = data.session?.user;
@@ -90,6 +93,7 @@ class AuthContext extends ChangeNotifier {
         if (_user != null) {
           _isGuest = false;
           _persistUsernameFromUserToPrefs(_user!);
+          unawaited(PushNotificationService.instance.registerIfNeeded());
         }
       }
       notifyListeners();

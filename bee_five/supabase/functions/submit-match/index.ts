@@ -104,8 +104,12 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Prevent double-recording when both clients report a result (e.g. network flap).
-  const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  // Prevent double-recording when the same result is submitted twice (retry / race).
+  // Must NOT block legitimate rematches between the same two players.
+  const DUPLICATE_SUBMIT_WINDOW_MS = 45_000;
+  const recentCutoff = new Date(
+    Date.now() - DUPLICATE_SUBMIT_WINDOW_MS,
+  ).toISOString();
   const { data: recentRows } = await supabase
     .from("mg_matches")
     .select(
@@ -120,7 +124,10 @@ Deno.serve(async (req) => {
 
   const recent = recentRows?.[0];
   if (recent) {
-    if (draw) {
+    const recordedWinner = recent.winner_id as string | null;
+    const recentWasDraw = recordedWinner == null;
+
+    if (draw && recentWasDraw) {
       return new Response(
         JSON.stringify({
           isDraw: true,
@@ -132,8 +139,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const recordedWinner = recent.winner_id as string | null;
-    if (recordedWinner) {
+    if (!draw && recordedWinner && recordedWinner === winner_id) {
       const winnerIsP1 = recordedWinner === player1_id;
       const winnerChange = winnerIsP1
         ? (recent.player1_elo_change as number)

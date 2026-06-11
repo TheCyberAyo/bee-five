@@ -1,5 +1,4 @@
-
-7/// AdMob units shared with [HomePage] practice / menu banners.
+/// AdMob units shared with [HomePage] practice / menu banners.
 const String kMultiplayerBannerAdUnitId =
     'ca-app-pub-6740638137327567/1435131168';
 

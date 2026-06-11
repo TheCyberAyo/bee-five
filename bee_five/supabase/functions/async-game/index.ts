@@ -8,7 +8,12 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-import { sendFcmV1 } from "../_shared/fcm_v1.ts";
+import {
+  notifyUser,
+  pushForLatestNotification,
+  pushToUser,
+  stringifyFcmData,
+} from "../_shared/push_to_user.ts";
 
 
 
@@ -188,60 +193,6 @@ function nextTurnDeadline(): string {
 
 
 
-async function notifyUser(
-
-  userId: string,
-
-  type: string,
-
-  title: string,
-
-  body: string,
-
-  data: Record<string, string>,
-
-) {
-
-  await supabase.from("mg_notifications").insert({
-
-    user_id: userId,
-
-    type,
-
-    title,
-
-    body,
-
-    data,
-
-  });
-
-
-
-  const { data: tokenRows } = await supabase
-
-    .from("mg_push_tokens")
-
-    .select("fcm_token")
-
-    .eq("user_id", userId);
-
-
-
-  const tokens = (tokenRows ?? [])
-
-    .map((r) => r.fcm_token as string)
-
-    .filter((t) => t?.length > 0);
-
-
-
-  await sendFcmV1(tokens, title, body, data);
-
-}
-
-
-
 async function submitForfeitStats(
 
   player1Id: string,
@@ -311,9 +262,34 @@ async function applyExpiredForfeits(matchId?: string): Promise<ForfeitRow[]> {
   const rows = (data ?? []) as ForfeitRow[];
 
   for (const row of rows) {
-
     await submitForfeitStats(row.player1_id, row.player2_id, row.winner_id);
 
+    const loserId = row.winner_id === row.player1_id
+      ? row.player2_id
+      : row.player1_id;
+
+    const { data: loserProfile } = await supabase
+      .from("mg_profiles")
+      .select("username")
+      .eq("id", loserId)
+      .maybeSingle();
+    const loserName =
+      ((loserProfile?.username as string) ?? "").trim() || "Your opponent";
+
+    await pushToUser(
+      supabase,
+      row.winner_id,
+      "You win by forfeit",
+      `${loserName} ran out of time. You win the 24hr-turn match.`,
+      { match_id: row.match_id, type: "forfeited" },
+    );
+    await pushToUser(
+      supabase,
+      loserId,
+      "Time expired",
+      "You did not move within 24 hours. You lost the 24hr-turn match.",
+      { match_id: row.match_id, type: "forfeited" },
+    );
   }
 
   return rows;
@@ -418,21 +394,121 @@ Deno.serve(async (req) => {
 
   const action = body.action as string;
 
-  const matchId = body.match_id as string;
+  if (action === "send_challenge") {
+    const challengedId = body.challenged_id as string;
+    if (!challengedId) {
+      return new Response(JSON.stringify({ error: "challenged_id required" }), {
+        status: 400,
+      });
+    }
 
+    const { data: challengeId, error } = await userClient.rpc(
+      "mg_send_async_challenge",
+      { p_challenged_id: challengedId },
+    );
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 400,
+      });
+    }
 
+    await pushForLatestNotification(
+      supabase,
+      challengedId,
+      "async_challenge",
+    );
 
-  if (!matchId) {
-
-    return new Response(JSON.stringify({ error: "match_id required" }), {
-
-      status: 400,
-
-    });
-
+    return new Response(
+      JSON.stringify({ ok: true, challenge_id: challengeId }),
+      { headers: { "Content-Type": "application/json" } },
+    );
   }
 
+  if (action === "accept_challenge") {
+    const challengeId = body.challenge_id as string;
+    if (!challengeId) {
+      return new Response(JSON.stringify({ error: "challenge_id required" }), {
+        status: 400,
+      });
+    }
 
+    const { data: challengeRow } = await supabase
+      .from("mg_async_challenges")
+      .select("challenger_id")
+      .eq("id", challengeId)
+      .maybeSingle();
+
+    const { data: matchId, error } = await userClient.rpc(
+      "mg_accept_async_challenge",
+      { p_challenge_id: challengeId },
+    );
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 400,
+      });
+    }
+
+    const challengerId = challengeRow?.challenger_id as string | undefined;
+    if (challengerId) {
+      await pushForLatestNotification(
+        supabase,
+        challengerId,
+        "async_challenge_accepted",
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ ok: true, match_id: matchId }),
+      { headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (action === "decline_challenge") {
+    const challengeId = body.challenge_id as string;
+    if (!challengeId) {
+      return new Response(JSON.stringify({ error: "challenge_id required" }), {
+        status: 400,
+      });
+    }
+
+    const { data: challengeRow } = await supabase
+      .from("mg_async_challenges")
+      .select("challenger_id")
+      .eq("id", challengeId)
+      .maybeSingle();
+
+    const { error } = await userClient.rpc(
+      "mg_decline_async_challenge",
+      { p_challenge_id: challengeId },
+    );
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 400,
+      });
+    }
+
+    const challengerId = challengeRow?.challenger_id as string | undefined;
+    if (challengerId) {
+      await pushForLatestNotification(
+        supabase,
+        challengerId,
+        "async_challenge_declined",
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ ok: true }),
+      { headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const matchId = body.match_id as string;
+
+  if (!matchId) {
+    return new Response(JSON.stringify({ error: "match_id required" }), {
+      status: 400,
+    });
+  }
 
   if (action === "sync_match") {
 
@@ -738,11 +814,11 @@ Deno.serve(async (req) => {
 
   if (status === "completed") {
 
-    notifyBody = `${moverName} won the async match.`;
+    notifyBody = `${moverName} won the 24hr-turn match.`;
 
   } else if (isDraw) {
 
-    notifyBody = `Async match with ${moverName} ended in a draw.`;
+    notifyBody = `24hr-turn match with ${moverName} ended in a draw.`;
 
   } else {
 
@@ -755,17 +831,15 @@ Deno.serve(async (req) => {
 
 
   await notifyUser(
-
+    supabase,
     opponentId,
-
     status === "active" ? "async_move" : "async_match_over",
-
     status === "active" ? "Your turn" : "Async match finished",
-
     notifyBody,
-
-    { match_id: matchId, type: status === "active" ? "async_move" : status },
-
+    stringifyFcmData({
+      match_id: matchId,
+      type: status === "active" ? "async_move" : status,
+    }),
   );
 
 

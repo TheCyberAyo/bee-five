@@ -180,6 +180,7 @@ class MultiplayerService {
   RealtimeChannel? _matchChannel;
   Timer? _opponentDisconnectTimer;
   String? _matchOpponentId;
+  String? _activeMatchId;
 
   static const Duration _opponentDisconnectGrace = Duration(seconds: 12);
 
@@ -189,6 +190,9 @@ class MultiplayerService {
 
   /// Outgoing live challenges: opponent user id → match id we proposed.
   final Map<String, String> _pendingOutgoingChallenges = {};
+
+  /// Active [MatchScreen] routes — lobby challenge routing pauses while > 0.
+  int _matchScreenCount = 0;
 
   // ── Stream controllers (your UI listens to these) ────────
   final _onlinePlayersController =
@@ -218,9 +222,28 @@ class MultiplayerService {
   bool hasPendingChallengeTo(String opponentId) =>
       _pendingOutgoingChallenges.containsKey(opponentId);
 
+  /// True while [joinMatch] holds the realtime room for [matchId].
+  bool isActiveMatch(String matchId) => _activeMatchId == matchId;
+
+  /// When true, [GlobalLobbySession] should not open matches from lobby events.
+  bool get shouldRouteLobbyChallenges => _matchScreenCount == 0;
+
+  void notifyMatchScreenOpened() => _matchScreenCount++;
+
+  void notifyMatchScreenClosed() {
+    if (_matchScreenCount > 0) _matchScreenCount--;
+  }
+
   /// Reuse an in-flight challenge id so simultaneous invites share one room.
   String matchIdForOutgoingChallenge(String opponentId, String proposedMatchId) {
     return _pendingOutgoingChallenges[opponentId] ?? proposedMatchId;
+  }
+
+  /// Register rematch/challenge intent before slow async work so mutual clicks
+  /// resolve to one shared [matchId].
+  void stageOutgoingChallenge(String opponentId, String proposedMatchId) {
+    final resolved = matchIdForOutgoingChallenge(opponentId, proposedMatchId);
+    _pendingOutgoingChallenges[opponentId] = resolved;
   }
 
   /// Prefer the shared room id when accepting someone you also challenged.
@@ -230,8 +253,9 @@ class MultiplayerService {
   }) {
     final mine = _pendingOutgoingChallenges[opponentId];
     if (mine == null || mine.isEmpty) return theirMatchId;
-    final myId = _lobbyIdentity?.userId;
-    if (myId == null || myId.isEmpty) return theirMatchId;
+    final myId =
+        _lobbyIdentity?.userId ?? _client.auth.currentUser?.id ?? '';
+    if (myId.isEmpty) return theirMatchId;
     return canonicalMutualMatchId(
       myId: myId,
       opponentId: opponentId,
@@ -413,15 +437,20 @@ class MultiplayerService {
       _clearPendingChallengeTo(fromId);
 
       if (userId.compareTo(fromId) < 0) {
-        unawaited(
-          _autoAcceptMutualChallenge(
+        unawaited(() async {
+          final xp = await getXp();
+          if (!canPlayLiveMatches(xp)) {
+            _challengeController.add(data);
+            return;
+          }
+          await _autoAcceptMutualChallenge(
             matchId: canonical,
             challengerId: fromId,
             challengerUsername: data['from_username']?.toString() ?? 'Player',
             responderId: userId,
             responderUsername: username,
-          ),
-        );
+          );
+        }());
       }
       return;
     }
@@ -621,6 +650,11 @@ class MultiplayerService {
     required String toId,
     required String matchId,
   }) async {
+    if (!canPlayLiveMatches(fromBeeFiveXp)) {
+      _clearPendingChallengeTo(toId);
+      return;
+    }
+
     final resolvedMatchId = matchIdForOutgoingChallenge(toId, matchId);
     _pendingOutgoingChallenges[toId] = resolvedMatchId;
 
@@ -706,6 +740,7 @@ class MultiplayerService {
   }) async {
     await leaveMatch();
 
+    _activeMatchId = matchId;
     _matchOpponentId = opponentId;
     _matchChannel = _client.channel('match:$matchId');
 
@@ -776,9 +811,14 @@ class MultiplayerService {
     }
   }
 
-  Future<void> leaveMatch() async {
+  /// Drops the realtime match channel. When [onlyIfMatchId] is set, no-ops if a
+  /// newer rematch screen already joined a different room.
+  Future<void> leaveMatch({String? onlyIfMatchId}) async {
+    if (onlyIfMatchId != null && _activeMatchId != onlyIfMatchId) return;
+
     _cancelOpponentDisconnectTimer();
     _matchOpponentId = null;
+    _activeMatchId = null;
     if (_matchChannel != null) {
       await _matchChannel!.untrack();
       await _client.removeChannel(_matchChannel!);

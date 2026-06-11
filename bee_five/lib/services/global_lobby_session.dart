@@ -95,10 +95,16 @@ class GlobalLobbySession {
   }
 
   Future<void> _onIncomingChallenge(Map<String, dynamic> payload) async {
+    if (!_service.shouldRouteLobbyChallenges) return;
+
     final ctx = _dialogContext;
     final userId = _userId;
     final username = _username;
     if (ctx == null || userId == null || username == null) return;
+
+    await ensureXpInitialized();
+    _lobbyXp = await getXp();
+    if (!ctx.mounted) return;
 
     await showDialog<void>(
       context: ctx,
@@ -106,6 +112,8 @@ class GlobalLobbySession {
       builder: (dialogCtx) => ChallengeDialog(
         fromUsername: payload['from_username']?.toString() ?? 'Player',
         fromElo: int.tryParse(payload['from_elo']?.toString() ?? '') ?? 1200,
+        acceptBlockedReason:
+            canPlayLiveMatches(_lobbyXp) ? null : liveMatchesRequiresXpMessage,
         onAccept: () async {
           Navigator.pop(dialogCtx);
           final challengerId = payload['from_id']?.toString() ?? '';
@@ -142,6 +150,8 @@ class GlobalLobbySession {
   }
 
   void _onChallengeResponse(Map<String, dynamic> payload) {
+    if (!_service.shouldRouteLobbyChallenges) return;
+
     final ctx = _snackContext;
     if (ctx == null) return;
 
@@ -162,6 +172,8 @@ class GlobalLobbySession {
   }
 
   void _onMatchStart(Map<String, dynamic> payload) {
+    if (!_service.shouldRouteLobbyChallenges) return;
+
     _openMatchIfNew(
       matchId: payload['match_id']?.toString() ?? '',
       opponentId: payload['opponent_id']?.toString() ?? '',

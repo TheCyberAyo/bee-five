@@ -1,9 +1,12 @@
-// Async (multi-day) Bee Five: challenges, saved moves, notifications.
+// 24hr-turn Bee Five: challenges, saved moves, notifications.
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../game_board_codec.dart';
 import '../widgets/online_bee_five_board.dart';
+
+/// UI label for 24-hours-per-move online matches.
+const String asyncGameModeLabel = '24hr-turn';
 
 class AsyncChallengeRow {
   final String id;
@@ -12,6 +15,7 @@ class AsyncChallengeRow {
   final String status;
   final String? matchId;
   final String? challengerUsername;
+  final String? challengedUsername;
 
   const AsyncChallengeRow({
     required this.id,
@@ -20,10 +24,12 @@ class AsyncChallengeRow {
     required this.status,
     this.matchId,
     this.challengerUsername,
+    this.challengedUsername,
   });
 
   factory AsyncChallengeRow.fromMap(Map<String, dynamic> map) {
-    final name = map['challenger_username']?.toString().trim();
+    final challengerName = map['challenger_username']?.toString().trim();
+    final challengedName = map['challenged_username']?.toString().trim();
     return AsyncChallengeRow(
       id: map['id']?.toString() ?? '',
       challengerId: map['challenger_id']?.toString() ?? '',
@@ -31,7 +37,13 @@ class AsyncChallengeRow {
       status: map['status']?.toString() ?? 'pending',
       matchId: map['match_id']?.toString(),
       challengerUsername:
-          (name != null && name.isNotEmpty) ? name : null,
+          (challengerName != null && challengerName.isNotEmpty)
+              ? challengerName
+              : null,
+      challengedUsername:
+          (challengedName != null && challengedName.isNotEmpty)
+              ? challengedName
+              : null,
     );
   }
 }
@@ -153,11 +165,26 @@ class AsyncGameService {
 
   Future<String?> sendAsyncChallenge(String challengedUserId) async {
     try {
-      final id = await _client.rpc<String>(
-        'mg_send_async_challenge',
-        params: {'p_challenged_id': challengedUserId},
+      final response = await _client.functions.invoke(
+        'async-game',
+        body: {
+          'action': 'send_challenge',
+          'challenged_id': challengedUserId,
+        },
       );
-      return id;
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (data['ok'] != true) {
+        throw AsyncGameException(
+          data['error']?.toString() ?? 'Could not send challenge',
+        );
+      }
+      return data['challenge_id']?.toString();
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        throw AsyncGameException(details['error'].toString());
+      }
+      throw AsyncGameException(e.reasonPhrase ?? 'Could not send challenge');
     } on PostgrestException catch (e) {
       throw AsyncGameException(e.message);
     }
@@ -165,11 +192,30 @@ class AsyncGameService {
 
   Future<String> acceptAsyncChallenge(String challengeId) async {
     try {
-      final matchId = await _client.rpc<String>(
-        'mg_accept_async_challenge',
-        params: {'p_challenge_id': challengeId},
+      final response = await _client.functions.invoke(
+        'async-game',
+        body: {
+          'action': 'accept_challenge',
+          'challenge_id': challengeId,
+        },
       );
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (data['ok'] != true) {
+        throw AsyncGameException(
+          data['error']?.toString() ?? 'Could not accept challenge',
+        );
+      }
+      final matchId = data['match_id']?.toString() ?? '';
+      if (matchId.isEmpty) {
+        throw const AsyncGameException('Match was not created');
+      }
       return matchId;
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        throw AsyncGameException(details['error'].toString());
+      }
+      throw AsyncGameException(e.reasonPhrase ?? 'Could not accept challenge');
     } on PostgrestException catch (e) {
       throw AsyncGameException(e.message);
     }
@@ -177,16 +223,87 @@ class AsyncGameService {
 
   Future<void> declineAsyncChallenge(String challengeId) async {
     try {
-      await _client.rpc(
-        'mg_decline_async_challenge',
-        params: {'p_challenge_id': challengeId},
+      final response = await _client.functions.invoke(
+        'async-game',
+        body: {
+          'action': 'decline_challenge',
+          'challenge_id': challengeId,
+        },
       );
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (data['ok'] != true) {
+        throw AsyncGameException(
+          data['error']?.toString() ?? 'Could not decline challenge',
+        );
+      }
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        throw AsyncGameException(details['error'].toString());
+      }
+      throw AsyncGameException(e.reasonPhrase ?? 'Could not decline challenge');
     } on PostgrestException catch (e) {
       throw AsyncGameException(e.message);
     }
   }
 
+  /// Opponents you cannot invite again (pending challenge or active match).
+  Future<Set<String>> fetchAsyncInviteBlockedOpponentIds({
+    List<AsyncMatchRow>? activeMatches,
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return {};
+
+    final blocked = <String>{};
+
+    try {
+      final matches = activeMatches ?? await fetchActiveMatchesForMe();
+      for (final match in matches) {
+        blocked.add(match.opponentIdFor(uid));
+      }
+
+      final rows = List<Map<String, dynamic>>.from(
+        await _client
+            .from('mg_async_challenges')
+            .select('challenger_id, challenged_id')
+            .eq('status', 'pending')
+            .or('challenger_id.eq.$uid,challenged_id.eq.$uid'),
+      );
+      for (final row in rows) {
+        final challenger = row['challenger_id']?.toString() ?? '';
+        final challenged = row['challenged_id']?.toString() ?? '';
+        if (challenger == uid && challenged.isNotEmpty) {
+          blocked.add(challenged);
+        } else if (challenged == uid && challenger.isNotEmpty) {
+          blocked.add(challenger);
+        }
+      }
+    } catch (_) {}
+
+    return blocked;
+  }
+
   Future<List<AsyncChallengeRow>> fetchPendingChallengesForMe() async {
+    return _fetchPendingChallenges(
+      filterColumn: 'challenged_id',
+      usernameColumn: 'challenger_id',
+      usernameKey: 'challenger_username',
+    );
+  }
+
+  Future<List<AsyncChallengeRow>> fetchOutgoingPendingChallengesByMe() async {
+    return _fetchPendingChallenges(
+      filterColumn: 'challenger_id',
+      usernameColumn: 'challenged_id',
+      usernameKey: 'challenged_username',
+    );
+  }
+
+  Future<List<AsyncChallengeRow>> _fetchPendingChallenges({
+    required String filterColumn,
+    required String usernameColumn,
+    required String usernameKey,
+  }) async {
     final uid = _client.auth.currentUser?.id;
     if (uid == null) return [];
     try {
@@ -194,23 +311,23 @@ class AsyncGameService {
         await _client
             .from('mg_async_challenges')
             .select()
-            .eq('challenged_id', uid)
+            .eq(filterColumn, uid)
             .eq('status', 'pending')
             .order('created_at', ascending: false),
       );
       final out = <AsyncChallengeRow>[];
       for (final row in rows) {
         final m = Map<String, dynamic>.from(row);
-        final cid = m['challenger_id']?.toString();
-        if (cid != null && cid.isNotEmpty) {
+        final otherId = m[usernameColumn]?.toString();
+        if (otherId != null && otherId.isNotEmpty) {
           try {
             final prof = await _client
                 .from('mg_profiles')
                 .select('username')
-                .eq('id', cid)
+                .eq('id', otherId)
                 .maybeSingle();
             if (prof != null) {
-              m['challenger_username'] = prof['username'];
+              m[usernameKey] = prof['username'];
             }
           } catch (_) {}
         }

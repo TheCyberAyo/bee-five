@@ -2,7 +2,7 @@ name: bee_five
 description: "Bee Five game app."
 publish_to: 'none'
 
-version: 1.5.0+26
+version: 1.5.1+27
 
 environment:
   sdk: ^3.10.7

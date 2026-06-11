@@ -12,7 +12,7 @@ import '../services/multiplayer_service.dart';
 import '../simple_game.dart' show primaryYellow;
 import '../theme/bee_five_multiplayer_theme.dart';
 import '../widgets/async_bee_five_board.dart';
-import '../widgets/online_bee_five_board.dart';
+import '../widgets/async_match_score_header.dart';
 
 class AsyncMatchScreen extends StatefulWidget {
   final String matchId;
@@ -45,16 +45,10 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
   bool _finishedHandled = false;
   StreamSubscription<List<Map<String, dynamic>>>? _matchSub;
   Timer? _clockTimer;
+  Timer? _syncTimer;
   InterstitialAd? _interstitialAd;
   BannerAd? _bannerAd;
   bool _isBannerLoaded = false;
-
-  String get _p1Id => onlineMatchPlayer1Id(widget.myId, widget.opponentId);
-  String get _p2Id => onlineMatchPlayer2Id(widget.myId, widget.opponentId);
-  String get _p1Name =>
-      _p1Id == widget.myId ? widget.myUsername : widget.opponentUsername;
-  String get _p2Name =>
-      _p2Id == widget.myId ? widget.myUsername : widget.opponentUsername;
 
   bool get _isMyTurn =>
       _match != null && _match!.seatFor(widget.myId) == _match!.currentSeat;
@@ -75,7 +69,10 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
       setState(() => _match = row);
       unawaited(_handleFinishedIfNeeded(row));
     });
-    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _match?.isActive == true) setState(() {});
+    });
+    _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       if (!mounted || _match == null || !_match!.isActive) return;
       final synced = await _async.syncMatch(widget.matchId);
       if (!mounted || synced == null) return;
@@ -308,7 +305,7 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
         ? (iWon
             ? 'Your opponent did not move within 24 hours.'
             : 'You did not move within 24 hours.')
-        : 'This async match is complete. Your series score will update on your next match.';
+        : 'This $asyncGameModeLabel match is complete. Your series score will update on your next match.';
 
     showDialog<void>(
       context: context,
@@ -338,6 +335,7 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
   @override
   void dispose() {
     _clockTimer?.cancel();
+    _syncTimer?.cancel();
     _matchSub?.cancel();
     _interstitialAd?.dispose();
     _bannerAd?.dispose();
@@ -347,135 +345,94 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
   @override
   Widget build(BuildContext context) {
     final match = _match;
+    final canSave = match != null &&
+        match.isActive &&
+        _isMyTurn &&
+        (_boardKey.currentState?.hasPendingMove ?? false) &&
+        !_saving;
+
     return Scaffold(
       backgroundColor: BeeFiveMultiplayerTheme.scaffoldBackground,
       appBar: AppBar(
         backgroundColor: primaryYellow,
         foregroundColor: Colors.black,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${widget.myUsername} vs ${widget.opponentUsername}',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-            ),
-            const Text(
-              'Multi-day match · 24h per turn',
-              style: TextStyle(fontSize: 12, color: Colors.black87),
-            ),
-          ],
+        title: Text(
+          '${widget.myUsername} vs ${widget.opponentUsername}',
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
         ),
       ),
       body: Column(
         children: [
-          Expanded(
-            child: match == null
-                ? const Center(child: CircularProgressIndicator())
-                : Column(
-                    children: [
-                      _buildTurnClock(match),
-                      _buildScoreHeader(),
-                      Expanded(
-                        child: AsyncBeeFiveBoard(
-                          key: _boardKey,
-                          myUserId: widget.myId,
-                          opponentUserId: widget.opponentId,
-                          myUsername: widget.myUsername,
-                          opponentUsername: widget.opponentUsername,
-                          board: match.board,
-                          currentSeat: match.currentSeat,
-                          isSaving: _saving || !match.isActive,
-                          onSaveMove: _saveMove,
-                        ),
+          if (match == null)
+            const Expanded(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            AsyncMatchScoreHeader(
+              myId: widget.myId,
+              myUsername: widget.myUsername,
+              opponentId: widget.opponentId,
+              opponentUsername: widget.opponentUsername,
+              seriesScore: _seriesScore,
+              match: match,
+            ),
+            Expanded(
+              child: AsyncBeeFiveBoard(
+                key: _boardKey,
+                myUserId: widget.myId,
+                opponentUserId: widget.opponentId,
+                board: match.board,
+                currentSeat: match.currentSeat,
+                isSaving: _saving || !match.isActive,
+                onPendingChanged: () => setState(() {}),
+                onSaveMove: _saveMove,
+              ),
+            ),
+            if (match.isActive && _isMyTurn)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: canSave
+                        ? () =>
+                            unawaited(_boardKey.currentState?.confirmSave())
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.black26,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ],
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Save Move',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
                   ),
+                ),
+              ),
+          ],
+          SafeArea(
+            top: false,
+            child: Center(child: _buildBannerAd()),
           ),
-          _buildBannerAd(),
         ],
       ),
-    );
-  }
-
-  Widget _buildTurnClock(AsyncMatchRow match) {
-    if (!match.isActive) return const SizedBox.shrink();
-
-    final myTurn = _isMyTurn;
-    final label = myTurn
-        ? AsyncGameService.formatTurnTimeLeft(match.timeLeft)
-        : 'Waiting for ${widget.opponentUsername}';
-
-    Color bg;
-    Color fg;
-    if (myTurn && match.isTurnExpired) {
-      bg = Colors.red.shade100;
-      fg = Colors.red.shade900;
-    } else if (myTurn) {
-      bg = Colors.orange.shade100;
-      fg = Colors.black87;
-    } else {
-      bg = Colors.white;
-      fg = Colors.black54;
-    }
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.black, width: 2),
-      ),
-      child: Text(
-        myTurn ? 'Your turn · $label' : label,
-        textAlign: TextAlign.center,
-        style: TextStyle(fontWeight: FontWeight.bold, color: fg),
-      ),
-    );
-  }
-
-  Widget _buildScoreHeader() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black, width: 2),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          Expanded(child: _playerColumn(_p1Name, _p1Id)),
-          const Text('VS', style: TextStyle(fontWeight: FontWeight.w900)),
-          Expanded(child: _playerColumn(_p2Name, _p2Id)),
-        ],
-      ),
-    );
-  }
-
-  Widget _playerColumn(String name, String playerId) {
-    final wins = _seriesScore?.winsFor(playerId);
-    return Column(
-      children: [
-        Text(
-          name,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          wins == null ? '—' : '$wins',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-        ),
-        const Text(
-          'series wins',
-          style: TextStyle(fontSize: 11, color: Colors.black54),
-        ),
-      ],
     );
   }
 }

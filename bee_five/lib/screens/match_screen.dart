@@ -93,6 +93,7 @@ class _MatchScreenState extends State<MatchScreen> {
   @override
   void initState() {
     super.initState();
+    _service.notifyMatchScreenOpened();
     // Listen before joining so broadcast StreamController does not drop events
     // that arrive in the first ms after subscribe (broadcast has no buffer).
     _gameEventSub = _service.onGameEvent.listen((payload) {
@@ -377,6 +378,19 @@ class _MatchScreenState extends State<MatchScreen> {
 
     await ensureXpInitialized();
     final xp = await getXp();
+    if (!canPlayLiveMatches(xp)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(liveMatchesRequiresXpMessage)),
+        );
+      }
+      return;
+    }
+
+    final matchId = _uuid.v4();
+    // Stage before async lobby work so simultaneous rematch clicks share one room.
+    _service.stageOutgoingChallenge(widget.opponentId, matchId);
+
     await _service.setIdle(
       userId: widget.myId,
       username: widget.myUsername,
@@ -384,10 +398,6 @@ class _MatchScreenState extends State<MatchScreen> {
       beeFiveXp: xp,
     );
 
-    final matchId = _service.matchIdForOutgoingChallenge(
-      widget.opponentId,
-      _uuid.v4(),
-    );
     await _service.sendChallenge(
       fromId: widget.myId,
       fromUsername: widget.myUsername,
@@ -535,8 +545,8 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic> result;
     try {
       result = await _service.submitMatchResult(
-        player1Id: widget.myId,
-        player2Id: widget.opponentId,
+        player1Id: _p1Id,
+        player2Id: _p2Id,
         isDraw: true,
       );
     } catch (_) {
@@ -574,15 +584,15 @@ class _MatchScreenState extends State<MatchScreen> {
       try {
         if (!hadMoves) {
           result = await _service.submitMatchResult(
-            player1Id: widget.myId,
-            player2Id: widget.opponentId,
+            player1Id: _p1Id,
+            player2Id: _p2Id,
             isDraw: true,
             voidNoMoves: true,
           );
         } else {
           result = await _service.submitMatchResult(
-            player1Id: widget.myId,
-            player2Id: widget.opponentId,
+            player1Id: _p1Id,
+            player2Id: _p2Id,
             winnerId: winnerId,
           );
         }
@@ -758,8 +768,13 @@ class _MatchScreenState extends State<MatchScreen> {
     _matchOverSub.cancel();
     _matchBannerAd?.dispose();
     _multiplayerInterstitial?.dispose();
-    _service.leaveMatch();
-    unawaited(_restoreLobbyPresenceAfterMatch());
+    // Rematch uses pushReplacement: the new MatchScreen joins first; only tear
+    // down the channel if this route still owns it.
+    if (_service.isActiveMatch(widget.matchId)) {
+      unawaited(_service.leaveMatch(onlyIfMatchId: widget.matchId));
+      unawaited(_restoreLobbyPresenceAfterMatch());
+    }
+    _service.notifyMatchScreenClosed();
     super.dispose();
   }
 

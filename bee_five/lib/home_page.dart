@@ -33,40 +33,72 @@ import 'xp_service.dart';
 /// Contact email for Connect messages and privacy policy (Connect UI hides this).
 const String _contactEmail = 'ndamaseayongezwa@gmail.com';
 
-/// Row in the home-header async inbox (active match or pending invite).
+enum _AsyncInboxKind { incomingInvite, outgoingInvite, activeMatch }
+
+/// Row in the home notifications inbox (invites + multi-day matches).
 class _AsyncInboxItem {
   const _AsyncInboxItem.match({
     required this.match,
     required this.opponentUsername,
     required this.isMyTurn,
     this.turnTimeLabel,
-  }) : challenge = null;
+  })  : kind = _AsyncInboxKind.activeMatch,
+        challenge = null;
 
-  const _AsyncInboxItem.invite({
+  const _AsyncInboxItem.incomingInvite({
     required this.challenge,
     required this.opponentUsername,
-  })  : match = null,
+  })  : kind = _AsyncInboxKind.incomingInvite,
+        match = null,
         isMyTurn = false,
         turnTimeLabel = null;
 
+  const _AsyncInboxItem.outgoingInvite({
+    required this.challenge,
+    required this.opponentUsername,
+  })  : kind = _AsyncInboxKind.outgoingInvite,
+        match = null,
+        isMyTurn = false,
+        turnTimeLabel = null;
+
+  final _AsyncInboxKind kind;
   final AsyncMatchRow? match;
   final AsyncChallengeRow? challenge;
   final String opponentUsername;
   final bool isMyTurn;
   final String? turnTimeLabel;
 
-  bool get needsResponse => challenge != null || isMyTurn;
+  bool get needsResponse =>
+      kind == _AsyncInboxKind.incomingInvite ||
+      (kind == _AsyncInboxKind.activeMatch && isMyTurn);
+
+  IconData get leadingIcon {
+    switch (kind) {
+      case _AsyncInboxKind.incomingInvite:
+        return Icons.mail_outline;
+      case _AsyncInboxKind.outgoingInvite:
+        return Icons.schedule_send;
+      case _AsyncInboxKind.activeMatch:
+        return isMyTurn ? Icons.sports_esports : Icons.hourglass_bottom;
+    }
+  }
 
   String get subtitle {
-    if (challenge != null) return 'Invited you — tap to respond';
-    if (isMyTurn) {
-      final clock = turnTimeLabel;
-      if (clock != null && clock.isNotEmpty) {
-        return 'Your turn · $clock';
-      }
-      return 'Your turn · 24h clock';
+    switch (kind) {
+      case _AsyncInboxKind.incomingInvite:
+        return '$asyncGameModeLabel invite — tap to accept or decline';
+      case _AsyncInboxKind.outgoingInvite:
+        return 'Invite sent — waiting for their response';
+      case _AsyncInboxKind.activeMatch:
+        if (isMyTurn) {
+          final clock = turnTimeLabel;
+          if (clock != null && clock.isNotEmpty) {
+            return 'Your turn · $clock';
+          }
+          return 'Your turn — tap to make a move';
+        }
+        return 'Match in progress — tap to view board';
     }
-    return 'Tap to view · waiting for their move';
   }
 }
 
@@ -439,6 +471,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   final FocusNode _connectTalkToUsFocus = FocusNode();
   int? _headerXp;
   List<_AsyncInboxItem> _asyncInbox = [];
+  Set<String> _asyncInviteBlockedOpponentIds = {};
+  final TextEditingController _notifPlayerSearchController =
+      TextEditingController();
+  List<Map<String, dynamic>> _notifPlayerSearchResults = [];
+  bool _notifPlayerSearchLoading = false;
+  Timer? _notifPlayerSearchDebounce;
   bool _dailyChallengePlayedToday = false;
   bool? _dailyChallengeWon;
 
@@ -460,7 +498,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     onOpenMatch: _openOnlineMatchFromLobby,
   );
   late final GlobalAsyncGameSession _globalAsync = GlobalAsyncGameSession(
-    onOpenMatch: _openAsyncMatchFromLobby,
     onTurnsChanged: () {
       if (mounted) unawaited(_loadAsyncInbox());
     },
@@ -640,7 +677,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       dialogContext: context,
       snackContext: context,
     );
-    _globalAsync.updateContext(context);
     unawaited(_globalLobby.startIfEligible());
     unawaited(_globalAsync.startIfEligible());
     unawaited(_loadAsyncInbox());
@@ -668,9 +704,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       return;
     }
 
-    final invites =
-        await AsyncGameService.instance.fetchPendingChallengesForMe();
-    final matches = await AsyncGameService.instance.fetchActiveMatchesForMe();
+    final service = AsyncGameService.instance;
+    final invites = await service.fetchPendingChallengesForMe();
+    final outgoing = await service.fetchOutgoingPendingChallengesByMe();
+    final matches = await service.fetchActiveMatchesForMe();
+    final blocked = await service.fetchAsyncInviteBlockedOpponentIds(
+      activeMatches: matches,
+    );
 
     final items = <_AsyncInboxItem>[];
 
@@ -678,7 +718,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       final name = invite.challengerUsername ??
           await _usernameForUser(invite.challengerId);
       items.add(
-        _AsyncInboxItem.invite(
+        _AsyncInboxItem.incomingInvite(
+          challenge: invite,
+          opponentUsername: name,
+        ),
+      );
+    }
+
+    for (final invite in outgoing) {
+      final name = invite.challengedUsername ??
+          await _usernameForUser(invite.challengedId);
+      items.add(
+        _AsyncInboxItem.outgoingInvite(
           challenge: invite,
           opponentUsername: name,
         ),
@@ -705,184 +756,364 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       if (a.needsResponse != b.needsResponse) {
         return a.needsResponse ? -1 : 1;
       }
-      if (a.challenge != null && b.challenge == null) return -1;
-      if (a.challenge == null && b.challenge != null) return 1;
+      if (a.kind.index != b.kind.index) {
+        return a.kind.index.compareTo(b.kind.index);
+      }
       if (a.isMyTurn != b.isMyTurn) return a.isMyTurn ? -1 : 1;
       return a.opponentUsername.compareTo(b.opponentUsername);
     });
 
     if (!mounted) return;
-    setState(() => _asyncInbox = items);
+    setState(() {
+      _asyncInbox = items;
+      _asyncInviteBlockedOpponentIds = blocked;
+    });
+  }
+
+  void _onNotifPlayerSearchChanged(
+    String query, {
+    VoidCallback? onSheetRebuild,
+  }) {
+    _notifPlayerSearchDebounce?.cancel();
+    final q = query.trim();
+    if (q.isEmpty) {
+      setState(() {
+        _notifPlayerSearchResults = [];
+        _notifPlayerSearchLoading = false;
+      });
+      onSheetRebuild?.call();
+      return;
+    }
+    _notifPlayerSearchDebounce = Timer(const Duration(milliseconds: 350), () async {
+      if (!mounted) return;
+      setState(() => _notifPlayerSearchLoading = true);
+      onSheetRebuild?.call();
+      try {
+        final rows = await _multiplayerService.searchGlobalLeaderboard(q);
+        if (!mounted) return;
+        final uid = context.read<AuthContext>().user?.id;
+        setState(() {
+          _notifPlayerSearchResults = uid == null
+              ? rows
+              : rows
+                  .where((p) => p['id']?.toString() != uid)
+                  .toList();
+          _notifPlayerSearchLoading = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _notifPlayerSearchResults = [];
+          _notifPlayerSearchLoading = false;
+        });
+      }
+      onSheetRebuild?.call();
+    });
+  }
+
+  Future<void> _sendAsyncChallengeFromNotifications(
+    String opponentId,
+    String opponentName, {
+    VoidCallback? onSheetRebuild,
+  }) async {
+    if (_asyncInviteBlockedOpponentIds.contains(opponentId)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You already have a pending or active $asyncGameModeLabel match with $opponentName.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await AsyncGameService.instance.sendAsyncChallenge(opponentId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$asyncGameModeLabel challenge sent to $opponentName.'),
+        ),
+      );
+      await _loadAsyncInbox();
+      onSheetRebuild?.call();
+    } on AsyncGameException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
   }
 
   Future<void> _showAsyncInboxSheet() async {
+    _notifPlayerSearchController.clear();
+    _notifPlayerSearchResults = [];
+    _notifPlayerSearchLoading = false;
     await _loadAsyncInbox();
     if (!mounted) return;
 
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: primaryYellow,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         side: BorderSide(color: Colors.black, width: 3),
       ),
       builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
         final needsAction =
             _asyncInbox.where((e) => e.needsResponse).length;
+        final sheetHeight = MediaQuery.of(sheetCtx).size.height * 0.85;
+        void refreshSheet() => setSheetState(() {});
 
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Multi-day games',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+          child: SizedBox(
+            height: sheetHeight,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    if (needsAction > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.black),
-                        ),
+                  ),
+                  Row(
+                    children: [
+                      const Expanded(
                         child: Text(
-                          '$needsAction to respond',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
+                          'Notifications',
+                          style: TextStyle(
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (_asyncInbox.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Text(
-                      'No active games or invitations right now.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 15, height: 1.35),
-                    ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: _asyncInbox.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (_, index) {
-                        final item = _asyncInbox[index];
-                        return Material(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InkWell(
+                      if (needsAction > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
                             borderRadius: BorderRadius.circular(12),
-                            onTap: () {
-                              Navigator.pop(sheetCtx);
-                              unawaited(_onAsyncInboxItemTap(item));
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.black,
-                                  width: item.needsResponse ? 2 : 1,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    backgroundColor: const Color(0xFF2c2c2c),
-                                    child: Text(
-                                      item.opponentUsername.isNotEmpty
-                                          ? item.opponentUsername[0]
-                                              .toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                        color: primaryYellow,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          item.opponentUsername,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          item.subtitle,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: item.needsResponse
-                                                ? Colors.black87
-                                                : Colors.black54,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Icon(
-                                    Icons.chevron_right,
-                                    color: Colors.black87,
-                                  ),
-                                ],
-                              ),
+                            border: Border.all(color: Colors.black),
+                          ),
+                          child: Text(
+                            '$needsAction need action',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        );
-                      },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$asyncGameModeLabel matches, invites, and your turn alerts live here.',
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_asyncInbox.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'No invites or ongoing $asyncGameModeLabel matches yet.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 15, height: 1.35),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      flex: 3,
+                      child: ListView.separated(
+                        itemCount: _asyncInbox.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (_, index) {
+                          final item = _asyncInbox[index];
+                          return Material(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                if (item.kind == _AsyncInboxKind.outgoingInvite) {
+                                  ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Waiting for ${item.opponentUsername} to respond.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                Navigator.pop(sheetCtx);
+                                unawaited(_onAsyncInboxItemTap(item));
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.black,
+                                    width: item.needsResponse ? 2 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      backgroundColor: const Color(0xFF2c2c2c),
+                                      child: Icon(
+                                        item.leadingIcon,
+                                        color: primaryYellow,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.opponentUsername,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            item.subtitle,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: item.needsResponse
+                                                  ? Colors.black87
+                                                  : Colors.black54,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.black87,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const Divider(height: 24, color: Colors.black54),
+                  Text(
+                    'Start a $asyncGameModeLabel match',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _notifPlayerSearchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search player to invite…',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Colors.black),
+                      ),
+                      suffixIcon: _notifPlayerSearchLoading
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                    ),
+                    onChanged: (q) => _onNotifPlayerSearchChanged(
+                      q,
+                      onSheetRebuild: refreshSheet,
                     ),
                   ),
-              ],
+                  if (_notifPlayerSearchResults.isNotEmpty)
+                    Expanded(
+                      flex: 2,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(top: 8),
+                        itemCount: _notifPlayerSearchResults.length,
+                        itemBuilder: (_, index) {
+                          final profile = _notifPlayerSearchResults[index];
+                          final opponentId = profile['id']?.toString() ?? '';
+                          final name =
+                              profile['username']?.toString() ?? 'Player';
+                          final blocked = _asyncInviteBlockedOpponentIds
+                              .contains(opponentId);
+                          return ListTile(
+                            dense: true,
+                            tileColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: const BorderSide(color: Colors.black26),
+                            ),
+                            title: Text(
+                              name,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            trailing: TextButton(
+                              onPressed: blocked || opponentId.isEmpty
+                                  ? null
+                                  : () => unawaited(
+                                        _sendAsyncChallengeFromNotifications(
+                                          opponentId,
+                                          name,
+                                          onSheetRebuild: refreshSheet,
+                                        ),
+                                      ),
+                              child: Text(
+                                blocked ? 'Unavailable' : asyncGameModeLabel,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: blocked ? Colors.black38 : Colors.green,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
+        );
+          },
         );
       },
     );
   }
 
   Future<void> _onAsyncInboxItemTap(_AsyncInboxItem item) async {
-    if (item.challenge != null) {
+    if (item.kind == _AsyncInboxKind.incomingInvite && item.challenge != null) {
       await _respondToAsyncInvite(item.challenge!, item.opponentUsername);
       return;
     }
@@ -912,10 +1143,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           challengerName,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        content: const Text(
-          'Invited you to a multi-day Bee Five match. Accept to start playing — '
+        content: Text(
+          'Invited you to a $asyncGameModeLabel Bee Five match. Accept to start playing — '
           'each move is saved when you tap Save Move.',
-          style: TextStyle(fontSize: 15, height: 1.35),
+          style: const TextStyle(fontSize: 15, height: 1.35),
         ),
         actions: [
           TextButton(
@@ -984,18 +1215,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     });
   }
 
-  void _openAsyncMatchFromLobby({
-    required String matchId,
-    required String opponentId,
-    required String opponentUsername,
-  }) {
-    _openAsyncMatch(
-      matchId: matchId,
-      opponentId: opponentId,
-      opponentUsername: opponentUsername,
-    );
-  }
-
   void _openOnlineMatchFromLobby({
     required String matchId,
     required String opponentId,
@@ -1030,6 +1249,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     _connectTalkToUsFocus.removeListener(_onConnectTalkToUsFocusChange);
     _connectTalkToUsFocus.dispose();
     _talkToUsController.dispose();
+    _notifPlayerSearchDebounce?.cancel();
+    _notifPlayerSearchController.dispose();
     bee1Controller.dispose();
     bee2Controller.dispose();
     bee3Controller.dispose();
@@ -2753,6 +2974,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     );
   }
 
+  void _showLiveMatchesXpRequired() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: primaryYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Colors.black, width: 4),
+        ),
+        title: const Text(
+          'Live Matches',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+        ),
+        content: const Text(
+          liveMatchesRequiresXpMessage,
+          style: TextStyle(fontSize: 16, color: Colors.black87),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'OK',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openSchoolLobbyScreen({
     required String schoolId,
     required String userId,
@@ -2779,6 +3031,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     if (auth.isGuest || auth.user == null) {
       if (!mounted) return;
       _showLiveMatchesAccountRequired();
+      return;
+    }
+
+    await ensureXpInitialized();
+    final xp = await getXp();
+    if (!canPlayLiveMatches(xp)) {
+      if (!mounted) return;
+      _showLiveMatchesXpRequired();
       return;
     }
 

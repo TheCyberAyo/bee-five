@@ -279,3 +279,9 @@ int getTodaysChallengeGameIndex() {
   final dayCode = now.year * 10000 + now.month * 100 + now.day;
   return dayCode % 6; // 6 different challenge types
 }
+
+/// Live Matches require at least 1 XP (send, accept, or rematch).
+bool canPlayLiveMatches(int xp) => xp > 0;
+
+const String liveMatchesRequiresXpMessage =
+    'You need at least 1 XP to play Live Matches. Earn XP in Adventure or Classic mode.';

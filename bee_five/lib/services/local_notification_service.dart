@@ -32,8 +32,8 @@ class LocalNotificationService {
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'bee_five_async',
-        'Async matches',
-        channelDescription: 'Challenges and saved moves in multi-day games',
+        '24hr-turn',
+        channelDescription: 'Challenges and saved moves in 24hr-turn games',
         importance: Importance.high,
         priority: Priority.high,
       ),

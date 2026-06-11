@@ -13,9 +13,7 @@ import 'package:uuid/uuid.dart';
 
 import '../ads/multiplayer_ad_constants.dart';
 import '../models/player_presence.dart';
-import '../services/async_game_service.dart';
 import '../services/multiplayer_service.dart';
-import '../navigation/async_match_navigation.dart';
 import '../utils/country_data.dart';
 import '../utils/player_rank.dart';
 import '../xp_service.dart';
@@ -70,7 +68,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
 
   List<Map<String, dynamic>> _globalSearchResults = [];
   List<Map<String, dynamic>> _institutionalSearchResults = [];
-  List<AsyncMatchRow> _asyncMatches = [];
   bool _globalSearchLoading = false;
   bool _institutionalSearchLoading = false;
   Timer? _globalSearchDebounce;
@@ -145,96 +142,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
     _loadLobbyBannerAd();
     unawaited(_resolveInstitutionAndSchools());
     unawaited(_loadMyRankingStats());
-    unawaited(_loadAsyncMatches());
     _initLobby();
-  }
-
-  Future<void> _loadAsyncMatches() async {
-    final rows = await AsyncGameService.instance.fetchActiveMatchesForMe();
-    if (!mounted) return;
-    setState(() => _asyncMatches = rows);
-  }
-
-  Future<void> _openAsyncMatch(AsyncMatchRow match) async {
-    final oppId = match.opponentIdFor(widget.userId);
-    String oppName = 'Player';
-    try {
-      final row = await Supabase.instance.client
-          .from('mg_profiles')
-          .select('username')
-          .eq('id', oppId)
-          .maybeSingle();
-      final n = row?['username']?.toString().trim();
-      if (n != null && n.isNotEmpty) oppName = n;
-    } catch (_) {}
-
-    if (!mounted) return;
-    await openAsyncMatch(
-      context,
-      matchId: match.id,
-      myId: widget.userId,
-      myUsername: widget.username,
-      opponentId: oppId,
-      opponentUsername: oppName,
-      match: match,
-    );
-    await _loadAsyncMatches();
-  }
-
-  Future<void> _sendAsyncChallenge(String opponentId, String opponentName) async {
-    // Async challenges only from Global Rankings or Institutional Ranking lists.
-    if (_selectedTab != 1 && _selectedTab != 2) return;
-
-    try {
-      await AsyncGameService.instance.sendAsyncChallenge(opponentId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Multi-day challenge sent to $opponentName. '
-            'They can respond when ready — each player has 24 hours per turn.',
-          ),
-        ),
-      );
-    } on AsyncGameException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
-    }
-  }
-
-  Widget _buildAsyncMatchesBanner() {
-    if (_asyncMatches.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Multi-day matches',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
-          const SizedBox(height: 6),
-          ..._asyncMatches.map((m) {
-            final myTurn = m.seatFor(widget.userId) == m.currentSeat;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: OutlinedButton(
-                onPressed: () => _openAsyncMatch(m),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.black,
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-                child: Text(
-                  myTurn ? 'Your turn — resume async match' : 'Waiting — async match',
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
   }
 
   Future<void> _loadMyRankingStats() async {
@@ -448,19 +356,41 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
   }
 
   bool _canChallengePlayer(PlayerPresence player) =>
+      canPlayLiveMatches(_myLobbyXp) &&
+      player.hasLobbyChallengeXp &&
       player.status != PlayerStatus.inMatch;
 
   Future<void> _sendChallenge(PlayerPresence player) async {
+    await ensureXpInitialized();
+    _myLobbyXp = await getXp();
+    if (!mounted) return;
+
+    if (!canPlayLiveMatches(_myLobbyXp)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(liveMatchesRequiresXpMessage)),
+      );
+      return;
+    }
+
     if (player.status == PlayerStatus.inMatch) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'That player is in a match and can’t be challenged right now.',
-            ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'That player is in a match and can’t be challenged right now.',
           ),
-        );
-      }
+        ),
+      );
+      return;
+    }
+
+    if (!player.hasLobbyChallengeXp) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${player.username} needs at least 1 XP to play Live Matches.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -572,7 +502,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
       ),
       body: Column(
         children: [
-          if (!_isLoading) _buildAsyncMatchesBanner(),
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -979,7 +908,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             child: const Text(
-                              'Live',
+                              'Challenge',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
@@ -989,7 +918,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
                         : Text(
                             player.status == PlayerStatus.inMatch
                                 ? 'Busy'
-                                : '',
+                                : (!player.hasLobbyChallengeXp ? 'No XP' : ''),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -1096,30 +1025,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
     );
   }
 
-  Widget? _asyncChallengeTrailing(Map<String, dynamic> profile) {
-    if (_rowIsMe(profile)) return null;
-    final opponentId = profile['id']?.toString();
-    if (opponentId == null || opponentId.isEmpty) return null;
-    final name = profile['username']?.toString() ?? 'Player';
-    return TextButton(
-      onPressed: () => _sendAsyncChallenge(opponentId, name),
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.green,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        minimumSize: Size.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: const Text(
-        'Long-game',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 11,
-          color: Colors.green,
-        ),
-      ),
-    );
-  }
-
   Widget _buildGlobalRankingsTab() {
     final searching = _globalSearchController.text.trim().isNotEmpty;
     final players =
@@ -1157,9 +1062,8 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             'Institution',
             'Rank',
             'ELO',
-            'Challenge',
           ],
-          flex: const [1, 3, 2, 2, 1, _kChallengeColumnFlex],
+          flex: const [1, 3, 2, 2, 1],
         ),
         Expanded(
           child: _buildLeaderboardList(
@@ -1167,7 +1071,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             players: players,
             flex: const [3, 2, 2, 1],
             emptyMessage: searching ? 'No players found' : 'No ranked players yet',
-            trailingForRow: _asyncChallengeTrailing,
             buildCells: (p, _) {
               final username = p['username']?.toString() ?? 'Player';
               final elo = _profileElo(p);
@@ -1227,9 +1130,8 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             'Rank',
             'ELO',
             'XPs',
-            'Challenge',
           ],
-          flex: const [1, 3, 2, 1, 1, _kChallengeColumnFlex],
+          flex: const [1, 3, 2, 1, 1],
         ),
         Expanded(
           child: _buildLeaderboardList(
@@ -1239,7 +1141,6 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
             emptyMessage: searching
                 ? 'No players found'
                 : 'No ranked players at your institution yet',
-            trailingForRow: _asyncChallengeTrailing,
             buildCells: (p, _) {
               final username = p['username']?.toString() ?? 'Player';
               final elo = _profileElo(p);
