@@ -184,7 +184,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
         if (newHumanMoveCount % 3 === 0) {
           updatedBoard = removeTwoBlockedCells(finalBoard);
         }
-      } else if (gameEndsWith3(gameNumber)) {
+      } else if (gameNumber !== undefined && gameEndsWith3(gameNumber)) {
         // Games ending with 3: Progressive blocking system
         const rules = getProgressiveBlockRules(gameNumber);
         if (rules.blocksToAdd > 0 && newHumanMoveCount % rules.movesInterval === 0) {
@@ -205,7 +205,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     
     // Handle block shifting for games ending with 7 after game 250
     let newBlockShiftMoveCount = gameState.blockShiftMoveCount + 1;
-    if (gameEndsWith7After250(gameNumber)) {
+    if (gameNumber !== undefined && gameEndsWith7After250(gameNumber)) {
       // Shift all blocks one position every 2 moves
       if (newBlockShiftMoveCount % 2 === 0) {
         updatedBoard = shiftAllBlocks(updatedBoard);
@@ -214,7 +214,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     }
     
     // Handle block shifting for games ending with 8 after game 600
-    if (gameEndsWith8After600(gameNumber)) {
+    if (gameNumber !== undefined && gameEndsWith8After600(gameNumber)) {
       // Shift all blocks one position every 5 moves
       if (newBlockShiftMoveCount % 5 === 0) {
         updatedBoard = shiftAllBlocks(updatedBoard);
@@ -233,10 +233,10 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     let newBlindPlayTriggerMove = gameState.blindPlayTriggerMove;
     
     // Check if this is a multiple of 50 in match 2/5 (persistent blind play for entire game)
-    const isMultipleOf50Match2BlindPlay = isMultipleOf50Match2(gameNumber, currentMatch);
+    const isMultipleOf50Match2BlindPlay = gameNumber !== undefined && isMultipleOf50Match2(gameNumber, currentMatch);
     
     // Check if this is a game ending with 42, 92, 142, 192, etc. (persistent blind play for entire game)
-    const isGameEndsWith2BlindPlay = gameEndsWith2SpecificPattern(gameNumber);
+    const isGameEndsWith2BlindPlay = gameNumber !== undefined && gameEndsWith2SpecificPattern(gameNumber);
     
     if (isMultipleOf50Match2BlindPlay || isGameEndsWith2BlindPlay) {
       // These games should have blind play for the entire game
@@ -246,31 +246,31 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       // For all other games (temporary blind play only):
       
       // Handle temporary blind play for multiples of 10 from game 60 in match 1/3
-      if (isMultipleOf10Match1From60(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 17 === 0) {
+      if (gameNumber !== undefined && isMultipleOf10Match1From60(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 17 === 0) {
         // After multiples of 17 moves, the match becomes blind play for one move
         shouldBeBlindPlay = true;
       }
 
       // Handle temporary blind play for multiples of 10 from game 210 in match 1/3
-      if (isMultipleOf10Match1From210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 15 === 0) {
+      if (gameNumber !== undefined && isMultipleOf10Match1From210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 15 === 0) {
         // After multiples of 15 moves, the match becomes blind play for one move
         shouldBeBlindPlay = true;
       }
 
       // Handle temporary blind play for multiples of 10 from game 810 in match 1/3
-      if (isMultipleOf10Match1From810(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
+      if (gameNumber !== undefined && isMultipleOf10Match1From810(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
         // After multiples of 13 moves, the match becomes blind play for one move
         shouldBeBlindPlay = true;
       }
 
       // Handle temporary blind play for multiples of 10 from game 1210 in match 1/3
-      if (isMultipleOf10Match1From1210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
+      if (gameNumber !== undefined && isMultipleOf10Match1From1210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
         // After multiples of 9 moves, the match becomes blind play for one move
         shouldBeBlindPlay = true;
       }
 
       // Reset temporary blind play after one move (only for temporary blind play, not persistent)
-      if (gameState.isBlindPlay && !isMultipleOf50Match2(gameNumber, currentMatch) && !isGameEndsWith2BlindPlay && newTotalMoveCount > gameState.blindPlayTriggerMove) {
+      if (gameState.isBlindPlay && gameNumber !== undefined && !isMultipleOf50Match2(gameNumber, currentMatch) && !isGameEndsWith2BlindPlay && newTotalMoveCount > gameState.blindPlayTriggerMove) {
         shouldBeBlindPlay = false;
         newBlindPlayTriggerMove = 0;
       } else if (shouldBeBlindPlay && !gameState.isBlindPlay && !isMultipleOf50Match2BlindPlay && !isGameEndsWith2BlindPlay) {
@@ -280,7 +280,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     }
 
     // Handle board rearrangement for Game 50, Match 3/5 every 5 moves
-    if (isMultipleOf50Match3(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
+    if (gameNumber !== undefined && isMultipleOf50Match3(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
       // Rearrange board every 5 moves for Game 50, Match 3/5
       let result = rearrangeBoard(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
@@ -288,7 +288,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     }
 
     // Handle piece swapping for Game 50, Match 4/5 every 5 moves
-    if (isMultipleOf50Match4(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
+    if (gameNumber !== undefined && isMultipleOf50Match4(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
       // Swap 1 random pair of opponent pieces every 5 moves for Game 50, Match 4/5
       let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
@@ -296,7 +296,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     }
 
     // Handle piece swapping for multiples of 10 Match 2/3 from game 30 every 9 moves
-    if (isMultipleOf10Match2From30(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
+    if (gameNumber !== undefined && isMultipleOf10Match2From30(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
       // Swap 1 random pair of AI and human pieces every 9 moves for multiples of 10 Match 2/3 from game 30
       let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
@@ -304,7 +304,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     }
 
     // Handle piece swapping for multiples of 10 Match 2/3 from game 330 every 7 moves
-    if (isMultipleOf10Match2From330(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 7 === 0) {
+    if (gameNumber !== undefined && isMultipleOf10Match2From330(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 7 === 0) {
       // Swap 1 random pair of AI and human pieces every 7 moves for multiples of 10 Match 2/3 from game 330
       let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
@@ -312,7 +312,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     }
 
     // Handle piece swapping for multiples of 10 Match 2/3 from game 730 every 5 moves
-    if (isMultipleOf10Match2From730(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
+    if (gameNumber !== undefined && isMultipleOf10Match2From730(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
       // Swap 1 random pair of AI and human pieces every 5 moves for multiples of 10 Match 2/3 from game 730
       let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
       updatedBoard = result.board;
@@ -320,7 +320,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     }
 
     // Swap all pieces for multiples of 10 match 1 from game 60 every 11 moves
-    if (isMultipleOf10Match1From60(gameNumber, currentMatch || 1) && newTotalMoveCount > 0 && newTotalMoveCount % 11 === 0) {
+    if (gameNumber !== undefined && isMultipleOf10Match1From60(gameNumber, currentMatch || 1) && newTotalMoveCount > 0 && newTotalMoveCount % 11 === 0) {
       const swapAllResult = swapAllPieces(updatedBoard, updatedPieceAges);
       updatedBoard = swapAllResult.board;
       updatedPieceAges = swapAllResult.pieceAges;
