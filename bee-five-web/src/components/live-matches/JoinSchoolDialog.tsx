@@ -33,7 +33,7 @@ export default function JoinSchoolDialog({
     else setError(outcome.errorMessage ?? 'Could not join school.');
   };
 
-  const useDefaultLobby = async () => {
+  const handleDefaultLobby = async () => {
     setLoading(true);
     setError(null);
     const outcome = await mgMultiplayerService.joinDefaultLobby();
@@ -99,7 +99,7 @@ export default function JoinSchoolDialog({
             marginTop: '1.25rem',
           }}
         >
-          <button type="button" onClick={() => void useDefaultLobby()} disabled={loading} style={primaryYellowButtonStyle}>
+          <button type="button" onClick={() => void handleDefaultLobby()} disabled={loading} style={primaryYellowButtonStyle}>
             Use default lobby
           </button>
           {allowSkip && onSkip && (
