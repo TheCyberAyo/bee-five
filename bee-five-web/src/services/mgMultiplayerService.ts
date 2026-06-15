@@ -1080,25 +1080,54 @@ class MgMultiplayerService {
     }
   }
 
+  private async ensureAuthenticatedQuery(): Promise<boolean> {
+    if (!supabase) return false;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) return true;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+    console.warn('mgMultiplayerService: leaderboard query skipped — no auth session');
+    return false;
+  }
+
   async getLeaderboard(schoolId: string): Promise<Record<string, unknown>[]> {
-    if (!supabase) return [];
-    const { data } = await supabase
+    if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
+    const { data, error } = await supabase
       .from('mg_profiles')
       .select('id, username, elo, wins, losses, country_code')
       .eq('school_id', schoolId)
       .order('elo', { ascending: false })
       .limit(100);
+    if (error) {
+      console.error('getLeaderboard failed:', error.message);
+      return [];
+    }
     return (data ?? []) as Record<string, unknown>[];
   }
 
   async getGlobalLeaderboard(): Promise<Record<string, unknown>[]> {
-    if (!supabase) return [];
-    const { data } = await supabase
+    if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
+    const { data, error } = await supabase
       .from('mg_profiles')
       .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name)')
       .not('school_id', 'is', null)
       .order('elo', { ascending: false })
       .limit(100);
+    if (error) {
+      console.error('getGlobalLeaderboard failed:', error.message);
+      const { data: fallback, error: fallbackError } = await supabase
+        .from('mg_profiles')
+        .select('id, username, elo, wins, losses, school_id, country_code')
+        .not('school_id', 'is', null)
+        .order('elo', { ascending: false })
+        .limit(100);
+      if (fallbackError) {
+        console.error('getGlobalLeaderboard fallback failed:', fallbackError.message);
+        return [];
+      }
+      return (fallback ?? []) as Record<string, unknown>[];
+    }
     return (data ?? []) as Record<string, unknown>[];
   }
 
@@ -1109,7 +1138,22 @@ class MgMultiplayerService {
     const client = supabase;
     if (!client) return () => {};
 
-    void this.getLeaderboard(schoolId).then(onUpdate);
+    const refresh = () => {
+      void this.getLeaderboard(schoolId).then(onUpdate);
+    };
+
+    const { data: { subscription: authSub } } = client.auth.onAuthStateChange((event, session) => {
+      if (
+        session?.access_token
+        && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')
+      ) {
+        refresh();
+      }
+    });
+
+    void client.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) refresh();
+    });
 
     const channel = client
       .channel(`inst-lb:${schoolId}`)
@@ -1121,13 +1165,12 @@ class MgMultiplayerService {
           table: 'mg_profiles',
           filter: `school_id=eq.${schoolId}`,
         },
-        () => {
-          void this.getLeaderboard(schoolId).then(onUpdate);
-        },
+        refresh,
       )
       .subscribe();
 
     return () => {
+      authSub.unsubscribe();
       void client.removeChannel(channel);
     };
   }
@@ -1136,36 +1179,54 @@ class MgMultiplayerService {
     const client = supabase;
     if (!client) return () => {};
 
-    void this.getGlobalLeaderboard().then(onUpdate);
+    const refresh = () => {
+      void this.getGlobalLeaderboard().then(onUpdate);
+    };
+
+    const { data: { subscription: authSub } } = client.auth.onAuthStateChange((event, session) => {
+      if (
+        session?.access_token
+        && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')
+      ) {
+        refresh();
+      }
+    });
+
+    void client.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) refresh();
+    });
 
     const channel = client
       .channel('global-lb')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mg_profiles' },
-        () => {
-          void this.getGlobalLeaderboard().then(onUpdate);
-        },
+        refresh,
       )
       .subscribe();
 
     return () => {
+      authSub.unsubscribe();
       void client.removeChannel(channel);
     };
   }
 
   async searchGlobalLeaderboard(query: string): Promise<Record<string, unknown>[]> {
-    if (!supabase) return [];
+    if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
     const pattern = usernameIlikePattern(query);
     if (!pattern) return [];
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('mg_profiles')
       .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name)')
       .not('school_id', 'is', null)
       .ilike('username', pattern)
       .order('elo', { ascending: false })
       .limit(50);
+    if (error) {
+      console.error('searchGlobalLeaderboard failed:', error.message);
+      return [];
+    }
     return (data ?? []) as Record<string, unknown>[];
   }
 
@@ -1173,22 +1234,26 @@ class MgMultiplayerService {
     schoolId: string,
     query: string,
   ): Promise<Record<string, unknown>[]> {
-    if (!supabase) return [];
+    if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
     const pattern = usernameIlikePattern(query);
     if (!pattern) return [];
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('mg_profiles')
       .select('id, username, elo, wins, losses, country_code')
       .eq('school_id', schoolId)
       .ilike('username', pattern)
       .order('elo', { ascending: false })
       .limit(50);
+    if (error) {
+      console.error('searchInstitutionalLeaderboard failed:', error.message);
+      return [];
+    }
     return (data ?? []) as Record<string, unknown>[];
   }
 
   async getLeaderboardRank(elo: number, schoolId?: string): Promise<number | null> {
-    if (!supabase) return null;
+    if (!supabase || !(await this.ensureAuthenticatedQuery())) return null;
     try {
       let query = supabase.from('mg_profiles').select('id', { count: 'exact', head: true }).gt('elo', elo);
       if (schoolId) {

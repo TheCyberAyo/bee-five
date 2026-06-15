@@ -81,6 +81,13 @@ export default function SchoolLobby({
     const unsubs: (() => void)[] = [];
 
     async function init() {
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token && !cancelled) {
+          setLobbyJoinError('Sign in again to load rankings and online players.');
+        }
+      }
+
       unsubs.push(
         mgMultiplayerService.onOnlinePlayers(setOnlinePlayers),
         mgMultiplayerService.subscribeGlobalLeaderboard(setGlobalLeaderboard),
@@ -157,6 +164,21 @@ export default function SchoolLobby({
       if (!cancelled) {
         setMyGlobalRank(globalRank);
         setMyInstitutionalRank(institutionalRank);
+
+        const [globalRows, institutionalRows] = await Promise.all([
+          mgMultiplayerService.getGlobalLeaderboard(),
+          mgMultiplayerService.getLeaderboard(schoolId),
+        ]);
+        setGlobalLeaderboard(globalRows);
+        setInstitutionalLeaderboard(institutionalRows);
+        if (globalRows.length === 0 || institutionalRows.length === 0) {
+          console.warn('SchoolLobby: leaderboard fetch returned empty', {
+            global: globalRows.length,
+            institutional: institutionalRows.length,
+            schoolId,
+            userId,
+          });
+        }
         setIsLoading(false);
       }
     }
