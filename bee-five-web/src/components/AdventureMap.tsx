@@ -473,7 +473,7 @@ const AdventureMap: React.FC<AdventureMapProps> = ({
             {getStageForGame(selectedGame)?.name}
           </p>
           <p style={{ margin: '0 0 1rem 0', color: currentTheme.primaryColor, fontSize: '0.9rem' }}>
-            🐝 {getStageForGame(selectedGame)?.beeLifeStage}
+            {getStageForGame(selectedGame)?.beeLifeStage}
           </p>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
             <button

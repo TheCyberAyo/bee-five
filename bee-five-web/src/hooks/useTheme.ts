@@ -169,7 +169,7 @@ export const ADVENTURE_THEMES: Theme[] = [
     buttonHoverColor: "#20B2AA",
     cardBackground: "rgba(224, 255, 255, 0.9)",
     stageIcon: "🌅",
-    stageEmoji: "🐝🌅",
+    stageEmoji: "🌅",
     backgroundPattern: "linear-gradient(45deg, rgba(0, 206, 209, 0.05) 25%, transparent 25%), linear-gradient(-45deg, rgba(32, 178, 170, 0.05) 25%, transparent 25%)",
     visualEffect: "dawn-break",
     beeLifeStage: "Emergence - Breaking free from the cell, first glimpse of the world"
@@ -193,7 +193,7 @@ export const ADVENTURE_THEMES: Theme[] = [
     buttonHoverColor: "#228B22",
     cardBackground: "rgba(240, 255, 240, 0.9)",
     stageIcon: "🏠",
-    stageEmoji: "🐝🏠",
+    stageEmoji: "🏠",
     backgroundPattern: "repeating-radial-gradient(circle at 50% 50%, rgba(50, 205, 50, 0.03) 0px, rgba(50, 205, 50, 0.03) 30px, transparent 30px, transparent 60px)",
     visualEffect: "hexagonal-grid",
     beeLifeStage: "Nurse Bee - Caring for larvae and maintaining the hive"
@@ -217,7 +217,7 @@ export const ADVENTURE_THEMES: Theme[] = [
     buttonHoverColor: "#FFD700",
     cardBackground: "rgba(255, 250, 205, 0.9)",
     stageIcon: "🌻",
-    stageEmoji: "🐝🌻",
+    stageEmoji: "🌻",
     backgroundPattern: "radial-gradient(circle at 20% 80%, rgba(255, 195, 11, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 215, 0, 0.1) 0%, transparent 50%)",
     visualEffect: "pollen-trail",
     beeLifeStage: "Forager - Exploring fields, collecting nectar and pollen"
@@ -241,7 +241,7 @@ export const ADVENTURE_THEMES: Theme[] = [
     buttonHoverColor: "#B22222",
     cardBackground: "rgba(255, 228, 225, 0.9)",
     stageIcon: "🛡️",
-    stageEmoji: "🐝🛡️",
+    stageEmoji: "🛡️",
     backgroundPattern: "repeating-conic-gradient(from 0deg at 50% 50%, rgba(220, 20, 60, 0.05) 0deg, transparent 60deg, rgba(178, 34, 34, 0.05) 120deg, transparent 180deg)",
     visualEffect: "protective-aura",
     beeLifeStage: "Guard Bee - Defending the hive entrance from threats"
@@ -265,7 +265,7 @@ export const ADVENTURE_THEMES: Theme[] = [
     buttonHoverColor: "#9932CC",
     cardBackground: "rgba(240, 230, 255, 0.9)",
     stageIcon: "👑",
-    stageEmoji: "👑🐝",
+    stageEmoji: "👑",
     backgroundPattern: "radial-gradient(circle at 30% 30%, rgba(139, 0, 139, 0.08) 0%, transparent 50%), radial-gradient(circle at 70% 70%, rgba(153, 50, 204, 0.08) 0%, transparent 50%)",
     visualEffect: "royal-radiance",
     beeLifeStage: "Queen Bee - The ultimate ruler, laying eggs and leading the colony"

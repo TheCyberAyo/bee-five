@@ -239,7 +239,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
   // Get stage emoji based on bee life stage
   const getStageEmoji = (stageIndex: number) => {
     const stageEmojis = ['🥚', '🐛', '🍯', '🕸️', '🦋', '🌅', '🏠', '🌻', '🛡️', '👑'];
-    return stageEmojis[stageIndex] || '🐝';
+    return stageEmojis[stageIndex] || '🌟';
   };
 
   // Get stage-specific imagery and decorations
@@ -277,7 +277,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
       },
       6: { // Nurse Bee Stage
         beehive: '🏠',
-        decorations: ['🐝', '🏠', '💚'],
+        decorations: ['🏠', '💚', '🌟'],
         environment: ['🌿', '🌱', '🍃']
       },
       7: { // Forager Stage
@@ -415,7 +415,7 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
       2: ['🍯', '🍯', '🍯', '🍯', '🍯'], // Nectar stage - pure honey
       3: ['🍯', '🍯', '🍯', '🍯', '🍯'], // Cocoon stage - honey cells
       4: ['🍯', '🍯', '🍯', '🍯', '🦋'], // Pupa stage - honey and transformation
-      5: ['🍯', '🍯', '🍯', '🍯', '🐝'], // Emergence stage - honey and bees
+      5: ['🍯', '🍯', '🍯', '🍯', '🦋'], // Emergence stage - honey and transformation
       6: ['🍯', '🍯', '🍯', '🍯', '🍯'], // Nurse stage - nursing honey
       7: ['🍯', '🍯', '🍯', '🍯', '🍯'], // Forager stage - foraged honey
       8: ['🍯', '🍯', '🍯', '🍯', '🍯'], // Guard stage - protected honey
@@ -614,26 +614,6 @@ const BeeAdventureMap: React.FC<BeeAdventureMapProps> = ({
               </div>
             );
           })}
-
-          {/* Flying bees throughout the map */}
-          {Array.from({ length: 30 }, (_, i) => (
-            <div
-              key={`flying-bee-${i}`}
-              style={{
-                position: 'absolute',
-                left: `${Math.random() * 90 + 5}%`,
-                top: `${Math.random() * totalHeight + 50}px`,
-                fontSize: `${Math.random() * 15 + 12}px`,
-                opacity: 0.6 + Math.random() * 0.3,
-                pointerEvents: 'none',
-                animation: 'beeFlight 12s ease-in-out infinite',
-                animationDelay: `${i * 0.2}s`,
-                zIndex: 3
-              }}
-            >
-              🐝
-            </div>
-          ))}
 
           {/* Grass along the pathway sides */}
           {Array.from({ length: 200 }, (_, i) => {

@@ -17,21 +17,21 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onGameModeSelect }) => {
             <div className="mode-selection">
               <button 
                 className="mode-button"
-                onClick={() => onGameModeSelect('local')}
+                onClick={() => onGameModeSelect('online')}
               >
-                Take Turns
+                Live Matches
               </button>
               <button 
                 className="mode-button"
-                onClick={() => onGameModeSelect('online')}
+                onClick={() => onGameModeSelect('local')}
               >
-                Online Play
+                Local Challenge
               </button>
               <button 
                 className="mode-button"
                 onClick={() => onGameModeSelect('ai')}
               >
-                Play AI
+                Classic Mode
               </button>
             </div>
           </div>

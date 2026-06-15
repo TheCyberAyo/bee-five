@@ -161,7 +161,7 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
     return (
       <div style={{ textAlign: 'center' }}>
         <h2 style={{ color: 'black', marginBottom: '30px' }}>
-          🐝 Direct Multiplayer 🐝
+          Live Matches
         </h2>
 
         {!isConfigured && (
@@ -435,7 +435,7 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
           
           <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '2em', marginBottom: '10px' }}>🐝</div>
+              <div style={{ fontSize: '2em', marginBottom: '10px' }}>👤</div>
               <div style={{ fontWeight: 'bold', color: 'black' }}>
                 {hostPlayer?.name || 'Host'} (Host)
               </div>
@@ -449,7 +449,7 @@ export function MultiplayerLobby({ onGameStart, onBackToMenu }: MultiplayerLobby
             <div style={{ textAlign: 'center' }}>
               {guestPlayer ? (
                 <>
-                  <div style={{ fontSize: '2em', marginBottom: '10px' }}>🐝</div>
+                  <div style={{ fontSize: '2em', marginBottom: '10px' }}>👤</div>
                   <div style={{ fontWeight: 'bold', color: 'black' }}>
                     {guestPlayer.name}
                   </div>

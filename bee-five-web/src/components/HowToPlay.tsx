@@ -135,13 +135,13 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
             paddingLeft: '1.5rem'
           }}>
             <li style={{ marginBottom: '0.75rem' }}>
-              <strong style={{ color: '#FFC30B' }}>Take Turns:</strong> Play locally with a friend on the same device. Alternate turns and see who reaches five first!
+              <strong style={{ color: '#FFC30B' }}>Local Challenge:</strong> Play locally with a friend on the same device. Alternate turns and see who reaches five first!
             </li>
             <li style={{ marginBottom: '0.75rem' }}>
-              <strong style={{ color: '#FFC30B' }}>AI Game:</strong> Challenge the Bee Five bot. It learns from your moves and gets smarter with every match.
+              <strong style={{ color: '#FFC30B' }}>Classic Mode:</strong> Challenge the Bee Five bot. It learns from your moves and gets smarter with every match.
             </li>
             <li style={{ marginBottom: '0.75rem' }}>
-              <strong style={{ color: '#FFC30B' }}>Online Multiplayer:</strong> Play in real time with players around the world (coming soon).
+              <strong style={{ color: '#FFC30B' }}>Live Matches:</strong> Play in real time with players around the world (coming soon).
             </li>
           </ul>
 

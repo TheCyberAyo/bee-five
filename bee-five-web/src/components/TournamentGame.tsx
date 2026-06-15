@@ -147,7 +147,7 @@ export default function BattleGame({
         }, 100);
       } else {
         // Not the last game - show popup as usual
-        setWinMessage('Game Over - Draw! 🐝');
+        setWinMessage('Game Over - Draw!');
         setShowWinPopup(true);
       }
     } else if (gameState.timeLeft === 0 && !battleComplete && timeLimit > 0 && !gameCompletedRef.current) {
@@ -181,7 +181,7 @@ export default function BattleGame({
       } else {
         // Not the last game - show popup as usual
         const winnerName = winner === 1 ? player1Name : player2Name;
-        setWinMessage(`${winnerName} wins due to time limit! 🐝`);
+        setWinMessage(`${winnerName} wins due to time limit!`);
         setShowWinPopup(true);
       }
     }
@@ -353,7 +353,7 @@ export default function BattleGame({
             textShadow: '2px 2px 0px black',
             fontWeight: 'bold'
           }}>
-            🐝 Bee Five Battle
+            Bee Five Battle
           </h1>
         </div>
 

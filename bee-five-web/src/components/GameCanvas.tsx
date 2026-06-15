@@ -175,12 +175,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           ctx.fillStyle = gameNumber ? currentTheme.accentColor : '#8B4513';
           ctx.fillRect(x, y, currentCellSize, currentCellSize);
           
-          // Draw bee emoji
+          // Draw blocked cell marker
           ctx.font = `${currentCellSize * 0.6}px Arial`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillStyle = effectivePlayer1Color;
-          ctx.fillText('🐝', x + currentCellSize / 2, y + currentCellSize / 2);
+          ctx.fillText('✕', x + currentCellSize / 2, y + currentCellSize / 2);
         }
 
         // Draw mud zones (brown background with mud emoji)

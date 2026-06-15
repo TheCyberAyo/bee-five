@@ -243,7 +243,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h2 style={{ margin: 0, color: '#FFC30B', fontSize: '1.8rem', fontWeight: 'bold' }}>
-            {isSignUp ? '🐝 Sign Up' : '🐝 Sign In'}
+            {isSignUp ? 'Sign Up' : 'Sign In'}
           </h2>
           <button
             onClick={onClose}

@@ -1988,7 +1988,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
             marginBottom: '1.5rem',
             textShadow: `2px 2px 4px ${currentTheme.shadowColor}`
           }}>
-            🐝 Bee Fact Time! 🐝
+            Bee Fact Time!
           </h2>
           <p style={{
             fontSize: '1.3rem',
@@ -2292,7 +2292,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
                   textAlign: 'center',
                   padding: '0 1rem'
                 }}>
-                  Get Ready! 🐝
+                  Get Ready!
                 </div>
               </div>
             )}
@@ -2404,7 +2404,7 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
               marginBottom: '20px',
               animation: 'bounce 1s ease-out infinite'
             }}>
-              🐝
+              🎉
             </div>
             
             <h1 style={{
@@ -2802,13 +2802,13 @@ const AdventureGame: React.FC<AdventureGameProps> = ({ onBackToMenu }) => {
               {playerWins > aiWins ? (
                 <>
                   <div style={{ marginBottom: '10px' }}>
-                    🐝 Excellent work, Bee Watcher! 🐝
+                    Excellent work, Bee Watcher!
                   </div>
                 </>
               ) : (
                 <>
                   <div style={{ marginBottom: '10px' }}>
-                    🐝 Don't give up, Bee Watcher! 🐝
+                    Don't give up, Bee Watcher!
                   </div>
                 </>
               )}

@@ -163,9 +163,9 @@ export default function NewsUpdates({ onBackToMenu, isMobile }: NewsUpdatesProps
                 paddingLeft: '1.2rem',
                 fontSize: '0.8rem'
               }}>
-                <li>Take Turns mode</li>
-                <li>AI Game challenges</li>
-                <li>Online Multiplayer (soon)</li>
+                <li>Local Challenge mode</li>
+                <li>Classic Mode challenges</li>
+                <li>Live Matches (soon)</li>
                 <li>Responsive design</li>
               </ul>
               <p style={{ marginBottom: '0', fontSize: '0.8rem', fontStyle: 'italic' }}>

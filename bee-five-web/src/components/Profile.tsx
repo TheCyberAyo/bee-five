@@ -48,7 +48,7 @@ export default function Profile({ onBackToMenu, isMobile }: ProfileProps) {
           padding: '2rem',
           zIndex: 0
         }}>
-          {['🐝', '👤', '🐝', '👤', '🐝', '👤', '🐝', '👤', '🐝'].map((emoji, i) => (
+          {['👤', '👤', '👤', '👤', '👤', '👤', '👤', '👤', '👤'].map((emoji, i) => (
             <div key={i} style={{ textAlign: 'center', transform: `rotate(${i * 15}deg)` }}>
               {emoji}
             </div>

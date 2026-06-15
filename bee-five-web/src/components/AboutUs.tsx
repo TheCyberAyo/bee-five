@@ -126,7 +126,7 @@ export default function AboutUs({ onBackToMenu, isMobile }: AboutUsProps) {
           </p>
           
           <p style={{ marginBottom: '1.5rem' }}>
-            Every feature of Bee Five, from the AI Game to the upcoming Online Multiplayer, is designed to run smoothly on both mobile devices and desktops.
+            Every feature of Bee Five, from Classic Mode to the upcoming Live Matches, is designed to run smoothly on both mobile devices and desktops.
           </p>
           
           <p style={{ marginBottom: '2rem' }}>

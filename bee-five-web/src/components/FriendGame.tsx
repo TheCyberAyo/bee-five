@@ -173,7 +173,7 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
 
     if (gameState.winner > 0) {
       const winnerName = gameState.winner === 1 ? gameSeries.player1Name : gameSeries.player2Name;
-      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame}! 🐝`);
+      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame}!`);
       setShowWinPopup(true);
       if (gameState.winner === 1) {
         soundManager.playVictorySound();
@@ -185,7 +185,7 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
       }
       setCountdown(0);
     } else if (!gameState.isGameActive && gameState.winner === 0) {
-      setWinMessage(`Game ${gameSeries.currentGame} - Draw! 🐝`);
+      setWinMessage(`Game ${gameSeries.currentGame} - Draw!`);
       setShowWinPopup(true);
       if (gameSeries.currentGame < gameSeries.totalGames) {
         return scheduleNextGame();
@@ -194,7 +194,7 @@ const FriendGame: React.FC<FriendGameProps> = ({ onBackToMenu }) => {
     } else if (gameState.timeLeft === 0) {
       const winner = gameState.currentPlayer === 1 ? 2 : 1;
       const winnerName = winner === 1 ? gameSeries.player1Name : gameSeries.player2Name;
-      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame} due to time limit! 🐝`);
+      setWinMessage(`${winnerName} wins Game ${gameSeries.currentGame} due to time limit!`);
       setShowWinPopup(true);
       if (gameSeries.currentGame < gameSeries.totalGames) {
         return scheduleNextGame();

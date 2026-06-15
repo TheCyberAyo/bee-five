@@ -90,7 +90,7 @@ export default function UserProfile({ onClose }: UserProfileProps) {
     >
       <div style={{ marginBottom: '1rem' }}>
         <h3 style={{ margin: '0 0 1rem 0', color: '#FFC30B', fontSize: '1.3rem', fontWeight: 'bold' }}>
-          🐝 Profile
+          Profile
         </h3>
         
         <div style={{ marginBottom: '0.75rem' }}>

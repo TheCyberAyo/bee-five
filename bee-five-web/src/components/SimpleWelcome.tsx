@@ -199,7 +199,7 @@ export default function SimpleWelcome() {
             padding: '2rem',
             zIndex: 0
           }}>
-            {['🐝', '🍯', '🐝', '🍯', '🐝', '🍯', '🐝', '🍯', '🐝'].map((emoji, i) => (
+            {['🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯'].map((emoji, i) => (
               <div key={i} style={{ textAlign: 'center', transform: `rotate(${i * 15}deg)` }}>
                 {emoji}
               </div>
@@ -240,7 +240,7 @@ export default function SimpleWelcome() {
               fontWeight: 'bold',
               WebkitTextStroke: isMobile ? '0.5px black' : 'initial'
             }}>
-              👥 Take Turns 👥
+              👥 Local Challenge 👥
             </h1>
             <p style={{
               fontSize: isMobile ? '1rem' : 'clamp(1rem, 3vw, 1.2rem)',
@@ -387,7 +387,7 @@ export default function SimpleWelcome() {
           padding: isMobile ? '0 1rem 0.5rem' : '0'
         }}>
           <p style={{ margin: 0 }}>
-            🐝 &copy; 2025 Bee Five. Product of MindGrind 🐝
+            &copy; 2025 Bee Five. Product of MindGrind
           </p>
         </footer>
 
@@ -790,7 +790,7 @@ export default function SimpleWelcome() {
               fontWeight: 'bold',
               WebkitTextStroke: isMobile ? '0.5px black' : 'initial'
             }}>
-              🤖 AI Game Mode 🤖
+              🤖 Classic Mode 🤖
             </h1>
             <p style={{
               fontSize: isMobile ? '1rem' : 'clamp(1rem, 3vw, 1.2rem)',
@@ -933,7 +933,7 @@ export default function SimpleWelcome() {
           padding: isMobile ? '0 1rem 0.5rem' : '0'
         }}>
           <p style={{ margin: 0 }}>
-            🐝 &copy; 2025 Bee Five. Product of MindGrind 🐝
+            &copy; 2025 Bee Five. Product of MindGrind
           </p>
         </footer>
 
@@ -1280,7 +1280,7 @@ export default function SimpleWelcome() {
           padding: '2rem',
           zIndex: 0
         }}>
-          {['🐝', '🍯', '🐝', '🍯', '🐝', '🍯', '🐝', '🍯', '🐝'].map((emoji, i) => (
+          {['🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯'].map((emoji, i) => (
             <div key={i} style={{ textAlign: 'center', transform: `rotate(${i * 15}deg)` }}>
               {emoji}
             </div>
@@ -1319,7 +1319,7 @@ export default function SimpleWelcome() {
             fontWeight: 'bold',
             WebkitTextStroke: isMobile ? '0.5px black' : 'initial'
           }}>
-            🐝 Bee Five 🐝
+            Bee Five
           </h1>
           <p style={{
             fontSize: isMobile ? '1rem' : 'clamp(1rem, 3vw, 1.2rem)',
@@ -1342,6 +1342,36 @@ export default function SimpleWelcome() {
           maxWidth: '100%',
           alignItems: 'center'
         }}>
+          <button
+            onClick={() => { setGameMode('online-lobby'); soundManager.playClickSound(); }}
+            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
+            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
+            style={{
+              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+              color: 'white',
+              border: '3px solid #FFC30B',
+              borderRadius: isMobile ? '16px' : '20px',
+              padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
+              fontSize: isMobile ? '1.1rem' : '1.2rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              minHeight: isMobile ? '56px' : '60px',
+              width: '100%',
+              maxWidth: isMobile ? '100%' : '300px',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent'
+            }}
+          >
+            <span style={{ fontSize: '1.3em' }}>🌐</span>
+            <span>Live Matches</span>
+          </button>
+
           <button
             onClick={() => { soundManager.playClickSound(); setGameMode('show-take-turns-submenu'); }}
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
@@ -1369,7 +1399,7 @@ export default function SimpleWelcome() {
             }}
           >
             <span style={{ fontSize: '1.3em' }}>👥</span>
-            <span>Take Turns</span>
+            <span>Local Challenge</span>
           </button>
 
           <button
@@ -1399,37 +1429,7 @@ export default function SimpleWelcome() {
             }}
           >
             <span style={{ fontSize: '1.3em' }}>🤖</span>
-            <span>AI Game</span>
-          </button>
-
-          <button
-            onClick={() => { setGameMode('online-lobby'); soundManager.playClickSound(); }}
-            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
-            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
-            style={{
-              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-              color: 'white',
-              border: '3px solid #FFC30B',
-              borderRadius: isMobile ? '16px' : '20px',
-              padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
-              fontSize: isMobile ? '1.1rem' : '1.2rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              minHeight: isMobile ? '56px' : '60px',
-              width: '100%',
-              maxWidth: isMobile ? '100%' : '300px',
-              touchAction: 'manipulation',
-              WebkitTapHighlightColor: 'transparent'
-            }}
-          >
-            <span style={{ fontSize: '1.3em' }}>🌐</span>
-            <span>Online Multiplayer</span>
+            <span>Classic Mode</span>
           </button>
 
           {!user && (
@@ -1475,7 +1475,7 @@ export default function SimpleWelcome() {
           zIndex: 1,
           padding: isMobile ? '0 1rem 0.5rem' : '0'
         }}>
-          <p style={{ margin: 0 }}>🐝 &copy; 2025 Bee Five. Product of MindGrind 🐝</p>
+          <p style={{ margin: 0 }}>&copy; 2025 Bee Five. Product of MindGrind</p>
         </footer>
       </div>
 

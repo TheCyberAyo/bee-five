@@ -52,11 +52,11 @@ export default function SimpleGame({ onBackToMenu, backgroundColor = 'yellow' }:
         soundManager.playDefeatSound();
       }
     } else if (!gameState.isGameActive && gameState.winner === 0) {
-      setWinMessage('Game Over - Draw! 🐝');
+      setWinMessage('Game Over - Draw!');
       setShowWinPopup(true);
     } else if (gameState.timeLeft === 0) {
       const winner = gameState.currentPlayer === 1 ? 'Yellow' : 'Black';
-      setWinMessage(`${winner} wins due to time limit! 🐝`);
+      setWinMessage(`${winner} wins due to time limit!`);
       setShowWinPopup(true);
     }
   }, [gameState.winner, gameState.isGameActive, gameState.timeLeft, gameState.currentPlayer]);

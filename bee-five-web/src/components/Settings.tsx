@@ -505,7 +505,7 @@ export default function Settings({
                   }
                 }}
               >
-                <span>🐝</span>
+                <span>🔊</span>
                 <span>Test Sound</span>
               </button>
             </div>
