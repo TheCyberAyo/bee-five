@@ -96,7 +96,7 @@ const OnlineBeeFiveBoard = forwardRef<OnlineBeeFiveBoardHandle, OnlineBeeFiveBoa
 
     const turnText = useMemo(() => {
       if (gameOver) {
-        if (winnerSeat > 0) return `${seatName(winnerSeat)} wins`;
+        if (winnerSeat === 1 || winnerSeat === 2) return `${seatName(winnerSeat)} wins`;
         return 'Draw';
       }
       const mover = seatName(currentSeat);
