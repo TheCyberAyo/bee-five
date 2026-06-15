@@ -22,6 +22,18 @@ import MobileHeader from './MobileHeader';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './Auth/AuthModal';
 
+const HOME_ICONS = {
+  localChallenge: '/homeImagery/play-with-friend.png',
+  classicMode: '/homeImagery/classic-mode.png',
+} as const;
+
+const modeIconStyle: React.CSSProperties = {
+  width: '1.75rem',
+  height: '1.75rem',
+  objectFit: 'contain',
+  flexShrink: 0,
+};
+
 export default function SimpleWelcome() {
   const [gameMode, setGameMode] = useState<'menu' | 'local-multiplayer' | 'online-lobby' | 'online-game' | 'ai-game' | 'adventure-game' | 'show-take-turns-submenu' | 'show-ai-submenu' | 'competition' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
   const [currentRoom, setCurrentRoom] = useState<RoomInfo | null>(null);
@@ -238,9 +250,14 @@ export default function SimpleWelcome() {
               margin: '0 0 0.5rem 0',
               lineHeight: '1.2',
               fontWeight: 'bold',
-              WebkitTextStroke: isMobile ? '0.5px black' : 'initial'
+              WebkitTextStroke: isMobile ? '0.5px black' : 'initial',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
             }}>
-              👥 Local Challenge 👥
+              <img src={HOME_ICONS.localChallenge} alt="" style={{ ...modeIconStyle, width: '2rem', height: '2rem' }} />
+              Local Challenge
             </h1>
             <p style={{
               fontSize: isMobile ? '1rem' : 'clamp(1rem, 3vw, 1.2rem)',
@@ -788,9 +805,14 @@ export default function SimpleWelcome() {
               margin: '0 0 0.5rem 0',
               lineHeight: '1.2',
               fontWeight: 'bold',
-              WebkitTextStroke: isMobile ? '0.5px black' : 'initial'
+              WebkitTextStroke: isMobile ? '0.5px black' : 'initial',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
             }}>
-              🤖 Classic Mode 🤖
+              <img src={HOME_ICONS.classicMode} alt="" style={{ ...modeIconStyle, width: '2rem', height: '2rem' }} />
+              Classic Mode
             </h1>
             <p style={{
               fontSize: isMobile ? '1rem' : 'clamp(1rem, 3vw, 1.2rem)',
@@ -851,7 +873,7 @@ export default function SimpleWelcome() {
                 WebkitTapHighlightColor: 'transparent'
               }}
             >
-              <span style={{ fontSize: '1.3em' }}>🤖</span>
+              <img src={HOME_ICONS.classicMode} alt="" style={modeIconStyle} />
               <span>Classic</span>
             </button>
 
@@ -1398,7 +1420,7 @@ export default function SimpleWelcome() {
               WebkitTapHighlightColor: 'transparent'
             }}
           >
-            <span style={{ fontSize: '1.3em' }}>👥</span>
+            <img src={HOME_ICONS.localChallenge} alt="" style={modeIconStyle} />
             <span>Local Challenge</span>
           </button>
 
@@ -1428,7 +1450,7 @@ export default function SimpleWelcome() {
               WebkitTapHighlightColor: 'transparent'
             }}
           >
-            <span style={{ fontSize: '1.3em' }}>🤖</span>
+            <img src={HOME_ICONS.classicMode} alt="" style={modeIconStyle} />
             <span>Classic Mode</span>
           </button>
 
