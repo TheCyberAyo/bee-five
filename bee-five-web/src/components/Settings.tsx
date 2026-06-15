@@ -10,15 +10,11 @@ const LOCAL_PROGRESS_KEY_PREFIX = 'beeAdventureProgress:';
 interface SettingsProps {
   onBackToMenu: () => void;
   isMobile: boolean;
-  backgroundColor: 'yellow' | 'black';
-  onBackgroundColorChange: (color: 'yellow' | 'black') => void;
 }
 
 export default function Settings({ 
   onBackToMenu, 
-  isMobile, 
-  backgroundColor,
-  onBackgroundColorChange 
+  isMobile,
 }: SettingsProps) {
   const { user, signIn } = useAuth();
   const [volume, setVolume] = useState(soundManager.getVolume());
@@ -217,138 +213,6 @@ export default function Settings({
           lineHeight: '1.8',
           marginBottom: '2rem'
         }}>
-          {/* Background Color Setting */}
-          <div style={{
-            marginBottom: '2.5rem'
-          }}>
-            <h3 style={{
-              fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
-              color: '#FFC30B',
-              marginBottom: '1.5rem',
-              fontWeight: 'bold'
-            }}>
-              🎨 Background Color
-            </h3>
-            
-            <p style={{ marginBottom: '1.5rem' }}>
-              Choose your preferred background color for the game boards:
-            </p>
-
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem'
-            }}>
-              {/* Yellow Option */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-                padding: '1rem',
-                border: backgroundColor === 'yellow' ? '3px solid #FFC30B' : '2px solid #666',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                backgroundColor: backgroundColor === 'yellow' ? 'rgba(255, 195, 11, 0.1)' : 'transparent'
-              }}>
-                <input
-                  type="radio"
-                  name="backgroundColor"
-                  value="yellow"
-                  checked={backgroundColor === 'yellow'}
-                  onChange={() => {
-                    onBackgroundColorChange('yellow');
-                    soundManager.playClickSound();
-                  }}
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    cursor: 'pointer',
-                    accentColor: '#FFC30B'
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginBottom: '0.25rem'
-                  }}>
-                    <span style={{ fontSize: '1.5em' }}>💛</span>
-                    <span style={{
-                      fontWeight: 'bold',
-                      color: '#FFC30B',
-                      fontSize: '1.1rem'
-                    }}>
-                      Yellow (Default)
-                    </span>
-                  </div>
-                  <p style={{
-                    margin: 0,
-                    fontSize: '0.9rem',
-                    color: 'rgba(255,255,255,0.7)'
-                  }}>
-                    Classic bee-themed yellow gradient background
-                  </p>
-                </div>
-              </label>
-
-              {/* Black Option */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-                padding: '1rem',
-                border: backgroundColor === 'black' ? '3px solid #FFC30B' : '2px solid #666',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                backgroundColor: backgroundColor === 'black' ? 'rgba(255, 195, 11, 0.1)' : 'transparent'
-              }}>
-                <input
-                  type="radio"
-                  name="backgroundColor"
-                  value="black"
-                  checked={backgroundColor === 'black'}
-                  onChange={() => {
-                    onBackgroundColorChange('black');
-                    soundManager.playClickSound();
-                  }}
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    cursor: 'pointer',
-                    accentColor: '#FFC30B'
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginBottom: '0.25rem'
-                  }}>
-                    <span style={{ fontSize: '1.5em' }}>⚫</span>
-                    <span style={{
-                      fontWeight: 'bold',
-                      color: '#FFC30B',
-                      fontSize: '1.1rem'
-                    }}>
-                      Black
-                    </span>
-                  </div>
-                  <p style={{
-                    margin: 0,
-                    fontSize: '0.9rem',
-                    color: 'rgba(255,255,255,0.7)'
-                  }}>
-                    Sleek black background for reduced eye strain
-                  </p>
-                </div>
-              </label>
-            </div>
-          </div>
-
           {/* Sound Settings */}
           <div style={{
             marginBottom: '2.5rem'

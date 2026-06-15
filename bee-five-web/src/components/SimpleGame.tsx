@@ -14,7 +14,6 @@ type LocalGameMode = 'single' | LocalSeriesMode;
 
 interface SimpleGameProps {
   onBackToMenu: () => void;
-  backgroundColor?: 'yellow' | 'black';
 }
 
 const PRIMARY_YELLOW = '#FFC30B';
