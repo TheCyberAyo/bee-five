@@ -57,6 +57,47 @@ export const createEmptyBoard = (): (0 | 1 | 2 | 3)[][] => {
   return Array(10).fill(null).map(() => Array(10).fill(0));
 };
 
+export const createBoardWithRandomBlocks = (blockageCount: number): (0 | 1 | 2 | 3)[][] => {
+  const board = createEmptyBoard();
+  if (blockageCount <= 0) return board;
+
+  const cells: [number, number][] = [];
+  for (let row = 0; row < 10; row++) {
+    for (let col = 0; col < 10; col++) {
+      cells.push([row, col]);
+    }
+  }
+
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+
+  cells.slice(0, blockageCount).forEach(([row, col]) => {
+    board[row][col] = BLOCKED_CELL;
+  });
+
+  return board;
+};
+
+export type LocalSeriesMode = 'series5' | 'series9';
+
+export const blockagesForLocalSeriesGame = (
+  mode: LocalSeriesMode,
+  gameNumber: number
+): number => {
+  if (mode === 'series5') {
+    if (gameNumber === 3) return 4;
+    if (gameNumber === 5) return 10;
+  } else {
+    if (gameNumber === 3) return 4;
+    if (gameNumber === 5) return 10;
+    if (gameNumber === 7) return 6;
+    if (gameNumber === 9) return 10;
+  }
+  return 0;
+};
+
 // Blocked cell value (3 represents a blocked cell with bee)
 export const BLOCKED_CELL = 3;
 

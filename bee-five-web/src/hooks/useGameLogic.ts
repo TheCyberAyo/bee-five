@@ -29,14 +29,27 @@ export interface UseGameLogicOptions {
   gameNumber?: number;
   currentMatch?: number;
   pauseTimer?: boolean;
+  initialBoard?: (0 | 1 | 2 | 3)[][];
 }
 
 export const useGameLogic = (options: UseGameLogicOptions) => {
-  const { timeLimit, startingPlayer = 1, gameNumber = 1, currentMatch = 1, pauseTimer = false } = options;
+  const { timeLimit, startingPlayer = 1, gameNumber, currentMatch = 1, pauseTimer = false, initialBoard } = options;
   const timerRef = useRef<number | null>(null);
 
+  const buildBoard = useCallback(() => {
+    if (initialBoard) return initialBoard.map(row => [...row]);
+    if (gameNumber) {
+      return createBoardWithBlocks(
+        gameNumber,
+        gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch),
+        currentMatch
+      );
+    }
+    return createEmptyBoard();
+  }, [initialBoard, gameNumber, currentMatch]);
+
   const [gameState, setGameState] = useState<GameState>({
-    board: gameNumber ? createBoardWithBlocks(gameNumber, gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch), currentMatch) : createEmptyBoard(),
+    board: buildBoard(),
     currentPlayer: startingPlayer,
     isGameActive: true,
     winner: 0,
@@ -66,7 +79,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
   useEffect(() => {
     setGameState(prevState => ({
       ...prevState,
-      board: gameNumber ? createBoardWithBlocks(gameNumber, gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch), currentMatch) : createEmptyBoard(),
+      board: buildBoard(),
       currentPlayer: startingPlayer,
       isGameActive: true,
       winner: 0,
@@ -83,7 +96,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       blindPlayTriggerMove: 0,
       winningPieces: []
     }));
-  }, [gameNumber, startingPlayer, timeLimit, currentMatch]);
+  }, [buildBoard, startingPlayer, timeLimit, currentMatch]);
 
 
   // Handle cell click
@@ -345,7 +358,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
   // Reset game
   const resetGame = useCallback((newStartingPlayer?: 1 | 2) => {
     setGameState({
-      board: gameNumber ? createBoardWithBlocks(gameNumber, gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch), currentMatch) : createEmptyBoard(),
+      board: buildBoard(),
       currentPlayer: newStartingPlayer || startingPlayer,
       isGameActive: true,
       winner: 0,
@@ -362,7 +375,7 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       blindPlayTriggerMove: 0,
       winningPieces: []
     });
-  }, [timeLimit, startingPlayer, gameNumber, currentMatch]);
+  }, [buildBoard, timeLimit, startingPlayer, gameNumber, currentMatch]);
 
   // Update game state (for external updates)
   const updateGameState = useCallback((newState: Partial<GameState>) => {
