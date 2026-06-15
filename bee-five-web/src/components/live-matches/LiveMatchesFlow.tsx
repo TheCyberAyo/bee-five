@@ -9,7 +9,7 @@ import {
   getXp,
   liveMatchesRequiresXpMessage,
 } from '../../services/xpService';
-import { multiplayerTheme, primaryBlackButtonStyle, yellowDialogStyle } from '../../constants/multiplayerTheme';
+import { multiplayerTheme, yellowDialogStyle } from '../../constants/multiplayerTheme';
 import JoinSchoolDialog from './JoinSchoolDialog';
 import SchoolLobby from './SchoolLobby';
 import LiveMatchScreen from './LiveMatchScreen';
@@ -43,16 +43,15 @@ export default function LiveMatchesFlow({
   onInitialMatchConsumed,
   onRestoreGlobalLobby,
 }: LiveMatchesFlowProps) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<LobbyProfile | null>(null);
-  const [showJoinSchool, setShowJoinSchool] = useState(false);
   const [activeMatch, setActiveMatch] = useState<ActiveMatch | null>(initialActiveMatch);
   const [lobbyXp, setLobbyXp] = useState(getXp());
   const [toast, setToast] = useState<string | null>(null);
   const [incomingChallenge, setIncomingChallenge] = useState<Record<string, unknown> | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authGate, setAuthGate] = useState(false);
+  const [authModalSignUp, setAuthModalSignUp] = useState(false);
   const [xpGate, setXpGate] = useState(false);
 
   useEffect(() => {
@@ -100,12 +99,15 @@ export default function LiveMatchesFlow({
   }, [user]);
 
   useEffect(() => {
+    if (authLoading) return;
+
     void (async () => {
       setLoading(true);
+      setXpGate(false);
+      setProfile(null);
 
       if (!user) {
         setLoading(false);
-        setAuthGate(true);
         return;
       }
 
@@ -114,22 +116,16 @@ export default function LiveMatchesFlow({
       setLobbyXp(xp);
 
       if (!canPlayLiveMatches(xp)) {
-        setLoading(false);
         setXpGate(true);
+        setLoading(false);
         return;
       }
 
       const p = await loadProfile();
-      if (!p) {
-        setShowJoinSchool(true);
-        setLoading(false);
-        return;
-      }
-
       setProfile(p);
       setLoading(false);
     })();
-  }, [user, loadProfile]);
+  }, [user, authLoading, loadProfile]);
 
   useEffect(() => {
     if (!initialActiveMatch) return;
@@ -177,7 +173,6 @@ export default function LiveMatchesFlow({
 
   const onJoinedSchool = (outcome: JoinSchoolOutcome) => {
     if (!outcome.isSuccess || !outcome.schoolId || !outcome.userId || !outcome.username) return;
-    setShowJoinSchool(false);
     setProfile({
       schoolId: outcome.schoolId,
       userId: outcome.userId,
@@ -186,7 +181,12 @@ export default function LiveMatchesFlow({
     });
   };
 
-  if (loading) {
+  const openAuthModal = (signUp: boolean) => {
+    setAuthModalSignUp(signUp);
+    setShowAuthModal(true);
+  };
+
+  if (authLoading || loading) {
     return (
       <div style={{ minHeight: '100vh', background: multiplayerTheme.scaffoldBackground, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         Loading…
@@ -194,23 +194,25 @@ export default function LiveMatchesFlow({
     );
   }
 
-  if (!user && authGate) {
+  if (!user) {
     return (
       <>
         <GateDialog title="Live Matches" onClose={onBackToMenu}>
-          <p>You need to sign in or sign up to play Live Matches.</p>
-          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <button type="button" onClick={() => { setAuthGate(false); setShowAuthModal(true); }} style={primaryBlackButtonStyle}>
-              Sign In
-            </button>
-            <button type="button" onClick={() => { setAuthGate(false); setShowAuthModal(true); }} style={primaryBlackButtonStyle}>
-              Sign Up
-            </button>
-            <button type="button" onClick={onBackToMenu}>Cancel</button>
+          <p style={{ margin: '0 0 1.25rem', fontSize: '16px', color: 'rgba(0,0,0,0.87)' }}>
+            You need to sign in or sign up to play Live Matches.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <GateLinkButton onClick={() => openAuthModal(true)}>Sign Up</GateLinkButton>
+            <GateLinkButton onClick={() => openAuthModal(false)}>Sign In</GateLinkButton>
+            <GateLinkButton onClick={onBackToMenu}>Exit</GateLinkButton>
           </div>
         </GateDialog>
         {showAuthModal && (
-          <AuthModal onClose={() => { setShowAuthModal(false); onBackToMenu(); }} onSuccess={() => setShowAuthModal(false)} />
+          <AuthModal
+            initialSignUp={authModalSignUp}
+            onClose={() => setShowAuthModal(false)}
+            onSuccess={() => setShowAuthModal(false)}
+          />
         )}
       </>
     );
@@ -219,10 +221,12 @@ export default function LiveMatchesFlow({
   if (xpGate) {
     return (
       <GateDialog title="Live Matches" onClose={onBackToMenu}>
-        <p>{liveMatchesRequiresXpMessage}</p>
-        <button type="button" onClick={onBackToMenu} style={primaryBlackButtonStyle}>
-          OK
-        </button>
+        <p style={{ margin: '0 0 1.25rem', fontSize: '16px', color: 'rgba(0,0,0,0.87)' }}>
+          {liveMatchesRequiresXpMessage}
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <GateLinkButton onClick={onBackToMenu}>OK</GateLinkButton>
+        </div>
       </GateDialog>
     );
   }
@@ -251,24 +255,29 @@ export default function LiveMatchesFlow({
     );
   }
 
+  if (!profile) {
+    return (
+      <GateDialog title="Live Matches" onClose={onBackToMenu}>
+        <p style={{ margin: '0 0 1rem', fontSize: '16px', color: 'rgba(0,0,0,0.87)' }}>
+          Join a school or the default lobby to play with others online.
+        </p>
+        <JoinSchoolDialog variant="panel" allowSkip={false} onJoined={onJoinedSchool} />
+      </GateDialog>
+    );
+  }
+
   return (
     <>
-      {showJoinSchool && (
-        <JoinSchoolDialog allowSkip={false} onJoined={onJoinedSchool} />
-      )}
+      <SchoolLobby
+        schoolId={profile.schoolId}
+        userId={profile.userId}
+        username={profile.username}
+        elo={profile.elo}
+        onBack={onBackToMenu}
+        onChallengeSent={setToast}
+      />
 
-      {profile && (
-        <SchoolLobby
-          schoolId={profile.schoolId}
-          userId={profile.userId}
-          username={profile.username}
-          elo={profile.elo}
-          onBack={onBackToMenu}
-          onChallengeSent={setToast}
-        />
-      )}
-
-      {incomingChallenge && profile && (
+      {incomingChallenge && (
         <ChallengeDialog
           fromUsername={incomingChallenge.from_username?.toString() ?? 'Player'}
           fromElo={parseInt(String(incomingChallenge.from_elo ?? profile.elo), 10) || profile.elo}
@@ -331,6 +340,33 @@ export default function LiveMatchesFlow({
   );
 }
 
+function GateLinkButton({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        fontWeight: 800,
+        fontSize: '16px',
+        color: '#000',
+        cursor: 'pointer',
+        textDecoration: 'underline',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function GateDialog({
   title,
   children,
@@ -353,10 +389,6 @@ function GateDialog({
         zIndex: 1000,
       }}
     >
-      <div style={yellowDialogStyle}>
-        <h2 style={{ marginTop: 0, fontWeight: 800 }}>{title}</h2>
-        {children}
-      </div>
       <button
         type="button"
         onClick={onClose}
@@ -364,6 +396,10 @@ function GateDialog({
       >
         ← Back
       </button>
+      <div style={yellowDialogStyle}>
+        <h2 style={{ marginTop: 0, fontWeight: 800 }}>{title}</h2>
+        {children}
+      </div>
     </div>
   );
 }

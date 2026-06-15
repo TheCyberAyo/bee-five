@@ -6,12 +6,15 @@ import { primaryBlackButtonStyle, primaryYellowButtonStyle } from '../../constan
 
 interface JoinSchoolDialogProps {
   allowSkip?: boolean;
+  /** When `panel`, renders inline (parent supplies backdrop). Default is full-screen modal. */
+  variant?: 'modal' | 'panel';
   onJoined: (outcome: JoinSchoolOutcome) => void;
   onSkip?: () => void;
 }
 
 export default function JoinSchoolDialog({
   allowSkip = true,
+  variant = 'modal',
   onJoined,
   onSkip,
 }: JoinSchoolDialogProps) {
@@ -42,19 +45,7 @@ export default function JoinSchoolDialog({
     else setError(outcome.errorMessage ?? 'Could not join default lobby.');
   };
 
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.55)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '1rem',
-      }}
-    >
+  const card = (
       <div
         style={{
           background: '#fff',
@@ -112,6 +103,26 @@ export default function JoinSchoolDialog({
           </button>
         </div>
       </div>
+  );
+
+  if (variant === 'panel') {
+    return card;
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '1rem',
+      }}
+    >
+      {card}
     </div>
   );
 }

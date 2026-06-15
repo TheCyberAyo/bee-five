@@ -8,10 +8,12 @@ import { isUsernameAvailable } from '../../services/usernameService';
 interface AuthModalProps {
   onClose: () => void;
   onSuccess?: () => void;
+  /** Opens the modal in sign-up mode when true, sign-in when false. */
+  initialSignUp?: boolean;
 }
 
-export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
+export default function AuthModal({ onClose, onSuccess, initialSignUp = false }: AuthModalProps) {
+  const [isSignUp, setIsSignUp] = useState(initialSignUp);
   const [loginUsername, setLoginUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -30,6 +32,10 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     onCloseRef.current = onClose;
     onSuccessRef.current = onSuccess;
   }, [onClose, onSuccess]);
+
+  useEffect(() => {
+    setIsSignUp(initialSignUp);
+  }, [initialSignUp]);
 
   useEffect(() => {
     if (user) {
