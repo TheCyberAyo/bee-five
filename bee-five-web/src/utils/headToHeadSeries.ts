@@ -54,5 +54,5 @@ export function computeHeadToHeadSeriesScore({
     }
   }
 
-  return { player1Id: p1, player2Id: p2, player1Wins, player2Wins };
+  return { player1Id: p1, player2Id: p2, player1Wins: p1Wins, player2Wins: p2Wins };
 }
