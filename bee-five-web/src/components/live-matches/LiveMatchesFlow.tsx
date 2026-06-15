@@ -77,7 +77,10 @@ export default function LiveMatchesFlow({
       .eq('id', user.id)
       .limit(1);
 
-    if (error || !rows?.length) return null;
+    if (error || !rows?.length) {
+      if (error) console.error('LiveMatches loadProfile failed:', error.message);
+      return null;
+    }
 
     const row = rows[0] as Record<string, unknown>;
     const schoolId = row.school_id?.toString().trim();

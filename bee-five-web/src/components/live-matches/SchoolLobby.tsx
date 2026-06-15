@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { mgMultiplayerService } from '../../services/mgMultiplayerService';
 import type { PlayerPresence } from '../../models/playerPresence';
 import {
@@ -35,6 +36,7 @@ export default function SchoolLobby({
   onBack,
   onChallengeSent,
 }: SchoolLobbyProps) {
+  const { session } = useAuth();
   const [selectedTab, setSelectedTab] = useState(0);
   const [onlinePlayers, setOnlinePlayers] = useState<PlayerPresence[]>([]);
   const [globalLeaderboard, setGlobalLeaderboard] = useState<Record<string, unknown>[]>([]);
@@ -79,22 +81,21 @@ export default function SchoolLobby({
   }, [onlinePlayers, playerSearch]);
 
   useEffect(() => {
+    if (!session?.access_token) {
+      setLobbyJoinError('Sign in again to load rankings and online players.');
+      setIsLoading(false);
+      return;
+    }
+
+    const accessToken = session.access_token;
+
     let cancelled = false;
     const unsubs: (() => void)[] = [];
 
     async function init() {
-      if (supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token && !cancelled) {
-          setLobbyJoinError('Sign in again to load rankings and online players.');
-        }
-      }
-
-      unsubs.push(
-        mgMultiplayerService.onOnlinePlayers(setOnlinePlayers),
-        mgMultiplayerService.subscribeGlobalLeaderboard(setGlobalLeaderboard),
-        mgMultiplayerService.subscribeLeaderboard(schoolId, setInstitutionalLeaderboard),
-      );
+      setIsLoading(true);
+      setLobbyJoinError(null);
+      await mgMultiplayerService.prepareAuthenticatedSession(accessToken);
 
       ensureXpInitialized();
       const xp = getXp();
@@ -111,8 +112,8 @@ export default function SchoolLobby({
           .limit(1);
 
         const institutionQuery = resolvedInstitution
-          ? Promise.resolve({ data: null as { name?: string }[] | null })
-          : supabase.from('mg_schools').select('name').eq('id', schoolId).limit(1);
+          ? Promise.resolve({ data: null as { name?: string; join_code?: string }[] | null })
+          : supabase.from('mg_schools').select('name, join_code').eq('id', schoolId).limit(1);
 
         const [{ data: profileRows }, { data: schoolRows }] = await Promise.all([
           profileQuery,
@@ -122,6 +123,8 @@ export default function SchoolLobby({
         if (!resolvedInstitution) {
           resolvedInstitution = schoolRows?.[0]?.name?.toString().trim() ?? '';
         }
+        const joinCode = schoolRows?.[0]?.join_code?.toString().trim().toUpperCase();
+        if (joinCode && !cancelled) setSchoolJoinCode(joinCode);
         const cc = profileRows?.[0]?.country_code?.toString().trim();
         if (cc) resolvedCountry = cc.toUpperCase();
       }
@@ -131,7 +134,6 @@ export default function SchoolLobby({
         setMyCountryCode(resolvedCountry);
       }
 
-      setLobbyJoinError(null);
       await mgMultiplayerService.joinLobby({
         schoolId,
         userId,
@@ -147,6 +149,10 @@ export default function SchoolLobby({
         }
       });
 
+      if (!cancelled) {
+        unsubs.push(mgMultiplayerService.onOnlinePlayers(setOnlinePlayers));
+      }
+
       if (supabase && !cancelled) {
         const { data: schools } = await supabase.from('mg_schools').select('id, name');
         const map: Record<string, string> = {};
@@ -158,47 +164,40 @@ export default function SchoolLobby({
         setSchoolIdToName(map);
       }
 
+      const diag = await mgMultiplayerService.collectLobbyDiagnostics(schoolId, userId);
+      const globalRows =
+        diag.globalLeaderboardRows.length > 0
+          ? diag.globalLeaderboardRows
+          : await mgMultiplayerService.getGlobalLeaderboard();
+      const institutionalRows =
+        diag.institutionalLeaderboardRows.length > 0
+          ? diag.institutionalLeaderboardRows
+          : await mgMultiplayerService.getLeaderboard(schoolId);
+
       const [globalRank, institutionalRank] = await Promise.all([
         mgMultiplayerService.getLeaderboardRank(elo),
         mgMultiplayerService.getLeaderboardRank(elo, schoolId),
       ]);
 
       if (!cancelled) {
-        setMyGlobalRank(globalRank);
-        setMyInstitutionalRank(institutionalRank);
-
-        const [globalRows, institutionalRows] = await Promise.all([
-          mgMultiplayerService.getGlobalLeaderboard(),
-          mgMultiplayerService.getLeaderboard(schoolId),
-        ]);
         setGlobalLeaderboard(globalRows);
         setInstitutionalLeaderboard(institutionalRows);
-        if (globalRows.length === 0 || institutionalRows.length === 0) {
-          console.warn('SchoolLobby: leaderboard fetch returned empty', {
-            global: globalRows.length,
-            institutional: institutionalRows.length,
-            schoolId,
-            userId,
-          });
-        }
-
-        const diag = await mgMultiplayerService.collectLobbyDiagnostics(schoolId, userId);
-        if (!cancelled) {
-          if (diag.schoolName) setInstitutionName(diag.schoolName);
-          setSchoolJoinCode(diag.schoolJoinCode);
-          setLobbyHint(diag.hint);
-          if (diag.globalLeaderboardCount > globalRows.length) {
-            setGlobalLeaderboard(
-              await mgMultiplayerService.getGlobalLeaderboard(),
-            );
-          }
-          if (diag.institutionalLeaderboardCount > institutionalRows.length) {
-            setInstitutionalLeaderboard(
-              await mgMultiplayerService.getLeaderboard(schoolId),
-            );
-          }
+        setMyGlobalRank(globalRank);
+        setMyInstitutionalRank(institutionalRank);
+        if (diag.schoolName) setInstitutionName(diag.schoolName);
+        if (diag.schoolJoinCode) setSchoolJoinCode(diag.schoolJoinCode);
+        setLobbyHint(diag.hint);
+        if (globalRows.length === 0 && institutionalRows.length === 0) {
+          console.warn('SchoolLobby: leaderboards still empty after init', diag);
         }
         setIsLoading(false);
+      }
+
+      if (!cancelled) {
+        unsubs.push(
+          mgMultiplayerService.subscribeGlobalLeaderboard(setGlobalLeaderboard),
+          mgMultiplayerService.subscribeLeaderboard(schoolId, setInstitutionalLeaderboard),
+        );
       }
     }
 
@@ -208,7 +207,7 @@ export default function SchoolLobby({
       cancelled = true;
       unsubs.forEach((u) => u());
     };
-  }, [schoolId, schoolName, userId, username, elo]);
+  }, [schoolId, schoolName, userId, username, elo, session]);
 
   useEffect(() => {
     const q = globalSearch.trim();

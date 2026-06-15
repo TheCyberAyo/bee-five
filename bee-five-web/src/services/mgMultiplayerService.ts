@@ -32,6 +32,8 @@ export interface LobbyDiagnostics {
   institutionalLeaderboardCount: number;
   globalLeaderboardError: string | null;
   institutionalLeaderboardError: string | null;
+  globalLeaderboardRows: Record<string, unknown>[];
+  institutionalLeaderboardRows: Record<string, unknown>[];
   hint: string | null;
 }
 
@@ -329,6 +331,8 @@ class MgMultiplayerService {
   private joinLobbyPromise: Promise<void> | null = null;
   private lobbyJoinGeneration = 0;
   private lastOnlinePlayers: PlayerPresence[] = [];
+  private lastGlobalLeaderboard: Record<string, unknown>[] = [];
+  private lastInstitutionalLeaderboard = new Map<string, Record<string, unknown>[]>();
   private visibilityRefreshHandler: (() => void) | null = null;
   private presenceSyncTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -1119,13 +1123,50 @@ class MgMultiplayerService {
 
   private async ensureAuthenticatedQuery(): Promise<boolean> {
     if (!supabase) return false;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) return true;
-      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+      if (session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 75 * (attempt + 1)));
     }
     console.warn('mgMultiplayerService: leaderboard query skipped — no auth session');
     return false;
+  }
+
+  /** Call before leaderboard reads when the UI already has a session from AuthContext. */
+  async prepareAuthenticatedSession(accessToken: string | undefined | null): Promise<boolean> {
+    if (!supabase || !accessToken) return false;
+    supabase.realtime.setAuth(accessToken);
+    return true;
+  }
+
+  private publishLeaderboardRows(
+    kind: 'global' | 'institutional',
+    schoolId: string | null,
+    rows: Record<string, unknown>[],
+    onUpdate: (rows: Record<string, unknown>[]) => void,
+  ): void {
+    if (rows.length > 0) {
+      if (kind === 'global') this.lastGlobalLeaderboard = rows;
+      else if (schoolId) this.lastInstitutionalLeaderboard.set(schoolId, rows);
+      onUpdate(rows);
+      return;
+    }
+
+    const cached =
+      kind === 'global'
+        ? this.lastGlobalLeaderboard
+        : (schoolId ? this.lastInstitutionalLeaderboard.get(schoolId) : []) ?? [];
+
+    if (cached.length > 0) {
+      console.warn(`mgMultiplayerService: ignoring empty ${kind} leaderboard refresh; keeping cached rows`);
+      onUpdate(cached);
+      return;
+    }
+
+    onUpdate(rows);
   }
 
   async collectLobbyDiagnostics(schoolId: string, userId: string): Promise<LobbyDiagnostics> {
@@ -1143,6 +1184,8 @@ class MgMultiplayerService {
       institutionalLeaderboardCount: 0,
       globalLeaderboardError: null,
       institutionalLeaderboardError: null,
+      globalLeaderboardRows: [],
+      institutionalLeaderboardRows: [],
       hint: null,
     };
 
@@ -1186,7 +1229,10 @@ class MgMultiplayerService {
         .order('elo', { ascending: false })
         .limit(100);
       if (instErr) base.institutionalLeaderboardError = instErr.message;
-      else base.institutionalLeaderboardCount = instData?.length ?? 0;
+      else {
+        base.institutionalLeaderboardCount = instData?.length ?? 0;
+        base.institutionalLeaderboardRows = (instData ?? []) as Record<string, unknown>[];
+      }
 
       const { data: globalData, error: globalErr } = await supabase
         .from('mg_profiles')
@@ -1195,7 +1241,10 @@ class MgMultiplayerService {
         .order('elo', { ascending: false })
         .limit(100);
       if (globalErr) base.globalLeaderboardError = globalErr.message;
-      else base.globalLeaderboardCount = globalData?.length ?? 0;
+      else {
+        base.globalLeaderboardCount = globalData?.length ?? 0;
+        base.globalLeaderboardRows = (globalData ?? []) as Record<string, unknown>[];
+      }
     }
 
     if (!base.hasSession) {
@@ -1230,42 +1279,79 @@ class MgMultiplayerService {
 
   async getLeaderboard(schoolId: string): Promise<Record<string, unknown>[]> {
     if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
-    const { data, error } = await supabase
-      .from('mg_profiles')
-      .select('id, username, elo, wins, losses, country_code')
-      .eq('school_id', schoolId)
-      .order('elo', { ascending: false })
-      .limit(100);
-    if (error) {
-      console.error('getLeaderboard failed:', error.message);
-      return [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data, error } = await supabase
+        .from('mg_profiles')
+        .select('id, username, elo, wins, losses, country_code')
+        .eq('school_id', schoolId)
+        .order('elo', { ascending: false })
+        .limit(100);
+      if (error) {
+        console.error('getLeaderboard failed:', error.message, { schoolId, attempt });
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+          continue;
+        }
+        return this.lastInstitutionalLeaderboard.get(schoolId) ?? [];
+      }
+      const rows = (data ?? []) as Record<string, unknown>[];
+      if (rows.length > 0 || attempt === 2) {
+        if (rows.length > 0) this.lastInstitutionalLeaderboard.set(schoolId, rows);
+        return rows;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
     }
-    return (data ?? []) as Record<string, unknown>[];
+    return this.lastInstitutionalLeaderboard.get(schoolId) ?? [];
   }
 
   async getGlobalLeaderboard(): Promise<Record<string, unknown>[]> {
     if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
-    const { data, error } = await supabase
-      .from('mg_profiles')
-      .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name)')
-      .not('school_id', 'is', null)
-      .order('elo', { ascending: false })
-      .limit(100);
-    if (error) {
-      console.error('getGlobalLeaderboard failed:', error.message);
-      const { data: fallback, error: fallbackError } = await supabase
+    const client = supabase;
+
+    const runQuery = async (withSchoolEmbed: boolean) => {
+      if (withSchoolEmbed) {
+        return client
+          .from('mg_profiles')
+          .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name)')
+          .not('school_id', 'is', null)
+          .order('elo', { ascending: false })
+          .limit(100);
+      }
+      return client
         .from('mg_profiles')
         .select('id, username, elo, wins, losses, school_id, country_code')
         .not('school_id', 'is', null)
         .order('elo', { ascending: false })
         .limit(100);
-      if (fallbackError) {
-        console.error('getGlobalLeaderboard fallback failed:', fallbackError.message);
-        return [];
+    };
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      let { data, error } = await runQuery(false);
+      if (error) {
+        console.error('getGlobalLeaderboard failed:', error.message, { attempt });
+        ({ data, error } = await runQuery(true));
+      } else if ((data?.length ?? 0) === 0 && attempt === 0) {
+        ({ data, error } = await runQuery(true));
       }
-      return (fallback ?? []) as Record<string, unknown>[];
+
+      if (error) {
+        console.error('getGlobalLeaderboard retry failed:', error.message, { attempt });
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+          continue;
+        }
+        return this.lastGlobalLeaderboard;
+      }
+
+      const rows = (data ?? []) as Record<string, unknown>[];
+      if (rows.length > 0 || attempt === 2) {
+        if (rows.length > 0) this.lastGlobalLeaderboard = rows;
+        return rows;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
     }
-    return (data ?? []) as Record<string, unknown>[];
+
+    return this.lastGlobalLeaderboard;
   }
 
   subscribeLeaderboard(
@@ -1276,7 +1362,9 @@ class MgMultiplayerService {
     if (!client) return () => {};
 
     const refresh = () => {
-      void this.getLeaderboard(schoolId).then(onUpdate);
+      void this.getLeaderboard(schoolId).then((rows) => {
+        this.publishLeaderboardRows('institutional', schoolId, rows, onUpdate);
+      });
     };
 
     const { data: { subscription: authSub } } = client.auth.onAuthStateChange((event, session) => {
@@ -1317,7 +1405,9 @@ class MgMultiplayerService {
     if (!client) return () => {};
 
     const refresh = () => {
-      void this.getGlobalLeaderboard().then(onUpdate);
+      void this.getGlobalLeaderboard().then((rows) => {
+        this.publishLeaderboardRows('global', null, rows, onUpdate);
+      });
     };
 
     const { data: { subscription: authSub } } = client.auth.onAuthStateChange((event, session) => {
