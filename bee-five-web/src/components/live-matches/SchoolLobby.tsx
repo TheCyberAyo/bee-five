@@ -55,6 +55,8 @@ export default function SchoolLobby({
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [institutionalSearchLoading, setInstitutionalSearchLoading] = useState(false);
   const [lobbyJoinError, setLobbyJoinError] = useState<string | null>(null);
+  const [lobbyHint, setLobbyHint] = useState<string | null>(null);
+  const [schoolJoinCode, setSchoolJoinCode] = useState<string | null>(null);
 
   const profileElo = (p: Record<string, unknown>) => {
     const v = p.elo;
@@ -179,6 +181,23 @@ export default function SchoolLobby({
             userId,
           });
         }
+
+        const diag = await mgMultiplayerService.collectLobbyDiagnostics(schoolId, userId);
+        if (!cancelled) {
+          if (diag.schoolName) setInstitutionName(diag.schoolName);
+          setSchoolJoinCode(diag.schoolJoinCode);
+          setLobbyHint(diag.hint);
+          if (diag.globalLeaderboardCount > globalRows.length) {
+            setGlobalLeaderboard(
+              await mgMultiplayerService.getGlobalLeaderboard(),
+            );
+          }
+          if (diag.institutionalLeaderboardCount > institutionalRows.length) {
+            setInstitutionalLeaderboard(
+              await mgMultiplayerService.getLeaderboard(schoolId),
+            );
+          }
+        }
         setIsLoading(false);
       }
     }
@@ -275,7 +294,17 @@ export default function SchoolLobby({
               {usernameWithFlag(formatPlayerRankTitle(username, elo), myCountryCode)}
             </div>
             {institutionName && (
-              <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.72 }}>{institutionName}</div>
+              <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.72 }}>
+                {institutionName}
+                {schoolJoinCode && (
+                  <span style={{ opacity: 0.85 }}> · {schoolJoinCode}</span>
+                )}
+              </div>
+            )}
+            {lobbyHint && (
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff3c4', marginTop: '4px', lineHeight: 1.35 }}>
+                {lobbyHint}
+              </div>
             )}
             {lobbyJoinError && (
               <div style={{ fontSize: '12px', fontWeight: 600, color: '#ffcdd2', marginTop: '4px' }}>

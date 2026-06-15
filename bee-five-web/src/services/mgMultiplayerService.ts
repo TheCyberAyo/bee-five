@@ -15,8 +15,25 @@ import { canPlayLiveMatches, ensureXpInitialized, getXp } from './xpService';
 
 export const DEFAULT_LOBBY_JOIN_CODE = '00BEE00';
 /** Display name for the default lobby row in mg_schools (join code 00BEE00). */
-export const DEFAULT_LOBBY_DISPLAY_NAME = 'Unclassified';
+export const DEFAULT_LOBBY_DISPLAY_NAME = 'Bee Five Default Lobby';
 export const UNIVERSAL_LOBBY_CHANNEL_KEY = 'universal';
+
+export interface LobbyDiagnostics {
+  hasSession: boolean;
+  userId: string | null;
+  schoolId: string;
+  schoolJoinCode: string | null;
+  schoolName: string | null;
+  profileSchoolId: string | null;
+  lobbyChannelState: string | null;
+  presenceTotal: number;
+  presenceOthers: number;
+  globalLeaderboardCount: number;
+  institutionalLeaderboardCount: number;
+  globalLeaderboardError: string | null;
+  institutionalLeaderboardError: string | null;
+  hint: string | null;
+}
 
 export interface LobbyIdentity {
   userId: string;
@@ -246,6 +263,26 @@ function iterPresenceEntries(state: Record<string, unknown>): unknown[] {
     }
   }
   return entries;
+}
+
+function countPresenceEntries(
+  state: Record<string, unknown>,
+  viewerUserId: string | null,
+): { total: number; others: number } {
+  let total = 0;
+  let others = 0;
+  for (const entry of iterPresenceEntries(state)) {
+    const presence = playerPresenceFromMap(presenceEntryToMap(entry));
+    if (!presence.userId) continue;
+    total += 1;
+    if (
+      !viewerUserId
+      || presence.userId.toLowerCase() !== viewerUserId.toLowerCase()
+    ) {
+      others += 1;
+    }
+  }
+  return { total, others };
 }
 
 function mergeOnlinePlayers(
@@ -1089,6 +1126,106 @@ class MgMultiplayerService {
     }
     console.warn('mgMultiplayerService: leaderboard query skipped — no auth session');
     return false;
+  }
+
+  async collectLobbyDiagnostics(schoolId: string, userId: string): Promise<LobbyDiagnostics> {
+    const base: LobbyDiagnostics = {
+      hasSession: false,
+      userId: null,
+      schoolId,
+      schoolJoinCode: null,
+      schoolName: null,
+      profileSchoolId: null,
+      lobbyChannelState: this.lobbyChannel?.state ?? null,
+      presenceTotal: 0,
+      presenceOthers: 0,
+      globalLeaderboardCount: 0,
+      institutionalLeaderboardCount: 0,
+      globalLeaderboardError: null,
+      institutionalLeaderboardError: null,
+      hint: null,
+    };
+
+    if (!supabase) {
+      base.hint = 'Supabase is not configured in this build.';
+      return base;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    base.hasSession = Boolean(session?.access_token);
+    base.userId = session?.user?.id ?? null;
+
+    if (this.lobbyChannel) {
+      const counts = countPresenceEntries(this.lobbyChannel.presenceState(), userId);
+      base.presenceTotal = counts.total;
+      base.presenceOthers = counts.others;
+    }
+
+    if (base.hasSession) {
+      const { data: schoolRows } = await supabase
+        .from('mg_schools')
+        .select('name, join_code')
+        .eq('id', schoolId)
+        .limit(1);
+      if (schoolRows?.[0]) {
+        base.schoolName = schoolRows[0].name?.toString().trim() || null;
+        base.schoolJoinCode = schoolRows[0].join_code?.toString().trim().toUpperCase() || null;
+      }
+
+      const { data: ownRows } = await supabase
+        .from('mg_profiles')
+        .select('school_id')
+        .eq('id', userId)
+        .limit(1);
+      base.profileSchoolId = ownRows?.[0]?.school_id?.toString().trim() ?? null;
+
+      const { data: instData, error: instErr } = await supabase
+        .from('mg_profiles')
+        .select('id, username, elo, wins, losses, country_code')
+        .eq('school_id', schoolId)
+        .order('elo', { ascending: false })
+        .limit(100);
+      if (instErr) base.institutionalLeaderboardError = instErr.message;
+      else base.institutionalLeaderboardCount = instData?.length ?? 0;
+
+      const { data: globalData, error: globalErr } = await supabase
+        .from('mg_profiles')
+        .select('id, username, elo, wins, losses, school_id, country_code')
+        .not('school_id', 'is', null)
+        .order('elo', { ascending: false })
+        .limit(100);
+      if (globalErr) base.globalLeaderboardError = globalErr.message;
+      else base.globalLeaderboardCount = globalData?.length ?? 0;
+    }
+
+    if (!base.hasSession) {
+      base.hint = 'Sign in again — rankings and online players need an active session.';
+    } else if (base.profileSchoolId && base.profileSchoolId !== schoolId) {
+      base.hint = 'Your saved school does not match this lobby. Leave the lobby in Settings and re-join with your school code.';
+    } else if (base.schoolJoinCode === DEFAULT_LOBBY_JOIN_CODE) {
+      base.hint =
+        'You are in the default lobby (00BEE00). Friends at a real school only appear under Global Rankings and Online Players when they are online — join your school code from the menu if you have one.';
+    } else if (
+      base.globalLeaderboardCount === 0
+      && base.institutionalLeaderboardCount === 0
+      && (base.globalLeaderboardError || base.institutionalLeaderboardError)
+    ) {
+      base.hint = `Leaderboard read failed (${base.globalLeaderboardError ?? base.institutionalLeaderboardError}). Database permissions may need updating (supabase db push).`;
+    } else if (
+      base.globalLeaderboardCount === 0
+      && base.institutionalLeaderboardCount === 0
+      && base.profileSchoolId
+    ) {
+      base.hint =
+        'No ranked players are visible. If others play on mobile, run `supabase db push` from bee_five so leaderboard permissions are applied.';
+    } else if (base.lobbyChannelState !== 'joined') {
+      base.hint = 'Not connected to the live lobby channel. Refresh the page.';
+    } else if (base.presenceOthers === 0 && base.globalLeaderboardCount > 1) {
+      base.hint = 'No one else is online right now. Ranked players may still appear on the other tabs.';
+    }
+
+    console.info('Lobby diagnostics', base);
+    return base;
   }
 
   async getLeaderboard(schoolId: string): Promise<Record<string, unknown>[]> {
