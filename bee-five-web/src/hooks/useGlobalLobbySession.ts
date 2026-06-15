@@ -20,6 +20,8 @@ interface UseGlobalLobbySessionOptions {
   user: User | null;
   /** When false, Live Matches flow handles challenges instead. */
   routeChallenges: boolean;
+  /** When false, SchoolLobby owns joinLobby (avoids competing channel joins). */
+  manageLobbyPresence?: boolean;
   onOpenMatch: (match: GlobalLobbyMatch) => void;
   onToast?: (message: string) => void;
 }
@@ -27,6 +29,7 @@ interface UseGlobalLobbySessionOptions {
 export function useGlobalLobbySession({
   user,
   routeChallenges,
+  manageLobbyPresence = true,
   onOpenMatch,
   onToast,
 }: UseGlobalLobbySessionOptions) {
@@ -57,9 +60,20 @@ export function useGlobalLobbySession({
     let cancelled = false;
     const unsubs: (() => void)[] = [];
 
-    void (async () => {
-      const joined = await mgMultiplayerService.joinLobbyFromCurrentProfile();
-      if (cancelled || !joined) return;
+    if (manageLobbyPresence) {
+      void (async () => {
+        const joined = await mgMultiplayerService.joinLobbyFromCurrentProfile();
+        if (cancelled || !joined) return;
+        const identity = mgMultiplayerService.lobbyIdentitySnapshot;
+        if (identity) {
+          identityRef.current = {
+            userId: identity.userId,
+            username: identity.username,
+            elo: identity.elo,
+          };
+        }
+      })();
+    } else {
       const identity = mgMultiplayerService.lobbyIdentitySnapshot;
       if (identity) {
         identityRef.current = {
@@ -68,7 +82,7 @@ export function useGlobalLobbySession({
           elo: identity.elo,
         };
       }
-    })();
+    }
 
     unsubs.push(
       mgMultiplayerService.onChallenge((payload) => {
@@ -106,7 +120,7 @@ export function useGlobalLobbySession({
       cancelled = true;
       unsubs.forEach((u) => u());
     };
-  }, [user, routeChallenges, openMatchIfNew, onToast]);
+  }, [user, routeChallenges, manageLobbyPresence, openMatchIfNew, onToast]);
 
   const clearIncomingChallenge = useCallback(() => setIncomingChallenge(null), []);
 
@@ -116,11 +130,16 @@ export function useGlobalLobbySession({
   }, []);
 
   const restoreIdleAfterMatch = useCallback(async () => {
-    const id = identityRef.current;
-    if (!id) return;
+    const identity = mgMultiplayerService.lobbyIdentitySnapshot ?? identityRef.current;
+    if (!identity) return;
+    identityRef.current = {
+      userId: identity.userId,
+      username: identity.username,
+      elo: identity.elo,
+    };
     ensureXpInitialized();
     const xp = getXp();
-    await mgMultiplayerService.setIdle(id.userId, id.username, id.elo, xp);
+    await mgMultiplayerService.setIdle(identity.userId, identity.username, identity.elo, xp);
   }, []);
 
   const acceptIncomingChallenge = useCallback(async () => {

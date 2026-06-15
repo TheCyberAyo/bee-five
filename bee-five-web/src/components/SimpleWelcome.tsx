@@ -87,6 +87,7 @@ export default function SimpleWelcome() {
   } = useGlobalLobbySession({
     user,
     routeChallenges: routeGlobalChallenges,
+    manageLobbyPresence: gameMode !== 'live-matches',
     onOpenMatch: handleGlobalOpenMatch,
     onToast: setGlobalToast,
   });

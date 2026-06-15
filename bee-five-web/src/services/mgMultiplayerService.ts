@@ -292,8 +292,10 @@ class MgMultiplayerService {
   private joinLobbyPromise: Promise<void> | null = null;
   private lastOnlinePlayers: PlayerPresence[] = [];
   private visibilityRefreshHandler: (() => void) | null = null;
+  private presenceSyncTimer: ReturnType<typeof setInterval> | null = null;
 
   private static readonly opponentDisconnectGraceMs = 12_000;
+  private static readonly presenceSyncIntervalMs = 8_000;
 
   private onlinePlayersEmitter = new SimpleEmitter<PlayerPresence[]>();
   private challengeEmitter = new SimpleEmitter<Record<string, unknown>>();
@@ -301,6 +303,27 @@ class MgMultiplayerService {
   private gameEventEmitter = new SimpleEmitter<Record<string, unknown>>();
   private matchOverEmitter = new SimpleEmitter<Record<string, unknown>>();
   private matchStartEmitter = new SimpleEmitter<Record<string, unknown>>();
+
+  private publishOnlinePlayersFromIdentity(): void {
+    const identity = this.lobbyIdentity;
+    const channel = this.lobbyChannel;
+    if (!identity || !channel) return;
+    this.emitOnlinePlayersFromChannel(channel, identity.elo, identity.userId);
+  }
+
+  private bindPresenceSyncTimer(): void {
+    this.unbindPresenceSyncTimer();
+    this.presenceSyncTimer = setInterval(() => {
+      this.publishOnlinePlayersFromIdentity();
+    }, MgMultiplayerService.presenceSyncIntervalMs);
+  }
+
+  private unbindPresenceSyncTimer(): void {
+    if (this.presenceSyncTimer) {
+      clearInterval(this.presenceSyncTimer);
+      this.presenceSyncTimer = null;
+    }
+  }
 
   private emitOnlinePlayersFromChannel(
     channel: RealtimeChannel,
@@ -327,9 +350,7 @@ class MgMultiplayerService {
       void this.lobbyChannel
         .track(this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'idle'))
         .then(() => {
-          if (this.lobbyChannel) {
-            this.emitOnlinePlayersFromChannel(this.lobbyChannel, elo, userId);
-          }
+          this.publishOnlinePlayersFromIdentity();
         })
         .catch(() => {
           // best-effort
@@ -468,13 +489,6 @@ class MgMultiplayerService {
       await this.leaveLobby();
 
       let inst = institutionName?.trim() ?? '';
-      const { data: schoolRows } = await supabase
-        .from('mg_schools')
-        .select('name')
-        .eq('id', schoolId)
-        .limit(1);
-      const dbName = schoolRows?.[0]?.name?.toString().trim();
-      if (dbName) inst = dbName;
       this.lobbyInstitutionName = inst.length > 0 ? inst : null;
 
       const cc = countryCode?.trim().toUpperCase();
@@ -484,17 +498,26 @@ class MgMultiplayerService {
 
       void this.touchAccountActivity();
 
+      void supabase
+        .from('mg_schools')
+        .select('name')
+        .eq('id', schoolId)
+        .limit(1)
+        .then(({ data: schoolRows }) => {
+          const dbName = schoolRows?.[0]?.name?.toString().trim();
+          if (!dbName || !this.lobbyChannel || !this.lobbyIdentity) return;
+          this.lobbyInstitutionName = dbName;
+          const id = this.lobbyIdentity;
+          void this.lobbyChannel.track(
+            this.lobbyPresencePayload(id.userId, id.username, id.elo, id.beeFiveXp, 'idle'),
+          );
+        });
+
       const client = supabase;
-      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`, {
-        config: {
-          presence: {
-            key: userId,
-          },
-        },
-      });
+      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`);
 
       const onPresenceChange = () => {
-        this.emitOnlinePlayersFromChannel(channel, elo, userId);
+        this.publishOnlinePlayersFromIdentity();
       };
 
       channel.on('broadcast', { event: 'challenge' }, ({ payload }) => {
@@ -540,6 +563,8 @@ class MgMultiplayerService {
 
       this.lobbyChannel = channel;
       this.bindLobbyVisibilityRefresh(userId, username, elo, beeFiveXp);
+      this.bindPresenceSyncTimer();
+      this.publishOnlinePlayersFromIdentity();
     };
 
     this.joinLobbyPromise = run().finally(() => {
@@ -597,6 +622,7 @@ class MgMultiplayerService {
 
   async leaveLobby(): Promise<void> {
     this.unbindLobbyVisibilityRefresh();
+    this.unbindPresenceSyncTimer();
     if (this.lobbyChannel && supabase) {
       await this.lobbyChannel.untrack();
       await supabase.removeChannel(this.lobbyChannel);

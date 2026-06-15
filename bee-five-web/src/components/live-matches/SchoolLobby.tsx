@@ -129,6 +129,8 @@ export default function SchoolLobby({
         beeFiveXp: xp,
         institutionName: resolvedInstitution || undefined,
         countryCode: resolvedCountry || undefined,
+      }).catch((err) => {
+        console.error('SchoolLobby: joinLobby failed', err);
       });
 
       if (supabase && !cancelled) {
