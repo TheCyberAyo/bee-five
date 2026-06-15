@@ -1268,7 +1268,7 @@ export default function SimpleWelcome() {
   // Main menu component
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #FFC30B 0%, #FFD700 50%, #FFC30B 100%)',
+      background: '#000000',
       minHeight: '100vh',
       width: '100%',
       maxWidth: '100vw',
@@ -1311,7 +1311,7 @@ export default function SimpleWelcome() {
       )}
 
       <div style={{
-        background: 'rgba(0, 0, 0, 0.95)',
+        background: '#FFC30B',
         borderRadius: isMobile ? '20px' : 'clamp(15px, 3vw, 25px)',
         padding: isMobile ? '1.5rem 1rem' : 'clamp(1.5rem, 3vw, 2rem)',
         width: isMobile ? '90vw' : 'auto',
@@ -1319,8 +1319,7 @@ export default function SimpleWelcome() {
         flex: isMobile ? 'none' : '1 1 auto',
         minHeight: isMobile ? 'calc(100vh - 140px)' : '90vh',
         maxHeight: isMobile ? 'calc(100vh - 140px)' : '90vh',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1), 0 0 0 3px rgba(0,0,0,0.1)',
-        backdropFilter: 'blur(10px)',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.2)',
         textAlign: 'center',
         position: 'relative',
         zIndex: 1,
@@ -1333,25 +1332,27 @@ export default function SimpleWelcome() {
       }}>
         <div style={{ marginBottom: isMobile ? '1.5rem' : 'clamp(1.5rem, 3vw, 2rem)' }}>
           <h1 style={{
-            fontSize: isMobile ? 'clamp(1.5rem, 8vw, 2rem)' : 'clamp(2rem, 6vw, 3rem)',
-            color: '#FFC30B',
-            textShadow: isMobile ? '2px 2px 0px black, -1px -1px 0px black' : '3px 3px 0px black, -1px -1px 0px black, 1px -1px 0px black, -1px 1px 0px black',
-            margin: '0 0 0.5rem 0',
+            fontSize: isMobile ? '2.25rem' : '2.5rem',
+            color: '#000000',
+            margin: '0 0 0.25rem 0',
             lineHeight: '1.2',
-            fontWeight: 'bold',
-            WebkitTextStroke: isMobile ? '0.5px black' : 'initial'
+            fontWeight: 900,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase'
           }}>
-            Bee Five
+            BEE FIVE
           </h1>
           <p style={{
-            fontSize: isMobile ? '1rem' : 'clamp(1rem, 3vw, 1.2rem)',
-            color: '#ffffff',
+            fontSize: isMobile ? '0.95rem' : '1.125rem',
             margin: '0 0 clamp(1rem, 3vw, 1.5rem) 0',
-            fontWeight: 'bold'
+            fontWeight: 600,
+            lineHeight: 1.4
           }}>
-            Your favourite version of{' '}
-            <span style={{ fontWeight: 900, color: '#ff4d4f', textTransform: 'uppercase', letterSpacing: '0.06em', textShadow: '0 3px 8px rgba(0,0,0,0.4)' }}>Connect-5</span>
-            <span style={{ fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.06em', textShadow: '0 3px 8px rgba(0,0,0,0.4)' }}>!</span>
+            <span style={{ color: '#FF9800' }}>Outthink</span>
+            <span style={{ color: 'rgba(0, 0, 0, 0.87)' }}> ● </span>
+            <span style={{ color: '#E53935' }}>Connect 5</span>
+            <span style={{ color: 'rgba(0, 0, 0, 0.87)' }}> ● </span>
+            <span style={{ color: '#4CAF50' }}>Win</span>
           </p>
         </div>
 
@@ -1491,7 +1492,7 @@ export default function SimpleWelcome() {
 
         <footer style={{
           marginTop: isMobile ? '1rem' : 'clamp(1rem, 3vw, 2rem)',
-          color: 'rgba(255,255,255,0.7)',
+          color: 'rgba(0,0,0,0.7)',
           fontSize: isMobile ? '0.8rem' : 'clamp(0.7rem, 2vw, 0.8rem)',
           textAlign: 'center',
           zIndex: 1,
