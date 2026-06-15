@@ -54,6 +54,7 @@ export default function SchoolLobby({
   const [institutionalSearchResults, setInstitutionalSearchResults] = useState<Record<string, unknown>[]>([]);
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [institutionalSearchLoading, setInstitutionalSearchLoading] = useState(false);
+  const [lobbyJoinError, setLobbyJoinError] = useState<string | null>(null);
 
   const profileElo = (p: Record<string, unknown>) => {
     const v = p.elo;
@@ -121,6 +122,7 @@ export default function SchoolLobby({
         setMyCountryCode(resolvedCountry);
       }
 
+      setLobbyJoinError(null);
       await mgMultiplayerService.joinLobby({
         schoolId,
         userId,
@@ -131,6 +133,9 @@ export default function SchoolLobby({
         countryCode: resolvedCountry || undefined,
       }).catch((err) => {
         console.error('SchoolLobby: joinLobby failed', err);
+        if (!cancelled) {
+          setLobbyJoinError('Could not connect to the online lobby. Refresh the page and try again.');
+        }
       });
 
       if (supabase && !cancelled) {
@@ -249,6 +254,11 @@ export default function SchoolLobby({
             </div>
             {institutionName && (
               <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.72 }}>{institutionName}</div>
+            )}
+            {lobbyJoinError && (
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#ffcdd2', marginTop: '4px' }}>
+                {lobbyJoinError}
+              </div>
             )}
           </div>
         </div>

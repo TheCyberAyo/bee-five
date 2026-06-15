@@ -40,6 +40,23 @@ export const supabase = isConfigured
     })
   : null;
 
+/** Keep Realtime WebSocket auth in sync with the signed-in session (browser only). */
+if (typeof window !== 'undefined' && supabase) {
+  const syncRealtimeAuth = (accessToken: string | undefined) => {
+    if (accessToken) {
+      supabase.realtime.setAuth(accessToken);
+    }
+  };
+
+  void supabase.auth.getSession().then(({ data: { session } }) => {
+    syncRealtimeAuth(session?.access_token);
+  });
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    syncRealtimeAuth(session?.access_token);
+  });
+}
+
 // Helper to check if Supabase is configured
 export const isSupabaseConfigured = () => !!supabase;
 

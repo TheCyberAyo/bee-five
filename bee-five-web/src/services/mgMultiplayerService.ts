@@ -256,7 +256,7 @@ function mergeOnlinePlayers(
   const raw: PlayerPresence[] = [];
   for (const entry of iterPresenceEntries(state)) {
     const presence = playerPresenceFromMap(presenceEntryToMap(entry));
-    if (presence.userId && presence.userId !== viewerUserId) {
+    if (presence.userId && presence.userId.toLowerCase() !== viewerUserId.toLowerCase()) {
       raw.push(presence);
     }
   }
@@ -290,6 +290,7 @@ class MgMultiplayerService {
   private pendingOutgoingChallenges = new Map<string, string>();
   private matchScreenCount = 0;
   private joinLobbyPromise: Promise<void> | null = null;
+  private lobbyJoinGeneration = 0;
   private lastOnlinePlayers: PlayerPresence[] = [];
   private visibilityRefreshHandler: (() => void) | null = null;
   private presenceSyncTimer: ReturnType<typeof setInterval> | null = null;
@@ -303,6 +304,31 @@ class MgMultiplayerService {
   private gameEventEmitter = new SimpleEmitter<Record<string, unknown>>();
   private matchOverEmitter = new SimpleEmitter<Record<string, unknown>>();
   private matchStartEmitter = new SimpleEmitter<Record<string, unknown>>();
+
+  private async ensureRealtimeAuth(): Promise<void> {
+    if (!supabase) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      supabase.realtime.setAuth(session.access_token);
+    }
+  }
+
+  private async refreshLobbyTrack(): Promise<void> {
+    const identity = this.lobbyIdentity;
+    const channel = this.lobbyChannel;
+    if (!identity || !channel || channel.state !== 'joined') return;
+
+    await channel.track(
+      this.lobbyPresencePayload(
+        identity.userId,
+        identity.username,
+        identity.elo,
+        identity.beeFiveXp,
+        'idle',
+      ),
+    );
+    this.publishOnlinePlayersFromIdentity();
+  }
 
   private publishOnlinePlayersFromIdentity(): void {
     const identity = this.lobbyIdentity;
@@ -347,14 +373,7 @@ class MgMultiplayerService {
       if (document.visibilityState !== 'visible' || !this.lobbyChannel || !this.lobbyIdentity) {
         return;
       }
-      void this.lobbyChannel
-        .track(this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'idle'))
-        .then(() => {
-          this.publishOnlinePlayersFromIdentity();
-        })
-        .catch(() => {
-          // best-effort
-        });
+      void this.refreshLobbyTrack();
     };
     document.addEventListener('visibilitychange', this.visibilityRefreshHandler);
   }
@@ -483,18 +502,36 @@ class MgMultiplayerService {
       await this.joinLobbyPromise;
     }
 
+    const generation = ++this.lobbyJoinGeneration;
+
     const run = async () => {
       if (!supabase) return;
 
-      await this.leaveLobby();
+      await this.ensureRealtimeAuth();
 
       let inst = institutionName?.trim() ?? '';
-      this.lobbyInstitutionName = inst.length > 0 ? inst : null;
-
       const cc = countryCode?.trim().toUpperCase();
-      this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
+      const nextIdentity: LobbyIdentity = { userId, username, elo, beeFiveXp, schoolId };
 
-      this.lobbyIdentity = { userId, username, elo, beeFiveXp, schoolId };
+      const canRefreshExisting =
+        this.lobbyChannel?.state === 'joined' &&
+        this.lobbyIdentity?.userId === userId;
+
+      if (canRefreshExisting && this.lobbyChannel) {
+        this.lobbyInstitutionName = inst.length > 0 ? inst : null;
+        this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
+        this.lobbyIdentity = nextIdentity;
+        void this.touchAccountActivity();
+        await this.refreshLobbyTrack();
+        return;
+      }
+
+      await this.leaveLobby();
+      if (generation !== this.lobbyJoinGeneration) return;
+
+      this.lobbyInstitutionName = inst.length > 0 ? inst : null;
+      this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
+      this.lobbyIdentity = nextIdentity;
 
       void this.touchAccountActivity();
 
@@ -507,16 +544,14 @@ class MgMultiplayerService {
           const dbName = schoolRows?.[0]?.name?.toString().trim();
           if (!dbName || !this.lobbyChannel || !this.lobbyIdentity) return;
           this.lobbyInstitutionName = dbName;
-          const id = this.lobbyIdentity;
-          void this.lobbyChannel.track(
-            this.lobbyPresencePayload(id.userId, id.username, id.elo, id.beeFiveXp, 'idle'),
-          );
+          void this.refreshLobbyTrack();
         });
 
       const client = supabase;
       const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`);
 
       const onPresenceChange = () => {
+        if (generation !== this.lobbyJoinGeneration) return;
         this.publishOnlinePlayersFromIdentity();
       };
 
@@ -541,6 +576,13 @@ class MgMultiplayerService {
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Lobby channel subscribe timeout')), 20_000);
         channel.subscribe(async (status) => {
+          if (generation !== this.lobbyJoinGeneration) {
+            clearTimeout(timeout);
+            await supabase!.removeChannel(channel);
+            resolve();
+            return;
+          }
+
           if (status === 'SUBSCRIBED') {
             clearTimeout(timeout);
             try {
@@ -560,6 +602,11 @@ class MgMultiplayerService {
           }
         });
       });
+
+      if (generation !== this.lobbyJoinGeneration) {
+        await supabase.removeChannel(channel);
+        return;
+      }
 
       this.lobbyChannel = channel;
       this.bindLobbyVisibilityRefresh(userId, username, elo, beeFiveXp);
