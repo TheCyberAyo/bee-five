@@ -206,25 +206,58 @@ function usernameIlikePattern(query: string): string {
 function presenceEntryToMap(entry: unknown): Record<string, unknown> {
   if (!entry || typeof entry !== 'object') return {};
   const e = entry as Record<string, unknown>;
-  if (e.payload && typeof e.payload === 'object' && !Array.isArray(e.payload)) {
-    return e.payload as Record<string, unknown>;
+
+  const payload = e.payload;
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    return payload as Record<string, unknown>;
   }
-  const { presence_ref: _ref, ...rest } = e;
+  if (typeof payload === 'string' && payload.trim()) {
+    try {
+      const parsed = JSON.parse(payload) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // ignore malformed payload
+    }
+  }
+
+  const metas = e.metas;
+  if (Array.isArray(metas) && metas.length > 0) {
+    const first = metas[0];
+    if (first && typeof first === 'object') {
+      const m = first as Record<string, unknown>;
+      const { phx_ref: _phx, presence_ref: _pref, ...rest } = m;
+      if (rest.user_id != null) return rest;
+    }
+  }
+
+  const { presence_ref: _ref, phx_ref: _phxTop, ...rest } = e;
   return rest;
 }
 
+function iterPresenceEntries(state: Record<string, unknown>): unknown[] {
+  const entries: unknown[] = [];
+  for (const value of Object.values(state)) {
+    if (Array.isArray(value)) {
+      entries.push(...value);
+    } else if (value && typeof value === 'object') {
+      entries.push(value);
+    }
+  }
+  return entries;
+}
+
 function mergeOnlinePlayers(
-  state: Record<string, unknown[]>,
+  state: Record<string, unknown>,
   viewerElo: number,
   viewerUserId: string,
 ): PlayerPresence[] {
   const raw: PlayerPresence[] = [];
-  for (const presences of Object.values(state)) {
-    for (const entry of presences) {
-      const presence = playerPresenceFromMap(presenceEntryToMap(entry));
-      if (presence.userId && presence.userId !== viewerUserId) {
-        raw.push(presence);
-      }
+  for (const entry of iterPresenceEntries(state)) {
+    const presence = playerPresenceFromMap(presenceEntryToMap(entry));
+    if (presence.userId && presence.userId !== viewerUserId) {
+      raw.push(presence);
     }
   }
 
@@ -257,6 +290,8 @@ class MgMultiplayerService {
   private pendingOutgoingChallenges = new Map<string, string>();
   private matchScreenCount = 0;
   private joinLobbyPromise: Promise<void> | null = null;
+  private lastOnlinePlayers: PlayerPresence[] = [];
+  private visibilityRefreshHandler: (() => void) | null = null;
 
   private static readonly opponentDisconnectGraceMs = 12_000;
 
@@ -272,9 +307,41 @@ class MgMultiplayerService {
     viewerElo: number,
     viewerUserId: string,
   ): void {
-    this.onlinePlayersEmitter.emit(
-      mergeOnlinePlayers(channel.presenceState(), viewerElo, viewerUserId),
-    );
+    const players = mergeOnlinePlayers(channel.presenceState(), viewerElo, viewerUserId);
+    this.lastOnlinePlayers = players;
+    this.onlinePlayersEmitter.emit(players);
+  }
+
+  private bindLobbyVisibilityRefresh(
+    userId: string,
+    username: string,
+    elo: number,
+    beeFiveXp: number,
+  ): void {
+    if (typeof document === 'undefined') return;
+    this.unbindLobbyVisibilityRefresh();
+    this.visibilityRefreshHandler = () => {
+      if (document.visibilityState !== 'visible' || !this.lobbyChannel || !this.lobbyIdentity) {
+        return;
+      }
+      void this.lobbyChannel
+        .track(this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'idle'))
+        .then(() => {
+          if (this.lobbyChannel) {
+            this.emitOnlinePlayersFromChannel(this.lobbyChannel, elo, userId);
+          }
+        })
+        .catch(() => {
+          // best-effort
+        });
+    };
+    document.addEventListener('visibilitychange', this.visibilityRefreshHandler);
+  }
+
+  private unbindLobbyVisibilityRefresh(): void {
+    if (typeof document === 'undefined' || !this.visibilityRefreshHandler) return;
+    document.removeEventListener('visibilitychange', this.visibilityRefreshHandler);
+    this.visibilityRefreshHandler = null;
   }
 
   get lobbyIdentitySnapshot(): LobbyIdentity | null {
@@ -324,7 +391,16 @@ class MgMultiplayerService {
   }
 
   onOnlinePlayers(listener: (players: PlayerPresence[]) => void): Unsubscribe {
-    return this.onlinePlayersEmitter.subscribe(listener);
+    const unsub = this.onlinePlayersEmitter.subscribe(listener);
+    if (this.lobbyChannel && this.lobbyIdentity) {
+      const { elo, userId } = this.lobbyIdentity;
+      listener(
+        mergeOnlinePlayers(this.lobbyChannel.presenceState(), elo, userId),
+      );
+    } else if (this.lastOnlinePlayers.length > 0) {
+      listener(this.lastOnlinePlayers);
+    }
+    return unsub;
   }
 
   onChallenge(listener: (data: Record<string, unknown>) => void): Unsubscribe {
@@ -409,7 +485,13 @@ class MgMultiplayerService {
       void this.touchAccountActivity();
 
       const client = supabase;
-      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`);
+      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`, {
+        config: {
+          presence: {
+            key: userId,
+          },
+        },
+      });
 
       const onPresenceChange = () => {
         this.emitOnlinePlayersFromChannel(channel, elo, userId);
@@ -457,6 +539,7 @@ class MgMultiplayerService {
       });
 
       this.lobbyChannel = channel;
+      this.bindLobbyVisibilityRefresh(userId, username, elo, beeFiveXp);
     };
 
     this.joinLobbyPromise = run().finally(() => {
@@ -513,6 +596,7 @@ class MgMultiplayerService {
   }
 
   async leaveLobby(): Promise<void> {
+    this.unbindLobbyVisibilityRefresh();
     if (this.lobbyChannel && supabase) {
       await this.lobbyChannel.untrack();
       await supabase.removeChannel(this.lobbyChannel);
@@ -522,6 +606,7 @@ class MgMultiplayerService {
     this.lobbyCountryCode = null;
     this.lobbyIdentity = null;
     this.pendingOutgoingChallenges.clear();
+    this.lastOnlinePlayers = [];
   }
 
   /** Clears school link and drops lobby/match channels (Settings → leave school lobby). */
@@ -708,12 +793,9 @@ class MgMultiplayerService {
   private isOpponentPresentOnMatchChannel(opponentId: string): boolean {
     const ch = this.matchChannel;
     if (!ch) return false;
-    const state = ch.presenceState();
-    for (const presences of Object.values(state)) {
-      for (const entry of presences) {
-        const payload = presenceEntryToMap(entry);
-        if (payload.user_id?.toString() === opponentId) return true;
-      }
+    for (const entry of iterPresenceEntries(ch.presenceState())) {
+      const payload = presenceEntryToMap(entry);
+      if (payload.user_id?.toString() === opponentId) return true;
     }
     return false;
   }

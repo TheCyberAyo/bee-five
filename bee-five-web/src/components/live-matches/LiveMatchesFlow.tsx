@@ -135,11 +135,6 @@ export default function LiveMatchesFlow({
 
   useEffect(() => {
     if (!profile || activeMatch) return;
-    void mgMultiplayerService.refreshLobbyPresence();
-  }, [profile, activeMatch]);
-
-  useEffect(() => {
-    if (!profile || activeMatch) return;
 
     const unsubs = [
       mgMultiplayerService.onChallenge((payload) => {

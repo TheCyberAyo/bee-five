@@ -94,42 +94,31 @@ export default function SchoolLobby({
       let resolvedCountry = '';
 
       if (supabase) {
-        if (!resolvedInstitution) {
-          const { data } = await supabase.from('mg_schools').select('name').eq('id', schoolId).limit(1);
-          resolvedInstitution = data?.[0]?.name?.toString().trim() ?? '';
-        }
-
-        const { data: profileRows } = await supabase
+        const profileQuery = supabase
           .from('mg_profiles')
           .select('country_code')
           .eq('id', userId)
           .limit(1);
+
+        const institutionQuery = resolvedInstitution
+          ? Promise.resolve({ data: null as { name?: string }[] | null })
+          : supabase.from('mg_schools').select('name').eq('id', schoolId).limit(1);
+
+        const [{ data: profileRows }, { data: schoolRows }] = await Promise.all([
+          profileQuery,
+          institutionQuery,
+        ]);
+
+        if (!resolvedInstitution) {
+          resolvedInstitution = schoolRows?.[0]?.name?.toString().trim() ?? '';
+        }
         const cc = profileRows?.[0]?.country_code?.toString().trim();
         if (cc) resolvedCountry = cc.toUpperCase();
-
-        const { data: schools } = await supabase.from('mg_schools').select('id, name');
-        const map: Record<string, string> = {};
-        for (const row of schools ?? []) {
-          const id = row.id?.toString();
-          const name = row.name?.toString().trim();
-          if (id && name) map[id] = name;
-        }
-        if (!cancelled) setSchoolIdToName(map);
       }
 
       if (!cancelled) {
         setInstitutionName(resolvedInstitution);
         setMyCountryCode(resolvedCountry);
-      }
-
-      const [globalRank, institutionalRank] = await Promise.all([
-        mgMultiplayerService.getLeaderboardRank(elo),
-        mgMultiplayerService.getLeaderboardRank(elo, schoolId),
-      ]);
-
-      if (!cancelled) {
-        setMyGlobalRank(globalRank);
-        setMyInstitutionalRank(institutionalRank);
       }
 
       await mgMultiplayerService.joinLobby({
@@ -142,7 +131,27 @@ export default function SchoolLobby({
         countryCode: resolvedCountry || undefined,
       });
 
-      if (!cancelled) setIsLoading(false);
+      if (supabase && !cancelled) {
+        const { data: schools } = await supabase.from('mg_schools').select('id, name');
+        const map: Record<string, string> = {};
+        for (const row of schools ?? []) {
+          const id = row.id?.toString();
+          const name = row.name?.toString().trim();
+          if (id && name) map[id] = name;
+        }
+        setSchoolIdToName(map);
+      }
+
+      const [globalRank, institutionalRank] = await Promise.all([
+        mgMultiplayerService.getLeaderboardRank(elo),
+        mgMultiplayerService.getLeaderboardRank(elo, schoolId),
+      ]);
+
+      if (!cancelled) {
+        setMyGlobalRank(globalRank);
+        setMyInstitutionalRank(institutionalRank);
+        setIsLoading(false);
+      }
     }
 
     void init();
