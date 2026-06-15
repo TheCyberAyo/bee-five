@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { soundManager } from '../utils/sounds';
 import { useGameLogic } from '../hooks/useGameLogic';
 import GameCanvas from './GameCanvas';
+import { LOCAL_BOARD_MAX_WIDTH } from '../constants/gameConstants';
 import {
   createBoardWithRandomBlocks,
   blockagesForLocalSeriesGame,
@@ -570,7 +571,9 @@ function LocalGameBoard({
         padding: isMobile ? '1rem' : '1rem',
         minHeight: 0,
       }}>
-        <GameCanvas gameState={gameState} onCellClick={handleCellClick} />
+        <div style={{ width: '100%', maxWidth: LOCAL_BOARD_MAX_WIDTH, margin: '0 auto' }}>
+          <GameCanvas gameState={gameState} onCellClick={handleCellClick} fillWidth />
+        </div>
       </div>
 
       <div style={{
