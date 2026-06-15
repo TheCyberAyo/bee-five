@@ -10,7 +10,7 @@ import {
   computeHeadToHeadSeriesScore,
   type HeadToHeadSeriesScore,
 } from '../utils/headToHeadSeries';
-import { canPlayLiveMatches, defaultXp, ensureXpInitialized, getXp } from './xpService';
+import { canPlayLiveMatches, ensureXpInitialized, getXp } from './xpService';
 
 export const DEFAULT_LOBBY_JOIN_CODE = '00BEE00';
 export const UNIVERSAL_LOBBY_CHANNEL_KEY = 'universal';
@@ -883,11 +883,12 @@ class MgMultiplayerService {
     schoolId: string,
     onUpdate: (rows: Record<string, unknown>[]) => void,
   ): Unsubscribe {
-    if (!supabase) return () => {};
+    const client = supabase;
+    if (!client) return () => {};
 
     void this.getLeaderboard(schoolId).then(onUpdate);
 
-    const channel = supabase
+    const channel = client
       .channel(`inst-lb:${schoolId}`)
       .on(
         'postgres_changes',
@@ -904,16 +905,17 @@ class MgMultiplayerService {
       .subscribe();
 
     return () => {
-      void supabase.removeChannel(channel);
+      void client.removeChannel(channel);
     };
   }
 
   subscribeGlobalLeaderboard(onUpdate: (rows: Record<string, unknown>[]) => void): Unsubscribe {
-    if (!supabase) return () => {};
+    const client = supabase;
+    if (!client) return () => {};
 
     void this.getGlobalLeaderboard().then(onUpdate);
 
-    const channel = supabase
+    const channel = client
       .channel('global-lb')
       .on(
         'postgres_changes',
@@ -925,7 +927,7 @@ class MgMultiplayerService {
       .subscribe();
 
     return () => {
-      void supabase.removeChannel(channel);
+      void client.removeChannel(channel);
     };
   }
 
