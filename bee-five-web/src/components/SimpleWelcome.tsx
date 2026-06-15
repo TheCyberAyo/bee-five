@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { soundManager } from '../utils/sounds';
-import { type RoomInfo } from '../utils/p2pMultiplayer';
-import { MultiplayerLobby } from './MultiplayerLobby';
-import { MultiplayerGame } from './MultiplayerGame';
+import LiveMatchesFlow from './live-matches/LiveMatchesFlow';
+import ChallengeDialog from './live-matches/ChallengeDialog';
 import SimpleGame from './SimpleGame';
 import ClassicAIGame from './ClassicAIGame';
 import AboutUs from './AboutUs';
@@ -18,6 +17,7 @@ import SidebarMenu from './SidebarMenu';
 import MobileHeader from './MobileHeader';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './Auth/AuthModal';
+import { useGlobalLobbySession } from '../hooks/useGlobalLobbySession';
 
 const HOME_ICONS = {
   localChallenge: '/homeImagery/play-with-friend.png',
@@ -54,14 +54,48 @@ const homeMenuButtonStyle: React.CSSProperties = {
 };
 
 export default function SimpleWelcome() {
-  const [gameMode, setGameMode] = useState<'menu' | 'local-multiplayer' | 'online-lobby' | 'online-game' | 'classic-game' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
-  const [currentRoom, setCurrentRoom] = useState<RoomInfo | null>(null);
-  const [playerNumber, setPlayerNumber] = useState<1 | 2>(1);
+  const [gameMode, setGameMode] = useState<'menu' | 'local-multiplayer' | 'live-matches' | 'classic-game' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
   const [isMobile, setIsMobile] = useState(false);
+  const [lobbyMatchLaunch, setLobbyMatchLaunch] = useState<{
+    matchId: string;
+    opponentId: string;
+    opponentUsername: string;
+  } | null>(null);
+  const [globalToast, setGlobalToast] = useState<string | null>(null);
   
   // Auth state
   const { user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const routeGlobalChallenges = gameMode !== 'live-matches';
+
+  const handleGlobalOpenMatch = useCallback(
+    (match: { matchId: string; opponentId: string; opponentUsername: string }) => {
+      setLobbyMatchLaunch(match);
+      setGameMode('live-matches');
+    },
+    [],
+  );
+
+  const {
+    incomingChallenge,
+    acceptIncomingChallenge,
+    declineIncomingChallenge,
+    acceptBlockedReason,
+    restoreIdleAfterMatch,
+    onLeftSchoolLobby,
+  } = useGlobalLobbySession({
+    user,
+    routeChallenges: routeGlobalChallenges,
+    onOpenMatch: handleGlobalOpenMatch,
+    onToast: setGlobalToast,
+  });
+
+  useEffect(() => {
+    if (!globalToast) return;
+    const t = setTimeout(() => setGlobalToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [globalToast]);
 
   // Initialize mobile detection
   useEffect(() => {
@@ -75,74 +109,145 @@ export default function SimpleWelcome() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  const globalLobbyOverlays = (
+    <>
+      {routeGlobalChallenges && incomingChallenge && (
+        <ChallengeDialog
+          fromUsername={incomingChallenge.from_username?.toString() ?? 'Player'}
+          fromElo={parseInt(String(incomingChallenge.from_elo ?? 1200), 10) || 1200}
+          acceptBlockedReason={acceptBlockedReason}
+          onAccept={() => void acceptIncomingChallenge()}
+          onDecline={() => void declineIncomingChallenge()}
+        />
+      )}
+      {globalToast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#000',
+            color: '#fff',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            zIndex: 900,
+            maxWidth: '90vw',
+          }}
+        >
+          {globalToast}
+        </div>
+      )}
+    </>
+  );
+
   // Handle local multiplayer mode
   if (gameMode === 'local-multiplayer') {
-    return <SimpleGame onBackToMenu={() => setGameMode('menu')} />;
+    return (
+      <>
+        <SimpleGame onBackToMenu={() => setGameMode('menu')} />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
   // Handle Classic Mode (streak session)
   if (gameMode === 'classic-game') {
-    return <ClassicAIGame onBackToMenu={() => setGameMode('menu')} />;
-  }
-
-  // Handle online multiplayer lobby
-  if (gameMode === 'online-lobby') {
     return (
-      <MultiplayerLobby 
-        onGameStart={(roomInfo: RoomInfo, playerNum: 1 | 2) => {
-          setCurrentRoom(roomInfo);
-          setPlayerNumber(playerNum);
-          setGameMode('online-game');
-        }}
-        onBackToMenu={() => setGameMode('menu')}
-      />
+      <>
+        <ClassicAIGame onBackToMenu={() => setGameMode('menu')} />
+        {globalLobbyOverlays}
+      </>
     );
   }
 
-  // Handle online multiplayer game
-  if (gameMode === 'online-game' && currentRoom) {
+  // Handle Live Matches (school lobby)
+  if (gameMode === 'live-matches') {
     return (
-      <MultiplayerGame 
-        roomInfo={currentRoom}
-        playerNumber={playerNumber}
-        onBackToLobby={() => setGameMode('online-lobby')}
-      />
+      <>
+        <LiveMatchesFlow
+          onBackToMenu={() => setGameMode('menu')}
+          initialActiveMatch={lobbyMatchLaunch}
+          onInitialMatchConsumed={() => setLobbyMatchLaunch(null)}
+          onRestoreGlobalLobby={() => void restoreIdleAfterMatch()}
+        />
+        {globalLobbyOverlays}
+      </>
     );
   }
 
   // Handle About Us page
   if (gameMode === 'about-us') {
-    return <AboutUs onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+    return (
+      <>
+        <AboutUs onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
   // Handle How to Play page
   if (gameMode === 'how-to-play') {
-    return <HowToPlay onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+    return (
+      <>
+        <HowToPlay onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
   // Handle News/Updates page
   if (gameMode === 'news-updates') {
-    return <NewsUpdates onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+    return (
+      <>
+        <NewsUpdates onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
   // Handle Privacy Policy page
   if (gameMode === 'privacy-policy') {
-    return <PrivacyPolicy onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+    return (
+      <>
+        <PrivacyPolicy onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
   // Handle Settings page
   if (gameMode === 'settings') {
-    return <Settings onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+    return (
+      <>
+        <Settings
+          onBackToMenu={() => setGameMode('menu')}
+          isMobile={isMobile}
+          onLeftSchoolLobby={onLeftSchoolLobby}
+        />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
   // Handle Contact Us page
   if (gameMode === 'contact-us') {
-    return <ContactUs onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+    return (
+      <>
+        <ContactUs onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
   // Handle Profile page
   if (gameMode === 'profile') {
-    return <Profile onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />;
+    return (
+      <>
+        <Profile onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
+        {globalLobbyOverlays}
+      </>
+    );
   }
 
 
@@ -247,7 +352,7 @@ export default function SimpleWelcome() {
           alignItems: 'center'
         }}>
           <button
-            onClick={() => { setGameMode('online-lobby'); soundManager.playClickSound(); }}
+            onClick={() => { setGameMode('live-matches'); soundManager.playClickSound(); }}
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
             onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
@@ -259,7 +364,6 @@ export default function SimpleWelcome() {
               maxWidth: isMobile ? '100%' : '300px',
             }}
           >
-            <span style={{ fontSize: '1.3em' }}>🌐</span>
             <span>Live Matches</span>
           </button>
 
@@ -350,6 +454,8 @@ export default function SimpleWelcome() {
           onSuccess={() => { setShowAuthModal(false); setGameMode('menu'); }}
         />
       )}
+
+      {globalLobbyOverlays}
     </div>
   );
 }

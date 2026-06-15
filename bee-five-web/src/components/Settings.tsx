@@ -7,14 +7,18 @@ import { resetAdventureProgress } from '../services/progressService';
 
 const LOCAL_PROGRESS_KEY_PREFIX = 'beeAdventureProgress:';
 
+import { mgMultiplayerService } from '../services/mgMultiplayerService';
+
 interface SettingsProps {
   onBackToMenu: () => void;
   isMobile: boolean;
+  onLeftSchoolLobby?: () => void;
 }
 
 export default function Settings({ 
   onBackToMenu, 
   isMobile,
+  onLeftSchoolLobby,
 }: SettingsProps) {
   const { user, signIn } = useAuth();
   const [volume, setVolume] = useState(soundManager.getVolume());
@@ -26,6 +30,9 @@ export default function Settings({
   const [confirmError, setConfirmError] = useState('');
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmSuccess, setConfirmSuccess] = useState('');
+  const [leaveLobbyLoading, setLeaveLobbyLoading] = useState(false);
+  const [leaveLobbyMessage, setLeaveLobbyMessage] = useState('');
+  const [showLeaveLobbyConfirm, setShowLeaveLobbyConfirm] = useState(false);
 
   // Sync volume changes with sound manager
   useEffect(() => {
@@ -47,6 +54,24 @@ export default function Settings({
 
   const handleTestSound = () => {
     soundManager.playBuzzSound();
+  };
+
+  const handleLeaveSchoolLobby = async () => {
+    setLeaveLobbyLoading(true);
+    setLeaveLobbyMessage('');
+    const outcome = await mgMultiplayerService.leaveSchoolLobby();
+    setLeaveLobbyLoading(false);
+    setShowLeaveLobbyConfirm(false);
+    if (!outcome.isSuccess) {
+      setLeaveLobbyMessage(outcome.errorMessage ?? 'Could not leave lobby.');
+      return;
+    }
+    onLeftSchoolLobby?.();
+    setLeaveLobbyMessage(
+      outcome.unlinkedSchool
+        ? 'You left the school lobby. Join again anytime from Live Matches.'
+        : 'You are not linked to a school lobby.',
+    );
   };
 
   const openConfirmModal = (action: 'reset' | 'delete') => {
@@ -387,6 +412,34 @@ export default function Settings({
                 🔐 Account & data
               </h3>
               <p style={{ marginBottom: '1rem', color: 'rgba(255,255,255,0.8)', fontSize: '0.95rem' }}>
+                School lobby — leave the school or default lobby you joined. You can link again later from Live Matches.
+              </p>
+              {leaveLobbyMessage && (
+                <p style={{ marginBottom: '1rem', color: leaveLobbyMessage.includes('left') ? '#8f8' : '#f88', fontSize: '0.9rem' }}>
+                  {leaveLobbyMessage}
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={leaveLobbyLoading}
+                onClick={() => { soundManager.playClickSound(); setShowLeaveLobbyConfirm(true); }}
+                style={{
+                  padding: '1rem',
+                  marginBottom: '1.25rem',
+                  backgroundColor: 'transparent',
+                  color: '#FFC30B',
+                  border: '2px solid rgba(255, 195, 11, 0.5)',
+                  borderRadius: '12px',
+                  cursor: leaveLobbyLoading ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '1rem',
+                  textAlign: 'left',
+                  opacity: leaveLobbyLoading ? 0.6 : 1,
+                }}
+              >
+                Leave school lobby
+              </button>
+              <p style={{ marginBottom: '1rem', color: 'rgba(255,255,255,0.8)', fontSize: '0.95rem' }}>
                 These actions require your password to confirm.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -568,6 +621,65 @@ export default function Settings({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {showLeaveLobbyConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '1rem',
+          }}
+          onClick={() => !leaveLobbyLoading && setShowLeaveLobbyConfirm(false)}
+        >
+          <div
+            style={{
+              background: '#FFC30B',
+              borderRadius: '20px',
+              border: '4px solid #000',
+              padding: '1.5rem',
+              maxWidth: '420px',
+              width: '100%',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 0.75rem', fontWeight: 800, color: '#000' }}>Leave school lobby?</h3>
+            <p style={{ margin: '0 0 1.25rem', color: 'rgba(0,0,0,0.87)', fontSize: '15px' }}>
+              You will be removed from your current school or default lobby. Use Live Matches to enter a join code again when you want.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                disabled={leaveLobbyLoading}
+                onClick={() => setShowLeaveLobbyConfirm(false)}
+                style={{ background: 'none', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={leaveLobbyLoading}
+                onClick={() => void handleLeaveSchoolLobby()}
+                style={{
+                  background: '#000',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.5rem 1rem',
+                  fontWeight: 800,
+                  cursor: leaveLobbyLoading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {leaveLobbyLoading ? 'Leaving…' : 'Leave lobby'}
+              </button>
+            </div>
           </div>
         </div>
       )}

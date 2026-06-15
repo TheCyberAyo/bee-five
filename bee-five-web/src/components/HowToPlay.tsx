@@ -141,7 +141,7 @@ export default function HowToPlay({ onBackToMenu, isMobile }: HowToPlayProps) {
               <strong style={{ color: '#FFC30B' }}>Classic Mode:</strong> Challenge the Bee Five bot. It learns from your moves and gets smarter with every match.
             </li>
             <li style={{ marginBottom: '0.75rem' }}>
-              <strong style={{ color: '#FFC30B' }}>Live Matches:</strong> Play in real time with players around the world (coming soon).
+              <strong style={{ color: '#FFC30B' }}>Live Matches:</strong> Sign in, join your school lobby, challenge online players, and climb the global and institutional rankings.
             </li>
           </ul>
 

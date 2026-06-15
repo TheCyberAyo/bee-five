@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { soundManager } from '../utils/sounds';
+import { onClassicStreakWin } from '../services/xpService';
 import { useGameLogic } from '../hooks/useGameLogic';
 import GameCanvas from './GameCanvas';
 import { LOCAL_BOARD_MAX_WIDTH } from '../constants/gameConstants';
@@ -270,6 +271,7 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
 
     setClassicGamesWon((prev) => {
       const newScore = prev + points;
+      onClassicStreakWin(newScore);
       classicGamesWonRef.current = newScore;
       if (newScore > classicBestStreakRef.current) {
         setClassicBestStreak(newScore);

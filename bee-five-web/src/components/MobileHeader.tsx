@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { soundManager } from '../utils/sounds';
 
-type GameMode = 'menu' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us' | 'local-multiplayer' | 'online-lobby' | 'online-game' | 'classic-game';
+type GameMode = 'menu' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us' | 'local-multiplayer' | 'live-matches' | 'classic-game';
 
 interface MobileHeaderProps {
   onMenuItemClick: (mode: GameMode) => void;

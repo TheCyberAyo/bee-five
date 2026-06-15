@@ -165,7 +165,7 @@ export default function NewsUpdates({ onBackToMenu, isMobile }: NewsUpdatesProps
               }}>
                 <li>Local Challenge mode</li>
                 <li>Classic Mode challenges</li>
-                <li>Live Matches (soon)</li>
+                <li>Live Matches — school lobby, challenges, and rankings</li>
                 <li>Responsive design</li>
               </ul>
               <p style={{ marginBottom: '0', fontSize: '0.8rem', fontStyle: 'italic' }}>
