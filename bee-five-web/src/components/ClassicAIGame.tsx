@@ -57,6 +57,8 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
   const aiProcessingRef = useRef(false);
   const classicGamesWonRef = useRef(0);
   const classicBestStreakRef = useRef(0);
+  const gameIndexRef = useRef(1);
+  const difficultyRef = useRef<AIDifficulty>(classicStreakDifficultyForGame(1));
 
   const initialBoard = useMemo(
     () => createBoardWithRandomBlocks(blockedCellCountForGame(boardGameIndex)),
@@ -88,6 +90,21 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
   useEffect(() => {
     classicBestStreakRef.current = classicBestStreak;
   }, [classicBestStreak]);
+
+  useEffect(() => {
+    gameIndexRef.current = gameIndex;
+  }, [gameIndex]);
+
+  useEffect(() => {
+    difficultyRef.current = difficulty;
+  }, [difficulty]);
+
+  // Allow the next round once useGameLogic clears winner after board advance.
+  useEffect(() => {
+    if (gameState.winner === 0) {
+      winHandledRef.current = false;
+    }
+  }, [gameState.winner]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
@@ -143,61 +160,61 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
   }, [classicGameOver, gameState.winner, endSession]);
 
   useEffect(() => {
+    if (classicGameOver || winHandledRef.current || gameState.winner !== 1) return;
+
+    winHandledRef.current = true;
+    soundManager.playVictorySound();
+
+    const points = scoreForDifficulty(difficultyRef.current);
+    const nextIndex = gameIndexRef.current + 1;
+
+    setClassicGamesWon((prev) => {
+      const newScore = prev + points;
+      classicGamesWonRef.current = newScore;
+      if (newScore > classicBestStreakRef.current) {
+        setClassicBestStreak(newScore);
+        classicBestStreakRef.current = newScore;
+        saveClassicBestStreak(newScore);
+      }
+      return newScore;
+    });
+    setGameIndex(nextIndex);
+    setDifficulty(classicStreakDifficultyForGame(nextIndex));
+    gameIndexRef.current = nextIndex;
+    difficultyRef.current = classicStreakDifficultyForGame(nextIndex);
+
+    const timeout = window.setTimeout(() => {
+      setBoardGameIndex(nextIndex);
+    }, 2000);
+
+    return () => window.clearTimeout(timeout);
+  }, [gameState.winner, classicGameOver]);
+
+  useEffect(() => {
+    if (classicGameOver || winHandledRef.current || gameState.winner !== 2) return;
+
+    winHandledRef.current = true;
+    soundManager.playDefeatSound();
+
+    const timeout = window.setTimeout(() => {
+      endSession(false, false);
+    }, 2000);
+
+    return () => window.clearTimeout(timeout);
+  }, [gameState.winner, classicGameOver, endSession]);
+
+  useEffect(() => {
     if (classicGameOver || winHandledRef.current) return;
+    if (gameState.isGameActive || gameState.winner !== 0) return;
 
-    if (gameState.winner === 1) {
-      winHandledRef.current = true;
-      soundManager.playVictorySound();
+    winHandledRef.current = true;
 
-      const points = scoreForDifficulty(difficulty);
-      const nextIndex = gameIndex + 1;
+    const timeout = window.setTimeout(() => {
+      endSession(false);
+    }, 2000);
 
-      setClassicGamesWon((prev) => {
-        const newScore = prev + points;
-        classicGamesWonRef.current = newScore;
-        if (newScore > classicBestStreakRef.current) {
-          setClassicBestStreak(newScore);
-          classicBestStreakRef.current = newScore;
-          saveClassicBestStreak(newScore);
-        }
-        return newScore;
-      });
-      setGameIndex(nextIndex);
-      setDifficulty(classicStreakDifficultyForGame(nextIndex));
-
-      const timeout = window.setTimeout(() => {
-        winHandledRef.current = false;
-        setBoardGameIndex(nextIndex);
-        resetGame();
-      }, 2000);
-      return () => window.clearTimeout(timeout);
-    }
-
-    if (gameState.winner === 2) {
-      winHandledRef.current = true;
-      soundManager.playDefeatSound();
-      const timeout = window.setTimeout(() => {
-        endSession(false, false);
-      }, 2000);
-      return () => window.clearTimeout(timeout);
-    }
-
-    if (!gameState.isGameActive && gameState.winner === 0) {
-      winHandledRef.current = true;
-      const timeout = window.setTimeout(() => {
-        endSession(false);
-      }, 2000);
-      return () => window.clearTimeout(timeout);
-    }
-  }, [
-    gameState.winner,
-    gameState.isGameActive,
-    classicGameOver,
-    difficulty,
-    gameIndex,
-    resetGame,
-    endSession,
-  ]);
+    return () => window.clearTimeout(timeout);
+  }, [gameState.winner, gameState.isGameActive, classicGameOver, endSession]);
 
   useEffect(() => {
     if (
@@ -276,10 +293,7 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
     soundManager.playClickSound();
   };
 
-  const turnLabel =
-    gameState.currentPlayer === 1
-      ? '▶ Your Turn (Yellow)'
-      : "AI's Turn (Black)";
+  const turnLabel = gameState.currentPlayer === 1 ? 'Black' : 'Yellow';
 
   return (
     <div style={{
@@ -325,10 +339,10 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
         </span>
       </div>
 
-      <div style={{ padding: '15px', textAlign: 'center' }}>
-        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#000' }}>
-          {turnLabel}
-        </div>
+      <div style={{ padding: '12px', textAlign: 'center' }}>
+        <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#000' }}>
+          <span style={{ color: '#4CAF50', fontSize: '28px' }}>▶</span> {turnLabel}
+        </span>
         {blockedCellCount > 0 && (
           <div style={{ fontSize: '13px', color: 'rgba(0,0,0,0.54)', fontWeight: 600, marginTop: '4px' }}>
             {blockedCellCount} blocked cell{blockedCellCount === 1 ? '' : 's'}
@@ -341,17 +355,10 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: isMobile ? '8px' : '16px',
+        padding: isMobile ? '1rem' : '1rem',
         minHeight: 0,
       }}>
-        <div style={{ width: '100%', maxWidth: isMobile ? '100vw' : '520px' }}>
-          <GameCanvas
-            gameState={gameState}
-            onCellClick={onCellClick}
-            fillWidth
-            classicBoardStyle
-          />
-        </div>
+        <GameCanvas gameState={gameState} onCellClick={onCellClick} />
       </div>
 
       <div style={{
