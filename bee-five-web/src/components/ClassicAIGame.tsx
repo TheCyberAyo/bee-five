@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { soundManager } from '../utils/sounds';
 import { useGameLogic } from '../hooks/useGameLogic';
 import GameCanvas from './GameCanvas';
