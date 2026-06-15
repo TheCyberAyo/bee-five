@@ -122,13 +122,15 @@ export default function LiveMatchScreen({
     if (submitToServer) {
       try {
         if (!hadMoves) {
-          result = await mgMultiplayerService.submitMatchResult({
+          await mgMultiplayerService.submitMatchResult({
             player1Id: p1Id,
             player2Id: p2Id,
             isDraw: true,
             voidNoMoves: true,
           });
           setEndDialog({ kind: 'void' });
+          await mgMultiplayerService.leaveMatch(matchId);
+          return;
         } else {
           result = await mgMultiplayerService.submitMatchResult({
             player1Id: p1Id,
@@ -153,7 +155,6 @@ export default function LiveMatchScreen({
     }
 
     await mgMultiplayerService.leaveMatch(matchId);
-    beginRematchPhase();
   };
 
   const finishMatchDrawSubmit = async () => {
@@ -170,7 +171,6 @@ export default function LiveMatchScreen({
       await mgMultiplayerService.leaveMatch(matchId);
       await refreshSeries();
       setEndDialog({ kind: 'draw', payload: result });
-      beginRematchPhase();
     } catch {
       setMatchEnded(false);
       setStatusMessage('Could not record draw. Try again.');
@@ -192,10 +192,9 @@ export default function LiveMatchScreen({
       await mgMultiplayerService.leaveMatch(matchId);
       if (payload.void_no_moves === true) {
         setEndDialog({ kind: 'void' });
-      } else {
-        setEndDialog({ kind: 'draw', payload });
+        return;
       }
-      beginRematchPhase();
+      setEndDialog({ kind: 'draw', payload });
       return;
     }
 
@@ -213,7 +212,6 @@ export default function LiveMatchScreen({
         loserChange: payload.loserChange,
       },
     });
-    beginRematchPhase();
   };
 
   const onLocalWin = (winnerUserId: string) => {
@@ -232,12 +230,8 @@ export default function LiveMatchScreen({
   const sendMove = (event: Record<string, unknown>) =>
     mgMultiplayerService.sendGameEvent(myId, event);
 
-  const beginRematchPhase = () => {
-    // listeners attached below via useEffect when endDialog is set
-  };
-
   useEffect(() => {
-    if (!endDialog || rematchHandled) return;
+    if (!endDialog || rematchHandled || endDialog.kind === 'void') return;
 
     const unsubs = [
       mgMultiplayerService.onChallenge((payload) => {
@@ -460,17 +454,28 @@ export default function LiveMatchScreen({
             Loading…
           </div>
         ) : (
-          <OnlineBeeFiveBoard
-            ref={boardRef}
-            myUserId={myId}
-            opponentUserId={opponentId}
-            myUsername={myUsername}
-            opponentUsername={opponentUsername}
-            initialFirstSeat={openingSeat}
-            sendNetworkEvent={sendMove}
-            onWin={onLocalWin}
-            onDraw={onLocalDraw}
-          />
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              pointerEvents: matchEnded || waitingDrawConfirm ? 'none' : 'auto',
+              opacity: matchEnded || waitingDrawConfirm ? 0.85 : 1,
+            }}
+          >
+            <OnlineBeeFiveBoard
+              ref={boardRef}
+              myUserId={myId}
+              opponentUserId={opponentId}
+              myUsername={myUsername}
+              opponentUsername={opponentUsername}
+              initialFirstSeat={openingSeat}
+              sendNetworkEvent={sendMove}
+              onWin={onLocalWin}
+              onDraw={onLocalDraw}
+            />
+          </div>
         )}
       </div>
 

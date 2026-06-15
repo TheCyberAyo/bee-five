@@ -274,7 +274,6 @@ export default function SchoolLobby({
             setPlayerSearch={setPlayerSearch}
             filtered={filteredOnlinePlayers}
             allCount={onlinePlayers.length}
-            institutionName={institutionName}
             canChallenge={canChallenge}
             onChallenge={(p) => void sendChallenge(p)}
           />
@@ -309,6 +308,11 @@ export default function SchoolLobby({
             elo={elo}
             rankLabel="institutional"
             userId={userId}
+            emptyMessage={
+              institutionalSearch.trim()
+                ? 'No players found'
+                : 'No ranked players at your institution yet'
+            }
             columns={['Username', 'Rank', 'ELO', 'XPs']}
             renderCells={(p, isMe) => [
               usernameWithFlag(p.username?.toString() ?? 'Player', p.country_code?.toString()),
@@ -369,7 +373,6 @@ function OnlineTab({
   setPlayerSearch,
   filtered,
   allCount,
-  institutionName,
   canChallenge,
   onChallenge,
 }: {
@@ -377,13 +380,26 @@ function OnlineTab({
   setPlayerSearch: (v: string) => void;
   filtered: PlayerPresence[];
   allCount: number;
-  institutionName: string;
   canChallenge: (p: PlayerPresence) => boolean;
   onChallenge: (p: PlayerPresence) => void;
 }) {
+  const searchQuery = playerSearch.trim();
+  const searching = searchQuery.length > 0;
+
+  let searchStatus: string | null = null;
+  if (searching) {
+    if (filtered.length === 1) searchStatus = `1 result for "${searchQuery}"`;
+    else searchStatus = `${filtered.length} results for "${searchQuery}"`;
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <SearchField value={playerSearch} onChange={setPlayerSearch} placeholder="Search player…" />
+      {searchStatus && (
+        <div style={{ padding: '4px 12px', fontSize: '12px', fontWeight: 600, color: 'rgba(0,0,0,0.55)' }}>
+          {searchStatus}
+        </div>
+      )}
       <TableHeader labels={['Username', 'Institution', 'Rank', 'ELO', '']} />
       <div style={{ flex: 1, overflow: 'auto' }}>
         {allCount === 0 ? (
@@ -439,6 +455,7 @@ function LeaderboardTab({
   elo,
   rankLabel,
   userId,
+  emptyMessage = 'No ranked players yet',
   columns,
   renderCells,
   isMe,
@@ -452,6 +469,7 @@ function LeaderboardTab({
   elo: number;
   rankLabel: string;
   userId: string;
+  emptyMessage?: string;
   columns: string[];
   renderCells: (p: Record<string, unknown>, isMe: boolean) => string[];
   isMe: (p: Record<string, unknown>) => boolean;
@@ -468,7 +486,7 @@ function LeaderboardTab({
       <div style={{ flex: 1, overflow: 'auto' }}>
         {players.length === 0 ? (
           <p style={{ textAlign: 'center', padding: '24px', fontWeight: 600, opacity: 0.65 }}>
-            {searching ? 'No players found' : 'No ranked players yet'}
+            {searching ? 'No players found' : emptyMessage}
           </p>
         ) : (
           players.map((p, index) => {

@@ -148,6 +148,7 @@ export default function LiveMatchesFlow({
         setIncomingChallenge(payload);
       }),
       mgMultiplayerService.onChallengeResponse((payload) => {
+        if (!mgMultiplayerService.shouldRouteLobbyChallenges) return;
         if (payload.challenger_id?.toString() !== profile.userId) return;
         if (payload.accepted === true) {
           const responderId = payload.responder_id?.toString() ?? '';
@@ -157,9 +158,13 @@ export default function LiveMatchesFlow({
             opponentId: responderId,
             opponentUsername: responderName,
           });
+        } else {
+          const name = payload.responder_username?.toString() ?? 'Player';
+          setToast(`${name} declined your challenge`);
         }
       }),
       mgMultiplayerService.onMatchStart((payload) => {
+        if (!mgMultiplayerService.shouldRouteLobbyChallenges) return;
         openMatch({
           matchId: payload.match_id?.toString() ?? '',
           opponentId: payload.opponent_id?.toString() ?? '',

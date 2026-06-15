@@ -199,6 +199,49 @@ function usernameIlikePattern(query: string): string {
   return `%${safe}%`;
 }
 
+/** Normalize Supabase presence rows from JS (flat) or Flutter (nested payload). */
+function presenceEntryToMap(entry: unknown): Record<string, unknown> {
+  if (!entry || typeof entry !== 'object') return {};
+  const e = entry as Record<string, unknown>;
+  if (e.payload && typeof e.payload === 'object' && !Array.isArray(e.payload)) {
+    return e.payload as Record<string, unknown>;
+  }
+  const { presence_ref: _ref, ...rest } = e;
+  return rest;
+}
+
+function mergeOnlinePlayers(
+  state: Record<string, unknown[]>,
+  viewerElo: number,
+  viewerUserId: string,
+): PlayerPresence[] {
+  const raw: PlayerPresence[] = [];
+  for (const presences of Object.values(state)) {
+    for (const entry of presences) {
+      const presence = playerPresenceFromMap(presenceEntryToMap(entry));
+      if (presence.userId && presence.userId !== viewerUserId) {
+        raw.push(presence);
+      }
+    }
+  }
+
+  const byId = new Map<string, PlayerPresence>();
+  for (const p of raw) {
+    const existing = byId.get(p.userId);
+    if (!existing || statusRank(p.status) > statusRank(existing.status)) {
+      byId.set(p.userId, p);
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    const da = Math.abs(a.elo - viewerElo);
+    const db = Math.abs(b.elo - viewerElo);
+    if (da !== db) return da - db;
+    if (b.elo !== a.elo) return b.elo - a.elo;
+    return a.username.localeCompare(b.username);
+  });
+}
+
 class MgMultiplayerService {
   private lobbyChannel: RealtimeChannel | null = null;
   private matchChannel: RealtimeChannel | null = null;
@@ -210,6 +253,9 @@ class MgMultiplayerService {
   private lobbyIdentity: LobbyIdentity | null = null;
   private pendingOutgoingChallenges = new Map<string, string>();
   private matchScreenCount = 0;
+  private joinLobbyPromise: Promise<void> | null = null;
+
+  private static readonly opponentDisconnectGraceMs = 12_000;
 
   private onlinePlayersEmitter = new SimpleEmitter<PlayerPresence[]>();
   private challengeEmitter = new SimpleEmitter<Record<string, unknown>>();
@@ -218,7 +264,15 @@ class MgMultiplayerService {
   private matchOverEmitter = new SimpleEmitter<Record<string, unknown>>();
   private matchStartEmitter = new SimpleEmitter<Record<string, unknown>>();
 
-  private static readonly opponentDisconnectGraceMs = 12_000;
+  private emitOnlinePlayersFromChannel(
+    channel: RealtimeChannel,
+    viewerElo: number,
+    viewerUserId: string,
+  ): void {
+    this.onlinePlayersEmitter.emit(
+      mergeOnlinePlayers(channel.presenceState(), viewerElo, viewerUserId),
+    );
+  }
 
   get lobbyIdentitySnapshot(): LobbyIdentity | null {
     return this.lobbyIdentity;
@@ -325,76 +379,80 @@ class MgMultiplayerService {
     institutionName?: string | null;
     countryCode?: string | null;
   }): Promise<void> {
-    if (!supabase) return;
+    if (this.joinLobbyPromise) {
+      await this.joinLobbyPromise;
+    }
 
-    await this.leaveLobby();
+    const run = async () => {
+      if (!supabase) return;
 
-    const inst = institutionName?.trim();
-    this.lobbyInstitutionName = inst && inst.length > 0 ? inst : null;
+      await this.leaveLobby();
 
-    const cc = countryCode?.trim().toUpperCase();
-    this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
+      const inst = institutionName?.trim();
+      this.lobbyInstitutionName = inst && inst.length > 0 ? inst : null;
 
-    this.lobbyIdentity = { userId, username, elo, beeFiveXp, schoolId };
+      const cc = countryCode?.trim().toUpperCase();
+      this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
 
-    void this.touchAccountActivity();
+      this.lobbyIdentity = { userId, username, elo, beeFiveXp, schoolId };
 
-    const channel = supabase.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`);
+      void this.touchAccountActivity();
 
-    channel.on('broadcast', { event: 'challenge' }, ({ payload }) => {
-      const data = unwrapChallengePayload((payload ?? {}) as Record<string, unknown>);
-      if (data.to_id?.toString() !== userId) return;
-      this.handleIncomingChallengeBroadcast(data, userId, username);
-    });
+      const client = supabase;
+      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`);
 
-    channel.on('broadcast', { event: 'challenge_response' }, ({ payload }) => {
-      const data = unwrapChallengeResponsePayload((payload ?? {}) as Record<string, unknown>);
-      if (data.challenger_id?.toString() !== userId) return;
-      const responderId = data.responder_id?.toString();
-      if (responderId) this.pendingOutgoingChallenges.delete(responderId);
-      this.challengeResponseEmitter.emit(data);
-    });
+      const onPresenceChange = () => {
+        this.emitOnlinePlayersFromChannel(channel, elo, userId);
+      };
 
-    channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState();
-      const raw: PlayerPresence[] = [];
-      for (const presences of Object.values(state)) {
-        for (const p of presences) {
-          const presence = playerPresenceFromMap(p as Record<string, unknown>);
-          if (presence.userId && presence.userId !== userId) {
-            raw.push(presence);
-          }
-        }
-      }
-
-      const byId = new Map<string, PlayerPresence>();
-      for (const p of raw) {
-        const existing = byId.get(p.userId);
-        if (!existing || statusRank(p.status) > statusRank(existing.status)) {
-          byId.set(p.userId, p);
-        }
-      }
-
-      const players = [...byId.values()].sort((a, b) => {
-        const da = Math.abs(a.elo - elo);
-        const db = Math.abs(b.elo - elo);
-        if (da !== db) return da - db;
-        if (b.elo !== a.elo) return b.elo - a.elo;
-        return a.username.localeCompare(b.username);
+      channel.on('broadcast', { event: 'challenge' }, ({ payload }) => {
+        const data = unwrapChallengePayload((payload ?? {}) as Record<string, unknown>);
+        if (data.to_id?.toString() !== userId) return;
+        this.handleIncomingChallengeBroadcast(data, userId, username);
       });
 
-      this.onlinePlayersEmitter.emit(players);
-    });
+      channel.on('broadcast', { event: 'challenge_response' }, ({ payload }) => {
+        const data = unwrapChallengeResponsePayload((payload ?? {}) as Record<string, unknown>);
+        if (data.challenger_id?.toString() !== userId) return;
+        const responderId = data.responder_id?.toString();
+        if (responderId) this.pendingOutgoingChallenges.delete(responderId);
+        this.challengeResponseEmitter.emit(data);
+      });
 
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track(
-          this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'idle'),
-        );
-      }
-    });
+      channel.on('presence', { event: 'sync' }, onPresenceChange);
+      channel.on('presence', { event: 'join' }, onPresenceChange);
+      channel.on('presence', { event: 'leave' }, onPresenceChange);
 
-    this.lobbyChannel = channel;
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Lobby channel subscribe timeout')), 20_000);
+        channel.subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            clearTimeout(timeout);
+            try {
+              await channel.track(
+                this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'idle'),
+              );
+              onPresenceChange();
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+            return;
+          }
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            clearTimeout(timeout);
+            reject(new Error(`Lobby channel ${status}`));
+          }
+        });
+      });
+
+      this.lobbyChannel = channel;
+    };
+
+    this.joinLobbyPromise = run().finally(() => {
+      this.joinLobbyPromise = null;
+    });
+    await this.joinLobbyPromise;
   }
 
   private handleIncomingChallengeBroadcast(
@@ -642,8 +700,8 @@ class MgMultiplayerService {
     if (!ch) return false;
     const state = ch.presenceState();
     for (const presences of Object.values(state)) {
-      for (const p of presences) {
-        const payload = p as Record<string, unknown>;
+      for (const entry of presences) {
+        const payload = presenceEntryToMap(entry);
         if (payload.user_id?.toString() === opponentId) return true;
       }
     }
