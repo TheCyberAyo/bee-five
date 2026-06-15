@@ -34,6 +34,28 @@ const modeIconStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+const homeMenuButtonStyle: React.CSSProperties = {
+  background: '#43A047',
+  color: 'white',
+  border: '3px solid #000000',
+  borderRadius: '20px',
+  padding: '1rem 2rem',
+  fontSize: '1.2rem',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '0.5rem',
+  minHeight: '60px',
+  width: '100%',
+  maxWidth: '300px',
+  touchAction: 'manipulation',
+  WebkitTapHighlightColor: 'transparent',
+};
+
 export default function SimpleWelcome() {
   const [gameMode, setGameMode] = useState<'menu' | 'local-multiplayer' | 'online-lobby' | 'online-game' | 'ai-game' | 'adventure-game' | 'show-take-turns-submenu' | 'show-ai-submenu' | 'competition' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
   const [currentRoom, setCurrentRoom] = useState<RoomInfo | null>(null);
@@ -1370,25 +1392,12 @@ export default function SimpleWelcome() {
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
             onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
-              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-              color: 'white',
-              border: '3px solid #FFC30B',
+              ...homeMenuButtonStyle,
               borderRadius: isMobile ? '16px' : '20px',
               padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
               fontSize: isMobile ? '1.1rem' : '1.2rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
               minHeight: isMobile ? '56px' : '60px',
-              width: '100%',
               maxWidth: isMobile ? '100%' : '300px',
-              touchAction: 'manipulation',
-              WebkitTapHighlightColor: 'transparent'
             }}
           >
             <span style={{ fontSize: '1.3em' }}>🌐</span>
@@ -1400,25 +1409,12 @@ export default function SimpleWelcome() {
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
             onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
-              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-              color: 'white',
-              border: '3px solid #FFC30B',
+              ...homeMenuButtonStyle,
               borderRadius: isMobile ? '16px' : '20px',
               padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
               fontSize: isMobile ? '1.1rem' : '1.2rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
               minHeight: isMobile ? '56px' : '60px',
-              width: '100%',
               maxWidth: isMobile ? '100%' : '300px',
-              touchAction: 'manipulation',
-              WebkitTapHighlightColor: 'transparent'
             }}
           >
             <img src={HOME_ICONS.localChallenge} alt="" style={modeIconStyle} />
@@ -1430,25 +1426,12 @@ export default function SimpleWelcome() {
             onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
             onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
             style={{
-              background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-              color: 'white',
-              border: '3px solid #FFC30B',
+              ...homeMenuButtonStyle,
               borderRadius: isMobile ? '16px' : '20px',
               padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
               fontSize: isMobile ? '1.1rem' : '1.2rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
               minHeight: isMobile ? '56px' : '60px',
-              width: '100%',
               maxWidth: isMobile ? '100%' : '300px',
-              touchAction: 'manipulation',
-              WebkitTapHighlightColor: 'transparent'
             }}
           >
             <img src={HOME_ICONS.classicMode} alt="" style={modeIconStyle} />
