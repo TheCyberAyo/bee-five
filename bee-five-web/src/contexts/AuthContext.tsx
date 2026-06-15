@@ -16,7 +16,12 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  signUp: (username: string, password: string, fullName: string) => Promise<SignUpResult>;
+  signUp: (
+    username: string,
+    password: string,
+    fullName: string,
+    countryCode: string,
+  ) => Promise<SignUpResult>;
   /** Pass username, or a full email (e.g. re-auth with `user.email`). */
   signIn: (identifier: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
@@ -96,7 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (
     username: string,
     password: string,
-    fullName: string
+    fullName: string,
+    countryCode: string,
   ): Promise<SignUpResult> => {
     if (!supabase) {
       return {
@@ -112,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const un = normalizeUsername(username);
     const email = internalEmailFromUsername(un);
     const fn = fullName.trim();
+    const country = countryCode.trim().toUpperCase();
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -120,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           username: un,
           full_name: fn,
+          country_code: country,
         },
       },
     });

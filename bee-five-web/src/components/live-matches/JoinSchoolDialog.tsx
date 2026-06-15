@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { mgMultiplayerService, type JoinSchoolOutcome } from '../../services/mgMultiplayerService';
+import { mgMultiplayerService, DEFAULT_LOBBY_DISPLAY_NAME, type JoinSchoolOutcome } from '../../services/mgMultiplayerService';
 import { primaryBlackButtonStyle, primaryYellowButtonStyle } from '../../constants/multiplayerTheme';
 
 interface JoinSchoolDialogProps {
@@ -58,7 +58,7 @@ export default function JoinSchoolDialog({
       >
         <h2 style={{ margin: '0 0 0.75rem', fontWeight: 800 }}>🏫 Join Your School</h2>
         <p style={{ fontSize: '14px', fontWeight: 600, color: '#FFC30B', marginBottom: '1rem' }}>
-          Enter your school join code, or use the default lobby if you do not have one yet.
+          Enter your school join code, or join {DEFAULT_LOBBY_DISPLAY_NAME} if you do not have one yet.
         </p>
         <input
           value={code}
@@ -91,7 +91,7 @@ export default function JoinSchoolDialog({
           }}
         >
           <button type="button" onClick={() => void handleDefaultLobby()} disabled={loading} style={primaryYellowButtonStyle}>
-            Use default lobby
+            Join {DEFAULT_LOBBY_DISPLAY_NAME}
           </button>
           {allowSkip && onSkip && (
             <button type="button" onClick={onSkip} disabled={loading} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}>

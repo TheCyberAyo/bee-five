@@ -1,4 +1,5 @@
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
+import { INTERNAL_EMAIL_DOMAIN } from '../lib/internalAuthEmail';
 import { supabase } from '../lib/supabase';
 import {
   playerPresenceFromMap,
@@ -13,6 +14,8 @@ import {
 import { canPlayLiveMatches, ensureXpInitialized, getXp } from './xpService';
 
 export const DEFAULT_LOBBY_JOIN_CODE = '00BEE00';
+/** Display name for the default lobby row in mg_schools (join code 00BEE00). */
+export const DEFAULT_LOBBY_DISPLAY_NAME = 'Unclassified';
 export const UNIVERSAL_LOBBY_CHANNEL_KEY = 'universal';
 
 export interface LobbyIdentity {
@@ -388,8 +391,15 @@ class MgMultiplayerService {
 
       await this.leaveLobby();
 
-      const inst = institutionName?.trim();
-      this.lobbyInstitutionName = inst && inst.length > 0 ? inst : null;
+      let inst = institutionName?.trim() ?? '';
+      const { data: schoolRows } = await supabase
+        .from('mg_schools')
+        .select('name')
+        .eq('id', schoolId)
+        .limit(1);
+      const dbName = schoolRows?.[0]?.name?.toString().trim();
+      if (dbName) inst = dbName;
+      this.lobbyInstitutionName = inst.length > 0 ? inst : null;
 
       const cc = countryCode?.trim().toUpperCase();
       this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
@@ -1036,6 +1046,103 @@ class MgMultiplayerService {
       return (count ?? 0) + 1;
     } catch {
       return null;
+    }
+  }
+
+  async createMgProfile(
+    username: string,
+    options?: { fullName?: string; countryCode?: string },
+  ): Promise<void> {
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const cc = options?.countryCode?.trim().toUpperCase()
+      ?? user.user_metadata?.country_code?.toString().trim().toUpperCase()
+      ?? null;
+    const fullName = options?.fullName?.trim()
+      ?? user.user_metadata?.full_name?.toString().trim()
+      ?? null;
+
+    const payload: Record<string, unknown> = {
+      id: user.id,
+      username,
+      elo: 1200,
+      wins: 0,
+      losses: 0,
+    };
+    if (fullName) payload.full_name = fullName;
+    if (cc) payload.country_code = cc;
+
+    const authEmail = user.email?.trim();
+    if (
+      authEmail &&
+      !authEmail.toLowerCase().endsWith(`@${INTERNAL_EMAIL_DOMAIN}`)
+    ) {
+      payload.email = authEmail;
+    }
+
+    const { error } = await supabase.from('mg_profiles').insert(payload);
+    if (error) {
+      const dup = error.code === '23505' || error.message.toLowerCase().includes('duplicate');
+      if (!dup) throw error;
+      const updates: Record<string, unknown> = { username };
+      if (fullName) updates.full_name = fullName;
+      if (cc) updates.country_code = cc;
+      if (payload.email) updates.email = payload.email;
+      await supabase.from('mg_profiles').update(updates).eq('id', user.id);
+    }
+
+    await this.touchAccountActivity();
+  }
+
+  async syncMgProfileFromAuthMetadata(): Promise<void> {
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await this.touchAccountActivity();
+
+    const fullName = user.user_metadata?.full_name?.toString().trim() || null;
+    const countryCode = user.user_metadata?.country_code?.toString().trim().toUpperCase() || null;
+    const authEmail = user.email?.trim();
+    const hasContactEmail = Boolean(
+      authEmail &&
+        !authEmail.toLowerCase().endsWith(`@${INTERNAL_EMAIL_DOMAIN}`),
+    );
+
+    if (!fullName && !hasContactEmail && !countryCode) return;
+
+    const { data: existing } = await supabase
+      .from('mg_profiles')
+      .select('full_name, email, country_code')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!existing) {
+      const metaUsername = user.user_metadata?.username?.toString().trim();
+      const username = metaUsername && metaUsername.length > 0
+        ? metaUsername
+        : `p_${user.id.replace(/-/g, '').slice(0, 12)}`;
+      await supabase.from('mg_profiles').insert({
+        id: user.id,
+        username,
+        elo: 1200,
+        wins: 0,
+        losses: 0,
+        ...(fullName ? { full_name: fullName } : {}),
+        ...(countryCode ? { country_code: countryCode } : {}),
+        ...(hasContactEmail ? { email: authEmail } : {}),
+      });
+      return;
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (hasContactEmail) updates.email = authEmail;
+    if (fullName) updates.full_name = fullName;
+    if (countryCode) updates.country_code = countryCode;
+    if (Object.keys(updates).length > 0) {
+      await supabase.from('mg_profiles').update(updates).eq('id', user.id);
     }
   }
 

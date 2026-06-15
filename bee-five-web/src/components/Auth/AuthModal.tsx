@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, validateUsername } from '../../lib/internalAuthEmail';
+import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, normalizeUsername, validateUsername } from '../../lib/internalAuthEmail';
 import { isUsernameAvailable } from '../../services/usernameService';
+import { mgMultiplayerService } from '../../services/mgMultiplayerService';
+import { SIGNUP_COUNTRIES, countryLabelWithFlag } from '../../utils/countryData';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -12,18 +14,41 @@ interface AuthModalProps {
   initialSignUp?: boolean;
 }
 
+const PASSWORD_LETTER = /[A-Za-z]/;
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '0.75rem',
+  borderRadius: '8px',
+  border: '2px solid #ddd',
+  fontSize: '1rem',
+  boxSizing: 'border-box',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: '0.5rem',
+  color: '#333',
+  fontWeight: 'bold',
+};
+
 export default function AuthModal({ onClose, onSuccess, initialSignUp = false }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(initialSignUp);
   const [loginUsername, setLoginUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
+  const [countryCode, setCountryCode] = useState('ZA');
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const { signUp, signIn, signInWithProvider, user } = useAuth();
+  const { signUp, signIn, user } = useAuth();
 
   const onCloseRef = useRef(onClose);
   const onSuccessRef = useRef(onSuccess);
@@ -35,6 +60,8 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
 
   useEffect(() => {
     setIsSignUp(initialSignUp);
+    setSuccessMessage(null);
+    setError(null);
   }, [initialSignUp]);
 
   useEffect(() => {
@@ -69,14 +96,13 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
 
       try {
         const result = await isUsernameAvailable(username.trim());
-
         if (!result.available) {
           setUsernameError(result.error || 'Username is already taken');
         } else {
           setUsernameError(null);
         }
-      } catch (error) {
-        console.error('Error checking username:', error);
+      } catch (checkErr) {
+        console.error('Error checking username:', checkErr);
         setUsernameError(null);
       } finally {
         setCheckingUsername(false);
@@ -94,14 +120,34 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
   }
 
   const validatePasswordStrength = (pwd: string): string | null => {
+    if (!pwd) return 'Please enter a password';
     if (pwd.length < 8) return 'Password must be at least 8 characters';
-    if (!/[A-Za-z]/.test(pwd)) return 'Password must include at least one letter';
+    if (!PASSWORD_LETTER.test(pwd)) return 'Password must include at least one letter';
     return null;
+  };
+
+  const resetSignUpFields = () => {
+    setPassword('');
+    setConfirmPassword('');
+    setFullName('');
+    setUsername('');
+    setCountryCode('ZA');
+    setUsernameError(null);
+  };
+
+  const switchMode = (signUp: boolean) => {
+    setIsSignUp(signUp);
+    setError(null);
+    setSuccessMessage(null);
+    setPassword('');
+    setConfirmPassword('');
+    if (!signUp) resetSignUpFields();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
 
     try {
@@ -114,6 +160,11 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         }
         if (trimmedFullName.length < 2) {
           setError('Full name must be at least 2 characters');
+          setLoading(false);
+          return;
+        }
+        if (!countryCode.trim()) {
+          setError('Please select your country');
           setLoading(false);
           return;
         }
@@ -138,7 +189,24 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
           return;
         }
 
-        const { error: signErr } = await signUp(username.trim(), password, trimmedFullName);
+        if (!confirmPassword) {
+          setError('Please confirm your password');
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setLoading(false);
+          return;
+        }
+
+        const un = normalizeUsername(username);
+        const { data, error: signErr } = await signUp(
+          un,
+          password,
+          trimmedFullName,
+          countryCode.trim().toUpperCase(),
+        );
 
         if (signErr) {
           const m = signErr.message?.toLowerCase() ?? '';
@@ -157,60 +225,78 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
           return;
         }
 
-        setError(null);
-        setLoading(false);
-        setIsClosing(true);
-        setTimeout(() => {
-          onCloseRef.current();
-          onSuccessRef.current?.();
-        }, 100);
-      } else {
-        if (!loginUsername.trim()) {
-          setError('Please enter your username');
+        if (data.user || data.session) {
+          try {
+            await mgMultiplayerService.createMgProfile(un, {
+              fullName: trimmedFullName,
+              countryCode: countryCode.trim().toUpperCase(),
+            });
+          } catch {
+            setError(
+              'Account created, but your online profile could not be saved. Sign in and try Live Matches again, or contact support if this persists.',
+            );
+            setLoading(false);
+            return;
+          }
+        }
+
+        if (data.session) {
           setLoading(false);
           return;
         }
 
-        const { error } = await signIn(loginUsername.trim(), password);
-        if (error) {
-          const m = error.message?.toLowerCase() ?? '';
-          if (
-            m.includes('invalid login') ||
-            m.includes('invalid_credentials') ||
-            m.includes('invalid grant')
-          ) {
-            setError('Invalid username or password. Please try again.');
-          } else {
-            setError(error.message || 'Failed to sign in');
-          }
-          setLoading(false);
-          setIsClosing(false);
-        } else {
-          setError(null);
-          setIsClosing(true);
-          setLoading(false);
-          onCloseRef.current();
-          onSuccessRef.current?.();
-          setTimeout(() => {
-            onCloseRef.current();
-            onSuccessRef.current?.();
-          }, 100);
-        }
+        setLoading(false);
+        resetSignUpFields();
+        setSuccessMessage('Account created. You can sign in now with your username and password.');
+        switchMode(false);
+        return;
       }
+
+      const loginFormatError = validateUsername(loginUsername);
+      if (loginFormatError) {
+        setError(loginFormatError);
+        setLoading(false);
+        return;
+      }
+
+      if (!password) {
+        setError('Please enter your password');
+        setLoading(false);
+        return;
+      }
+
+      const { error: signInErr } = await signIn(loginUsername.trim(), password);
+      if (signInErr) {
+        const m = signInErr.message?.toLowerCase() ?? '';
+        if (
+          m.includes('invalid login') ||
+          m.includes('invalid_credentials') ||
+          m.includes('invalid grant')
+        ) {
+          setError('Invalid username or password. Please try again.');
+        } else {
+          setError(signInErr.message || 'Failed to sign in');
+        }
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await mgMultiplayerService.syncMgProfileFromAuthMetadata();
+      } catch {
+        // non-blocking, same as Dart adventure sync
+      }
+
+      setError(null);
+      setLoading(false);
+      setIsClosing(true);
+      onCloseRef.current();
+      onSuccessRef.current?.();
     } catch (err: unknown) {
       console.error('Sign up/sign in error:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
       setLoading(false);
       setIsClosing(false);
-    }
-  };
-
-  const handleProviderSignIn = async (provider: 'google' | 'github') => {
-    setError(null);
-    try {
-      await signInWithProvider(provider);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : `Failed to sign in with ${provider}`);
     }
   };
 
@@ -240,18 +326,21 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
           backgroundColor: '#fff',
           borderRadius: '20px',
           padding: '2rem',
-          maxWidth: '400px',
+          maxWidth: '420px',
           width: '100%',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           border: '3px solid #FFC30B',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h2 style={{ margin: 0, color: '#FFC30B', fontSize: '1.8rem', fontWeight: 'bold' }}>
-            {isSignUp ? 'Sign Up' : 'Sign In'}
+            {isSignUp ? '🐝 Sign Up' : '🐝 Sign In'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             style={{
               background: 'none',
@@ -265,6 +354,27 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
             ×
           </button>
         </div>
+
+        <p style={{ margin: '0 0 1.25rem', fontSize: '15px', color: '#555', lineHeight: 1.45 }}>
+          {isSignUp
+            ? 'Full name, username, and password — no email address required.'
+            : 'Welcome back! Sign in with your BeeFive username.'}
+        </p>
+
+        {successMessage && (
+          <div
+            style={{
+              backgroundColor: '#e8f5e9',
+              color: '#2e7d32',
+              padding: '0.75rem',
+              borderRadius: '8px',
+              marginBottom: '1rem',
+              border: '1px solid #c8e6c9',
+            }}
+          >
+            {successMessage}
+          </div>
+        )}
 
         {error && (
           <div
@@ -284,14 +394,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         <form onSubmit={handleSubmit}>
           {isSignUp && (
             <div style={{ marginBottom: '1rem' }}>
-              <label
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#333',
-                  fontWeight: 'bold',
-                }}
-              >
+              <label style={labelStyle}>
                 Full name <span style={{ color: '#f44336' }}>*</span>
               </label>
               <input
@@ -304,29 +407,41 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
                 required
                 minLength={2}
                 autoComplete="name"
-                placeholder="Your full name"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: '8px',
-                  border: '2px solid #ddd',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
+                placeholder="e.g. Ayongezwa Dlamini"
+                style={inputStyle}
               />
             </div>
           )}
 
           {isSignUp && (
             <div style={{ marginBottom: '1rem' }}>
-              <label
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#333',
-                  fontWeight: 'bold',
+              <label style={labelStyle}>
+                Country <span style={{ color: '#f44336' }}>*</span>
+              </label>
+              <select
+                value={countryCode}
+                onChange={(e) => {
+                  setCountryCode(e.target.value);
+                  setError(null);
                 }}
+                required
+                style={inputStyle}
               >
+                {SIGNUP_COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {countryLabelWithFlag(c.code)}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
+                Your flag appears next to your name online
+              </div>
+            </div>
+          )}
+
+          {isSignUp ? (
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={labelStyle}>
                 Username <span style={{ color: '#f44336' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
@@ -343,12 +458,8 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
                   maxLength={MAX_USERNAME_LENGTH}
                   autoComplete="username"
                   style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '8px',
+                    ...inputStyle,
                     border: `2px solid ${usernameError ? '#f44336' : checkingUsername ? '#FFC30B' : '#ddd'}`,
-                    fontSize: '1rem',
-                    boxSizing: 'border-box',
                   }}
                 />
                 {checkingUsername && (
@@ -378,20 +489,9 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
                 </div>
               )}
             </div>
-          )}
-
-          {!isSignUp && (
+          ) : (
             <div style={{ marginBottom: '1rem' }}>
-              <label
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#333',
-                  fontWeight: 'bold',
-                }}
-              >
-                Username
-              </label>
+              <label style={labelStyle}>Username</label>
               <input
                 type="text"
                 value={loginUsername}
@@ -401,53 +501,89 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
                 }}
                 required
                 autoComplete="username"
-                placeholder="Your BeeFive username"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: '8px',
-                  border: '2px solid #ddd',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
+                placeholder="your_username"
+                style={inputStyle}
               />
+              <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
+                Same username you chose at sign up
+              </div>
             </div>
           )}
 
           <div style={{ marginBottom: '1rem' }}>
-            <label
-              style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                color: '#333',
-                fontWeight: 'bold',
-              }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              minLength={isSignUp ? 8 : 6}
-              autoComplete={isSignUp ? 'new-password' : 'current-password'}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '2px solid #ddd',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-              }}
-            />
+            <label style={labelStyle}>Password</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                minLength={isSignUp ? 8 : undefined}
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                style={{ ...inputStyle, paddingRight: '4.5rem' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: '#FFC30B',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
             {isSignUp && (
               <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
                 At least 8 characters with one letter
               </div>
             )}
           </div>
+
+          {isSignUp && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={labelStyle}>Confirm password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  minLength={8}
+                  autoComplete="new-password"
+                  style={{ ...inputStyle, paddingRight: '4.5rem' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#FFC30B',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  {showConfirmPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -470,61 +606,10 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginBottom: '1rem', color: '#666' }}>or</div>
-
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
           <button
             type="button"
-            onClick={() => handleProviderSignIn('google')}
-            style={{
-              flex: 1,
-              padding: '0.75rem',
-              backgroundColor: '#fff',
-              color: '#333',
-              border: '2px solid #ddd',
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <span>🔍</span> Google
-          </button>
-          <button
-            type="button"
-            onClick={() => handleProviderSignIn('github')}
-            style={{
-              flex: 1,
-              padding: '0.75rem',
-              backgroundColor: '#333',
-              color: '#fff',
-              border: '2px solid #000',
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <span>💻</span> GitHub
-          </button>
-        </div>
-
-        <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError(null);
-              setPassword('');
-            }}
+            onClick={() => switchMode(!isSignUp)}
             style={{
               background: 'none',
               border: 'none',
