@@ -53,6 +53,7 @@ export default function LiveMatchesFlow({
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalSignUp, setAuthModalSignUp] = useState(false);
   const [xpGate, setXpGate] = useState(false);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -71,34 +72,52 @@ export default function LiveMatchesFlow({
   const loadProfile = useCallback(async (): Promise<LobbyProfile | null> => {
     if (!supabase || !user) return null;
 
-    const { data: rows, error } = await supabase
-      .from('mg_profiles')
-      .select('school_id, username, elo')
-      .eq('id', user.id)
-      .limit(1);
+    try {
+      const { data: rows, error } = await supabase
+        .from('mg_profiles')
+        .select('school_id, username, elo')
+        .eq('id', user.id)
+        .limit(1);
 
-    if (error || !rows?.length) {
-      if (error) console.error('LiveMatches loadProfile failed:', error.message);
+      if (error) {
+        const message =
+          error.message.trim().length > 0
+            ? error.message
+            : 'Could not load your lobby profile. Try again.';
+        setProfileLoadError(message);
+        return null;
+      }
+
+      if (!rows?.length) {
+        setProfileLoadError(null);
+        return null;
+      }
+
+      const row = rows[0] as Record<string, unknown>;
+      const schoolId = row.school_id?.toString().trim();
+      if (!schoolId) {
+        setProfileLoadError(null);
+        return null;
+      }
+
+      const rawName = row.username?.toString().trim();
+      let username = rawName && rawName.length > 0 ? rawName : 'Player';
+      if (!rawName) {
+        const meta = user.user_metadata?.username;
+        if (meta && String(meta).trim()) username = String(meta).trim();
+        else if (user.email?.includes('@')) username = user.email.split('@')[0];
+      }
+
+      const eloRaw = row.elo;
+      const elo =
+        typeof eloRaw === 'number' ? Math.trunc(eloRaw) : parseInt(String(eloRaw ?? '1200'), 10) || 1200;
+
+      setProfileLoadError(null);
+      return { schoolId, userId: user.id, username, elo };
+    } catch {
+      setProfileLoadError('Could not open Live Matches. Check your connection.');
       return null;
     }
-
-    const row = rows[0] as Record<string, unknown>;
-    const schoolId = row.school_id?.toString().trim();
-    if (!schoolId) return null;
-
-    const rawName = row.username?.toString().trim();
-    let username = rawName && rawName.length > 0 ? rawName : 'Player';
-    if (!rawName) {
-      const meta = user.user_metadata?.username;
-      if (meta && String(meta).trim()) username = String(meta).trim();
-      else if (user.email?.includes('@')) username = user.email.split('@')[0];
-    }
-
-    const eloRaw = row.elo;
-    const elo =
-      typeof eloRaw === 'number' ? Math.trunc(eloRaw) : parseInt(String(eloRaw ?? '1200'), 10) || 1200;
-
-    return { schoolId, userId: user.id, username, elo };
   }, [user]);
 
   useEffect(() => {
@@ -108,6 +127,7 @@ export default function LiveMatchesFlow({
       setLoading(true);
       setXpGate(false);
       setProfile(null);
+      setProfileLoadError(null);
 
       if (!user || !isAuthenticated || !session?.access_token) {
         setLoading(false);
@@ -129,6 +149,11 @@ export default function LiveMatchesFlow({
       setLoading(false);
     })();
   }, [user, session, isAuthenticated, authLoading, loadProfile]);
+
+  useEffect(() => {
+    if (!profile || activeMatch) return;
+    void mgMultiplayerService.refreshLobbyPresence();
+  }, [profile, activeMatch]);
 
   useEffect(() => {
     if (!initialActiveMatch) return;
@@ -197,7 +222,7 @@ export default function LiveMatchesFlow({
     );
   }
 
-  if (!user) {
+  if (!user || !isAuthenticated || !session?.access_token) {
     return (
       <>
         <GateDialog title="Live Matches" onClose={onBackToMenu}>
@@ -259,11 +284,21 @@ export default function LiveMatchesFlow({
   }
 
   if (!profile) {
+    if (profileLoadError) {
+      return (
+        <GateDialog title="Live Matches" onClose={onBackToMenu}>
+          <p style={{ margin: '0 0 1.25rem', fontSize: '16px', color: 'rgba(0,0,0,0.87)' }}>
+            {profileLoadError}
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <GateLinkButton onClick={onBackToMenu}>OK</GateLinkButton>
+          </div>
+        </GateDialog>
+      );
+    }
+
     return (
       <GateDialog title="Live Matches" onClose={onBackToMenu}>
-        <p style={{ margin: '0 0 1rem', fontSize: '16px', color: 'rgba(0,0,0,0.87)' }}>
-          Join a school or the default lobby to play with others online.
-        </p>
         <JoinSchoolDialog variant="panel" allowSkip={false} onJoined={onJoinedSchool} />
       </GateDialog>
     );

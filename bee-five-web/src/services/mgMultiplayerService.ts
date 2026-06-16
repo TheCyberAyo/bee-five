@@ -877,6 +877,12 @@ class MgMultiplayerService {
     );
   }
 
+  async setSearching(userId: string, username: string, elo: number, beeFiveXp: number): Promise<void> {
+    await this.lobbyChannel?.track(
+      this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'searching'),
+    );
+  }
+
   async setInMatch(userId: string, username: string, elo: number, beeFiveXp: number): Promise<void> {
     await this.lobbyChannel?.track(
       this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'in_match'),

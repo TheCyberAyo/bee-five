@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { soundManager } from '../utils/sounds';
 import { useAuth } from '../contexts/AuthContext';
 import { resetAdventureProgress } from '../services/progressService';
+import { supabase } from '../lib/supabase';
+import { displayUsernameFromUser, supabaseProjectRef } from '../lib/supabaseProject';
 
 const LOCAL_PROGRESS_KEY_PREFIX = 'beeAdventureProgress:';
 
@@ -33,6 +35,45 @@ export default function Settings({
   const [leaveLobbyLoading, setLeaveLobbyLoading] = useState(false);
   const [leaveLobbyMessage, setLeaveLobbyMessage] = useState('');
   const [showLeaveLobbyConfirm, setShowLeaveLobbyConfirm] = useState(false);
+  const [onlineProfile, setOnlineProfile] = useState<{
+    username: string;
+    schoolJoinCode: string | null;
+    schoolName: string | null;
+  } | null>(null);
+
+  const projectRef = supabaseProjectRef();
+  const authUsername = displayUsernameFromUser(user);
+
+  useEffect(() => {
+    if (!user || !supabase) {
+      setOnlineProfile(null);
+      return;
+    }
+    void (async () => {
+      const { data: rows } = await supabase
+        .from('mg_profiles')
+        .select('username, school_id, mg_schools(name, join_code)')
+        .eq('id', user.id)
+        .limit(1);
+      const row = rows?.[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        setOnlineProfile(null);
+        return;
+      }
+      const schools = row.mg_schools;
+      let schoolName: string | null = null;
+      let schoolJoinCode: string | null = null;
+      if (schools && typeof schools === 'object' && !Array.isArray(schools)) {
+        schoolName = (schools as Record<string, unknown>).name?.toString().trim() || null;
+        schoolJoinCode = (schools as Record<string, unknown>).join_code?.toString().trim().toUpperCase() || null;
+      }
+      setOnlineProfile({
+        username: row.username?.toString().trim() || authUsername || 'Player',
+        schoolJoinCode,
+        schoolName,
+      });
+    })();
+  }, [user, authUsername]);
 
   // Sync volume changes with sound manager
   useEffect(() => {
@@ -399,6 +440,60 @@ export default function Settings({
               </button>
             </div>
           </div>
+
+          {/* Online connection — same Supabase project as mobile */}
+          {user && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <h3 style={{
+                fontSize: isMobile ? 'clamp(1.1rem, 3vw, 1.3rem)' : 'clamp(1.3rem, 2vw, 1.5rem)',
+                color: '#FFC30B',
+                marginBottom: '1rem',
+                fontWeight: 'bold',
+              }}>
+                🌐 Online connection
+              </h3>
+              <div style={{
+                padding: '1rem',
+                borderRadius: '12px',
+                border: '2px solid rgba(255,195,11,0.35)',
+                backgroundColor: 'rgba(0,0,0,0.25)',
+                fontSize: '0.9rem',
+                lineHeight: 1.5,
+                color: 'rgba(255,255,255,0.9)',
+              }}>
+                <p style={{ margin: '0 0 0.5rem' }}>
+                  <strong>Supabase project:</strong>{' '}
+                  {projectRef ?? 'not configured'}
+                </p>
+                <p style={{ margin: '0 0 0.5rem' }}>
+                  <strong>Signed in as:</strong> {authUsername ?? 'unknown'}
+                </p>
+                <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', opacity: 0.75 }}>
+                  User id: {user.id}
+                </p>
+                {onlineProfile ? (
+                  <>
+                    <p style={{ margin: '0 0 0.5rem' }}>
+                      <strong>Lobby profile:</strong> {onlineProfile.username}
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      <strong>School:</strong>{' '}
+                      {onlineProfile.schoolName ?? 'not joined'}
+                      {onlineProfile.schoolJoinCode ? ` (${onlineProfile.schoolJoinCode})` : ''}
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, color: 'rgba(255,255,255,0.65)' }}>
+                    No online profile yet — open Live Matches after signing in.
+                  </p>
+                )}
+                <p style={{ margin: '0.75rem 0 0', fontSize: '0.8rem', color: 'rgba(255,195,11,0.9)' }}>
+                  Mobile uses the same project ({projectRef}). If lists look empty, sign in with the
+                  <strong> same username and password</strong> as on the phone — a separate web signup is a different player.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Account & data — password required for reset / delete */}
           {user && (

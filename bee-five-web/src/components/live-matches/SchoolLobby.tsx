@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { mgMultiplayerService } from '../../services/mgMultiplayerService';
@@ -56,9 +56,11 @@ export default function SchoolLobby({
   const [institutionalSearchResults, setInstitutionalSearchResults] = useState<Record<string, unknown>[]>([]);
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [institutionalSearchLoading, setInstitutionalSearchLoading] = useState(false);
-  const [lobbyJoinError, setLobbyJoinError] = useState<string | null>(null);
-  const [lobbyHint, setLobbyHint] = useState<string | null>(null);
-  const [schoolJoinCode, setSchoolJoinCode] = useState<string | null>(null);
+
+  const globalListRef = useRef<HTMLDivElement>(null);
+  const institutionalListRef = useRef<HTMLDivElement>(null);
+  const globalScrollToSelfPending = useRef(false);
+  const institutionalScrollToSelfPending = useRef(false);
 
   const profileElo = (p: Record<string, unknown>) => {
     const v = p.elo;
@@ -80,9 +82,14 @@ export default function SchoolLobby({
     return onlinePlayers.filter((p) => p.username.toLowerCase().includes(q));
   }, [onlinePlayers, playerSearch]);
 
+  const selectTab = (index: number) => {
+    setSelectedTab(index);
+    if (index === 1) globalScrollToSelfPending.current = true;
+    if (index === 2) institutionalScrollToSelfPending.current = true;
+  };
+
   useEffect(() => {
     if (!isAuthenticated || !session?.access_token) {
-      setLobbyJoinError('Sign in again to load rankings and online players.');
       setIsLoading(false);
       return;
     }
@@ -94,7 +101,6 @@ export default function SchoolLobby({
 
     async function init() {
       setIsLoading(true);
-      setLobbyJoinError(null);
       await mgMultiplayerService.prepareAuthenticatedSession(accessToken);
 
       ensureXpInitialized();
@@ -112,8 +118,8 @@ export default function SchoolLobby({
           .limit(1);
 
         const institutionQuery = resolvedInstitution
-          ? Promise.resolve({ data: null as { name?: string; join_code?: string }[] | null })
-          : supabase.from('mg_schools').select('name, join_code').eq('id', schoolId).limit(1);
+          ? Promise.resolve({ data: null as { name?: string }[] | null })
+          : supabase.from('mg_schools').select('name').eq('id', schoolId).limit(1);
 
         const [{ data: profileRows }, { data: schoolRows }] = await Promise.all([
           profileQuery,
@@ -123,8 +129,6 @@ export default function SchoolLobby({
         if (!resolvedInstitution) {
           resolvedInstitution = schoolRows?.[0]?.name?.toString().trim() ?? '';
         }
-        const joinCode = schoolRows?.[0]?.join_code?.toString().trim().toUpperCase();
-        if (joinCode && !cancelled) setSchoolJoinCode(joinCode);
         const cc = profileRows?.[0]?.country_code?.toString().trim();
         if (cc) resolvedCountry = cc.toUpperCase();
       }
@@ -144,9 +148,6 @@ export default function SchoolLobby({
         countryCode: resolvedCountry || undefined,
       }).catch((err) => {
         console.error('SchoolLobby: joinLobby failed', err);
-        if (!cancelled) {
-          setLobbyJoinError('Could not connect to the online lobby. Refresh the page and try again.');
-        }
       });
 
       if (!cancelled) {
@@ -185,8 +186,7 @@ export default function SchoolLobby({
         setMyGlobalRank(globalRank);
         setMyInstitutionalRank(institutionalRank);
         if (diag.schoolName) setInstitutionName(diag.schoolName);
-        if (diag.schoolJoinCode) setSchoolJoinCode(diag.schoolJoinCode);
-        setLobbyHint(diag.hint);
+        if (diag.hint) console.warn('SchoolLobby:', diag.hint);
         if (globalRows.length === 0 && institutionalRows.length === 0) {
           console.warn('SchoolLobby: leaderboards still empty after init', diag);
         }
@@ -276,7 +276,7 @@ export default function SchoolLobby({
       matchId,
     });
 
-    onChallengeSent?.(`Challenge sent to ${player.username}…`);
+    onChallengeSent?.(`Challenge sent to ${player.username}...`);
   };
 
   const tabs = ['Online Players', 'Global Rankings', 'Institutional Ranking'];
@@ -295,19 +295,6 @@ export default function SchoolLobby({
             {institutionName && (
               <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.72 }}>
                 {institutionName}
-                {schoolJoinCode && (
-                  <span style={{ opacity: 0.85 }}> · {schoolJoinCode}</span>
-                )}
-              </div>
-            )}
-            {lobbyHint && (
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff3c4', marginTop: '4px', lineHeight: 1.35 }}>
-                {lobbyHint}
-              </div>
-            )}
-            {lobbyJoinError && (
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#ffcdd2', marginTop: '4px' }}>
-                {lobbyJoinError}
               </div>
             )}
           </div>
@@ -317,7 +304,7 @@ export default function SchoolLobby({
             <button
               key={label}
               type="button"
-              onClick={() => setSelectedTab(index)}
+              onClick={() => selectTab(index)}
               style={{
                 flex: 1,
                 background: 'none',
@@ -358,8 +345,9 @@ export default function SchoolLobby({
             myRank={myGlobalRank}
             elo={elo}
             rankLabel="global"
-            userId={userId}
-            columns={['Username', 'Institution', 'Rank', 'ELO']}
+            listRef={globalListRef}
+            scrollToSelfPendingRef={globalScrollToSelfPending}
+            columns={['Global Rank', 'Username', 'Institution', 'Rank', 'ELO']}
             renderCells={(p, isMe) => [
               usernameWithFlag(p.username?.toString() ?? 'Player', p.country_code?.toString()),
               institutionLabel(p),
@@ -378,13 +366,14 @@ export default function SchoolLobby({
             myRank={myInstitutionalRank}
             elo={elo}
             rankLabel="institutional"
-            userId={userId}
+            listRef={institutionalListRef}
+            scrollToSelfPendingRef={institutionalScrollToSelfPending}
             emptyMessage={
               institutionalSearch.trim()
                 ? 'No players found'
                 : 'No ranked players at your institution yet'
             }
-            columns={['Username', 'Rank', 'ELO', 'XPs']}
+            columns={['Local Rank', 'Username', 'Rank', 'ELO', 'XPs']}
             renderCells={(p, isMe) => [
               usernameWithFlag(p.username?.toString() ?? 'Player', p.country_code?.toString()),
               eloRankTitle(profileElo(p)),
@@ -412,12 +401,10 @@ function SearchField({
   value,
   onChange,
   placeholder,
-  loading,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
-  loading?: boolean;
 }) {
   return (
     <div style={{ padding: '8px 12px 0' }}>
@@ -434,7 +421,31 @@ function SearchField({
           fontWeight: 600,
         }}
       />
-      {loading && <div style={{ fontSize: '12px', marginTop: '4px' }}>Searching…</div>}
+    </div>
+  );
+}
+
+function SearchStatusStrip({
+  query,
+  loading,
+  resultCount,
+}: {
+  query: string;
+  loading?: boolean;
+  resultCount?: number | null;
+}) {
+  const q = query.trim();
+  if (!q) return null;
+
+  let message: string;
+  if (loading) message = 'Searching…';
+  else if (resultCount == null) message = `Search: "${q}"`;
+  else if (resultCount === 1) message = `1 result for "${q}"`;
+  else message = `${resultCount} results for "${q}"`;
+
+  return (
+    <div style={{ padding: '4px 12px', fontSize: '12px', fontWeight: 600, color: 'rgba(0,0,0,0.55)' }}>
+      {message}
     </div>
   );
 }
@@ -457,19 +468,11 @@ function OnlineTab({
   const searchQuery = playerSearch.trim();
   const searching = searchQuery.length > 0;
 
-  let searchStatus: string | null = null;
-  if (searching) {
-    if (filtered.length === 1) searchStatus = `1 result for "${searchQuery}"`;
-    else searchStatus = `${filtered.length} results for "${searchQuery}"`;
-  }
-
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <SearchField value={playerSearch} onChange={setPlayerSearch} placeholder="Search player…" />
-      {searchStatus && (
-        <div style={{ padding: '4px 12px', fontSize: '12px', fontWeight: 600, color: 'rgba(0,0,0,0.55)' }}>
-          {searchStatus}
-        </div>
+      {searching && (
+        <SearchStatusStrip query={searchQuery} resultCount={filtered.length} />
       )}
       <TableHeader labels={['Username', 'Institution', 'Rank', 'ELO', '']} />
       <div style={{ flex: 1, overflow: 'auto' }}>
@@ -530,6 +533,8 @@ function LeaderboardTab({
   columns,
   renderCells,
   isMe,
+  listRef,
+  scrollToSelfPendingRef,
 }: {
   search: string;
   setSearch: (v: string) => void;
@@ -539,22 +544,52 @@ function LeaderboardTab({
   myRank: number | null;
   elo: number;
   rankLabel: string;
-  userId: string;
   emptyMessage?: string;
   columns: string[];
   renderCells: (p: Record<string, unknown>, isMe: boolean) => string[];
   isMe: (p: Record<string, unknown>) => boolean;
+  listRef: React.RefObject<HTMLDivElement | null>;
+  scrollToSelfPendingRef: React.MutableRefObject<boolean>;
 }) {
+  useEffect(() => {
+    if (searching || !scrollToSelfPendingRef.current) return;
+    const myIndex = players.findIndex(isMe);
+    scrollToSelfPendingRef.current = false;
+    if (myIndex < 0) return;
+
+    let attempts = 0;
+    const attempt = () => {
+      attempts += 1;
+      const el = listRef.current;
+      if (!el || attempts > 48) return;
+      const rowTop = myIndex * (ROW_HEIGHT - 4);
+      const centered = rowTop - (el.clientHeight - (ROW_HEIGHT - 4)) / 2;
+      const target = Math.max(0, Math.min(centered, el.scrollHeight - el.clientHeight));
+      el.scrollTop = target;
+      if (el.scrollHeight <= el.clientHeight && attempts < 48) {
+        requestAnimationFrame(attempt);
+      }
+    };
+    requestAnimationFrame(attempt);
+  }, [players, searching, isMe, listRef, scrollToSelfPendingRef]);
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <SearchField value={search} onChange={setSearch} placeholder="Search player…" loading={searching && searchLoading} />
+      <SearchField value={search} onChange={setSearch} placeholder="Search player…" />
+      {searching && (
+        <SearchStatusStrip
+          query={search}
+          loading={searchLoading}
+          resultCount={searchLoading ? null : players.length}
+        />
+      )}
       {!searching && myRank != null && (
         <div style={{ margin: '4px 8px', padding: '4px 8px', background: '#fff', border: '2px solid #000', fontWeight: 700, fontSize: '12px' }}>
           Your {rankLabel} rank · #{myRank} · {elo} ELO
         </div>
       )}
       <TableHeader labels={columns} showRank />
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div ref={listRef} style={{ flex: 1, overflow: 'auto' }}>
         {players.length === 0 ? (
           <p style={{ textAlign: 'center', padding: '24px', fontWeight: 600, opacity: 0.65 }}>
             {searching ? 'No players found' : emptyMessage}
@@ -610,6 +645,15 @@ function LeaderboardTab({
 }
 
 function TableHeader({ labels, showRank }: { labels: string[]; showRank?: boolean }) {
+  const flexFor = (label: string) => {
+    if (label === 'Username') return 3;
+    if (label === 'Global Rank' || label === 'Local Rank') return 1;
+    if (label === 'ELO') return 1;
+    if (label === 'XPs') return 1;
+    if (label === '') return 2;
+    return 2;
+  };
+
   return (
     <div
       style={{
@@ -623,7 +667,7 @@ function TableHeader({ labels, showRank }: { labels: string[]; showRank?: boolea
       }}
     >
       {labels.map((label) => (
-        <Cell key={label} flex={label === 'Username' || label === '' ? 3 : 2}>
+        <Cell key={label} flex={flexFor(label)}>
           {label}
         </Cell>
       ))}

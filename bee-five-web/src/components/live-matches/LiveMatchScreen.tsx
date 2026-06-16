@@ -29,6 +29,7 @@ export interface LiveMatchScreenProps {
   lobbyBeeFiveXp: number;
   onBackToLobby: () => void;
   onRematch?: (matchId: string, opponentId: string, opponentUsername: string) => void;
+  restoreSearchingWhenLeaving?: boolean;
 }
 
 type EndDialog =
@@ -46,6 +47,7 @@ export default function LiveMatchScreen({
   lobbyBeeFiveXp,
   onBackToLobby,
   onRematch,
+  restoreSearchingWhenLeaving = false,
 }: LiveMatchScreenProps) {
   const boardRef = useRef<OnlineBeeFiveBoardHandle>(null);
   const p1Id = onlineMatchPlayer1Id(myId, opponentId);
@@ -109,7 +111,11 @@ export default function LiveMatchScreen({
   const restoreLobbyPresence = async () => {
     ensureXpInitialized();
     const xp = getXp();
-    await mgMultiplayerService.setIdle(myId, myUsername, myElo, xp);
+    if (restoreSearchingWhenLeaving) {
+      await mgMultiplayerService.setSearching(myId, myUsername, myElo, xp);
+    } else {
+      await mgMultiplayerService.setIdle(myId, myUsername, myElo, xp);
+    }
   };
 
   const finishMatchEnd = async (winnerId: string, submitToServer: boolean) => {
