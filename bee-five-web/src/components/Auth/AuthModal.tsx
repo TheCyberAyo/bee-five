@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, normalizeUsername, validateUsername, validateUsernameForSignIn } from '../../lib/internalAuthEmail';
 import { isUsernameAvailable } from '../../services/usernameService';
 import { mgMultiplayerService } from '../../services/mgMultiplayerService';
-import { mapSignInErrorMessage } from '../../services/authLoginService';
+import { mapSignInErrorMessage, isUsernameRegistered, usernameNotFoundMessage } from '../../services/authLoginService';
 import { SIGNUP_COUNTRIES, countryLabelWithFlag } from '../../utils/countryData';
 
 interface AuthModalProps {
@@ -262,6 +262,13 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
 
       if (!password) {
         setError('Please enter your password');
+        setLoading(false);
+        return;
+      }
+
+      const registered = await isUsernameRegistered(loginUsername);
+      if (registered === false) {
+        setError(usernameNotFoundMessage(loginUsername));
         setLoading(false);
         return;
       }
