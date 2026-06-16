@@ -145,6 +145,12 @@ export default function LiveMatchesFlow({
       }
 
       try {
+        await mgMultiplayerService.ensureMgProfileFromAuth();
+      } catch (profileErr) {
+        console.warn('LiveMatches: ensureMgProfileFromAuth failed', profileErr);
+      }
+
+      try {
         await mgMultiplayerService.syncMgProfileFromAuthMetadata();
       } catch {
         // non-blocking — same as mobile after sign-in

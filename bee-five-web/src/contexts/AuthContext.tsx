@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { hasUsableAuthSession, bindSupabaseSession, syncSupabaseAuth } from '../lib/syncSupabaseAuth';
 import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAuthEmail';
 import { loadUserProfile, UserProfile } from '../services/profileService';
-import { resolveLoginEmail } from '../services/authLoginService';
+import { resolveLoginEmail, signInEmailForIdentifier } from '../services/authLoginService';
 
 type SignUpResult = {
   data: AuthResponse['data'];
@@ -192,12 +192,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const trimmed = normalizeUsername(identifier);
-    const email = await resolveLoginEmail(trimmed);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+    const trimmed = identifier.trim();
+    const primaryEmail = signInEmailForIdentifier(trimmed);
+    let { data, error } = await supabase.auth.signInWithPassword({
+      email: primaryEmail,
       password,
     });
+
+    if (
+      error
+      && !trimmed.includes('@')
+      && (error.message?.toLowerCase().includes('invalid login')
+        || error.message?.toLowerCase().includes('invalid_credentials')
+        || error.code === 'invalid_credentials')
+    ) {
+      const resolvedEmail = await resolveLoginEmail(trimmed);
+      if (resolvedEmail && resolvedEmail !== primaryEmail) {
+        const retry = await supabase.auth.signInWithPassword({
+          email: resolvedEmail,
+          password,
+        });
+        data = retry.data;
+        error = retry.error;
+      }
+    }
 
     if (!error && data.session) {
       const nextUser = applySessionToState(data.session, setSession, setUser);

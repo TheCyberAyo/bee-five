@@ -1,6 +1,15 @@
 import { supabase } from '../lib/supabase';
 import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAuthEmail';
 
+/** Same as Dart sign-in: synthetic @beefive.app email from public username. */
+export function signInEmailForIdentifier(identifier: string): string {
+  const trimmed = identifier.trim();
+  if (trimmed.includes('@')) {
+    return trimmed.toLowerCase();
+  }
+  return internalEmailFromUsername(trimmed);
+}
+
 /** Map Supabase auth errors to user-facing copy (aligned with Dart sign-in). */
 export function mapSignInErrorMessage(message: string | undefined): string {
   const m = (message ?? '').toLowerCase();
@@ -13,7 +22,7 @@ export function mapSignInErrorMessage(message: string | undefined): string {
     m.includes('no user') ||
     m.includes('not found')
   ) {
-    return 'Incorrect password for that username. Try again or reset your password on the mobile app.';
+    return 'Incorrect password for that username. On mobile, use the exact username from Sign In (not "Continue as Guest").';
   }
   if (m.includes('email not confirmed')) {
     return 'Email confirmation is still pending. Try signing in on the mobile app, or contact support.';
@@ -43,7 +52,9 @@ export async function isUsernameRegistered(username: string): Promise<boolean | 
       console.warn('username_is_registered:', error.message);
       return null;
     }
-    return data === true;
+    if (data === true || data === 'true') return true;
+    if (data === false || data === 'false') return false;
+    return null;
   } catch {
     return null;
   }

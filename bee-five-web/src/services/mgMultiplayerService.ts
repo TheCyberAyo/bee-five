@@ -1670,9 +1670,13 @@ class MgMultiplayerService {
     username: string,
     options?: { fullName?: string; countryCode?: string },
   ): Promise<void> {
-    if (!supabase) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!supabase) {
+      throw new Error('Supabase is not configured');
+    }
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('Must be signed in to create your online profile');
+    }
 
     const cc = options?.countryCode?.trim().toUpperCase()
       ?? user.user_metadata?.country_code?.toString().trim().toUpperCase()
@@ -1711,6 +1715,49 @@ class MgMultiplayerService {
     }
 
     await this.touchAccountActivity();
+  }
+
+  /**
+   * Ensure mg_profiles exists after sign-in/sign-up (Dart createProfile parity).
+   * Creates the row when missing; patches metadata when present.
+   */
+  async ensureMgProfileFromAuth(options?: {
+    username?: string;
+    fullName?: string;
+    countryCode?: string;
+  }): Promise<void> {
+    if (!supabase) {
+      throw new Error('Supabase is not configured');
+    }
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('Must be signed in to load your online profile');
+    }
+
+    await this.syncMgProfileFromAuthMetadata();
+
+    const { data: existing, error: readError } = await supabase
+      .from('mg_profiles')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (readError) {
+      throw new Error(readError.message || 'Could not read your online profile');
+    }
+
+    if (existing?.id) return;
+
+    const metaUsername = user.user_metadata?.username?.toString().trim();
+    const username = options?.username?.trim()
+      || (metaUsername && metaUsername.length > 0 ? metaUsername : '')
+      || user.email?.split('@')[0]?.trim()
+      || `p_${user.id.replace(/-/g, '').slice(0, 12)}`;
+
+    await this.createMgProfile(username, {
+      fullName: options?.fullName,
+      countryCode: options?.countryCode,
+    });
   }
 
   async syncMgProfileFromAuthMetadata(): Promise<void> {

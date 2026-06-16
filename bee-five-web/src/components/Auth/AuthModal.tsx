@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, normalizeUsername, validateUsername, validateUsernameForSignIn } from '../../lib/internalAuthEmail';
 import { isUsernameAvailable } from '../../services/usernameService';
 import { mgMultiplayerService } from '../../services/mgMultiplayerService';
-import { mapSignInErrorMessage, isUsernameRegistered, usernameNotFoundMessage } from '../../services/authLoginService';
+import { mapSignInErrorMessage } from '../../services/authLoginService';
 import { SIGNUP_COUNTRIES, countryLabelWithFlag } from '../../utils/countryData';
 
 interface AuthModalProps {
@@ -227,17 +227,21 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         }
 
         if (data.user || data.session) {
-          try {
-            await mgMultiplayerService.createMgProfile(un, {
-              fullName: trimmedFullName,
-              countryCode: countryCode.trim().toUpperCase(),
-            });
-          } catch {
-            setError(
-              'Account created, but your online profile could not be saved. Sign in and try Live Matches again, or contact support if this persists.',
-            );
-            setLoading(false);
-            return;
+          if (data.session) {
+            try {
+              await mgMultiplayerService.ensureMgProfileFromAuth({
+                username: un,
+                fullName: trimmedFullName,
+                countryCode: countryCode.trim().toUpperCase(),
+              });
+            } catch (profileErr) {
+              console.error('Sign up: mg profile failed', profileErr);
+              setError(
+                'Account created, but your online profile could not be saved. Sign in and try Live Matches again, or contact support if this persists.',
+              );
+              setLoading(false);
+              return;
+            }
           }
         }
 
@@ -266,13 +270,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         return;
       }
 
-      const loginName = normalizeUsername(loginUsername);
-      const registered = await isUsernameRegistered(loginName);
-      if (registered === false) {
-        setError(usernameNotFoundMessage(loginName));
-        setLoading(false);
-        return;
-      }
+      const loginName = loginUsername.trim();
 
       const { error: signInErr, session: signedInSession } = await signIn(loginName, password);
       if (signInErr) {
@@ -288,9 +286,14 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
       }
 
       try {
-        await mgMultiplayerService.syncMgProfileFromAuthMetadata();
-      } catch {
-        // non-blocking, same as Dart adventure sync
+        await mgMultiplayerService.ensureMgProfileFromAuth();
+      } catch (profileErr) {
+        console.error('Sign in: mg profile ensure failed', profileErr);
+        setError(
+          'Signed in, but your online profile could not be loaded. Try Live Matches again or contact support if this persists.',
+        );
+        setLoading(false);
+        return;
       }
 
       setError(null);
