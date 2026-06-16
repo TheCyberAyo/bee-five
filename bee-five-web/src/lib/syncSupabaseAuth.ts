@@ -40,7 +40,7 @@ export async function bindSupabaseSession(
   if (error || !data.session?.access_token) {
     console.warn('bindSupabaseSession: setSession failed', error?.message);
     syncSupabaseAuth(session);
-    return false;
+    return Boolean(session.access_token);
   }
 
   syncSupabaseAuth(data.session);

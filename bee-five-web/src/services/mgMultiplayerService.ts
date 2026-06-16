@@ -2,6 +2,7 @@ import type { RealtimeChannel, Session, User } from '@supabase/supabase-js';
 import { INTERNAL_EMAIL_DOMAIN } from '../lib/internalAuthEmail';
 import { supabase } from '../lib/supabase';
 import { bindSupabaseSession, syncSupabaseAuth } from '../lib/syncSupabaseAuth';
+import { callEdgeFunctionWithToken, callRpcWithToken } from '../lib/authenticatedRest';
 import {
   playerPresenceFromMap,
   statusRank,
@@ -99,6 +100,33 @@ function findMapInTree(
     }
   }
   return null;
+}
+
+export function normalizeUserId(id: unknown): string {
+  return id?.toString().trim().toLowerCase() ?? '';
+}
+
+export function userIdsEqual(a: unknown, b: unknown): boolean {
+  const left = normalizeUserId(a);
+  const right = normalizeUserId(b);
+  return left.length > 0 && left === right;
+}
+
+export function isChallengeAccepted(value: unknown): boolean {
+  if (value === true) return true;
+  if (value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+  return false;
+}
+
+export function parseEloChange(value: unknown): number | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'number' && !Number.isNaN(value)) return Math.trunc(value);
+  const n = parseInt(String(value), 10);
+  return Number.isNaN(n) ? undefined : n;
 }
 
 function unwrapChallengePayload(raw: Record<string, unknown>): Record<string, unknown> {
@@ -349,13 +377,18 @@ class MgMultiplayerService {
   private pendingOutgoingChallenges = new Map<string, string>();
   private matchScreenCount = 0;
   private joinLobbyPromise: Promise<void> | null = null;
+  private joinMatchPromise: Promise<void> | null = null;
+  private matchJoinGeneration = 0;
   private lobbyJoinGeneration = 0;
+  private lobbyCleanupPromise: Promise<void> = Promise.resolve();
   private lastOnlinePlayers: PlayerPresence[] = [];
   private lastGlobalLeaderboard: Record<string, unknown>[] = [];
   private lastInstitutionalLeaderboard = new Map<string, Record<string, unknown>[]>();
   private visibilityRefreshHandler: (() => void) | null = null;
   private presenceSyncTimer: ReturnType<typeof setInterval> | null = null;
   private boundAuthSession: Session | null = null;
+  private rejoinLobbyTimer: ReturnType<typeof setTimeout> | null = null;
+  private removingLobbyChannel = false;
 
   private static readonly opponentDisconnectGraceMs = 12_000;
   private static readonly presenceSyncIntervalMs = 8_000;
@@ -369,19 +402,163 @@ class MgMultiplayerService {
 
   private async ensureRealtimeAuth(): Promise<string | null> {
     if (!supabase) return null;
+    if (this.boundAuthSession?.access_token) {
+      syncSupabaseAuth(this.boundAuthSession);
+      return this.boundAuthSession.access_token;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (token) {
+      this.boundAuthSession = session;
       syncSupabaseAuth(session);
       return token;
     }
     return null;
   }
 
+  /** Keep React AuthContext session available for REST + Realtime when client storage lags. */
+  clearBoundSession(): void {
+    this.boundAuthSession = null;
+  }
+
+  getBoundAccessToken(): string | null {
+    return this.boundAuthSession?.access_token ?? null;
+  }
+
   private isLobbyChannelReady(channel: RealtimeChannel | null): boolean {
     if (!channel) return false;
     const state = String(channel.state);
     return state === 'joined' || state === 'SUBSCRIBED';
+  }
+
+  /** Avoid recursive removeChannel stack overflow (never call from subscribe callbacks). */
+  private enqueueChannelRemoval(channel: RealtimeChannel): Promise<void> {
+    if (!supabase) return Promise.resolve();
+    const removal = (async () => {
+      try {
+        await channel.untrack().catch(() => {});
+        await supabase!.removeChannel(channel);
+      } catch (err) {
+        console.warn('enqueueChannelRemoval:', err);
+      }
+    })();
+    this.lobbyCleanupPromise = this.lobbyCleanupPromise.then(() => removal);
+    return removal;
+  }
+
+  private scheduleRemoveChannel(channel: RealtimeChannel): void {
+    void this.enqueueChannelRemoval(channel);
+  }
+
+  private async detachLobbyChannel(): Promise<void> {
+    const channel = this.lobbyChannel;
+    this.lobbyChannel = null;
+    if (!channel || !supabase || this.removingLobbyChannel) return;
+
+    this.removingLobbyChannel = true;
+    try {
+      await this.enqueueChannelRemoval(channel);
+    } finally {
+      this.removingLobbyChannel = false;
+    }
+  }
+
+  private lobbyIdentityMatches(
+    userId: string,
+    schoolId: string,
+  ): boolean {
+    const id = this.lobbyIdentity;
+    return Boolean(
+      id
+      && id.userId === userId
+      && id.schoolId === schoolId
+      && this.isLobbyChannelReady(this.lobbyChannel),
+    );
+  }
+
+  private attachLobbyChannelListeners(
+    channel: RealtimeChannel,
+    generation: number,
+    userId: string,
+    username: string,
+    onPresenceChange: () => void,
+  ): void {
+    channel.on('broadcast', { event: 'challenge' }, (message) => {
+      const data = unwrapChallengePayload((message ?? {}) as Record<string, unknown>);
+      const myId = this.lobbyIdentity?.userId ?? userId;
+      if (!userIdsEqual(data.to_id, myId)) return;
+      this.handleIncomingChallengeBroadcast(data, myId, username);
+    });
+
+    channel.on('broadcast', { event: 'challenge_response' }, (message) => {
+      const data = unwrapChallengeResponsePayload((message ?? {}) as Record<string, unknown>);
+      const myId = this.lobbyIdentity?.userId ?? userId;
+      if (!userIdsEqual(data.challenger_id, myId)) return;
+      const responderId = data.responder_id?.toString();
+      if (responderId) this.pendingOutgoingChallenges.delete(responderId);
+      this.challengeResponseEmitter.emit(data);
+      if (isChallengeAccepted(data.accepted)) {
+        this.matchStartEmitter.emit({
+          match_id: data.match_id,
+          opponent_id: data.responder_id,
+          opponent_username: data.responder_username,
+        });
+      }
+    });
+
+    channel.on('presence', { event: 'sync' }, onPresenceChange);
+    channel.on('presence', { event: 'join' }, onPresenceChange);
+    channel.on('presence', { event: 'leave' }, onPresenceChange);
+  }
+
+  private waitForChannelSubscribe(
+    channel: RealtimeChannel,
+    generation: number,
+    userId: string,
+    username: string,
+    elo: number,
+    beeFiveXp: number,
+    onPresenceChange: () => void,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Lobby channel subscribe timeout'));
+      }, 25_000);
+
+      channel.subscribe((status) => {
+        if (generation !== this.lobbyJoinGeneration) {
+          clearTimeout(timeout);
+          this.scheduleRemoveChannel(channel);
+          reject(new Error('Lobby join superseded'));
+          return;
+        }
+
+        if (status === 'SUBSCRIBED') {
+          clearTimeout(timeout);
+          void (async () => {
+            try {
+              await channel.track(
+                this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'idle'),
+              );
+              onPresenceChange();
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          })();
+          return;
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          clearTimeout(timeout);
+          reject(new Error(`Lobby channel ${status}`));
+        }
+      });
+    });
+  }
+
+  private isJoinSupersededError(err: unknown): boolean {
+    return err instanceof Error && err.message === 'Lobby join superseded';
   }
 
   private async refreshLobbyTrack(): Promise<void> {
@@ -584,8 +761,6 @@ class MgMultiplayerService {
       await this.joinLobbyPromise;
     }
 
-    const generation = ++this.lobbyJoinGeneration;
-
     const run = async () => {
       if (!supabase) return;
 
@@ -595,12 +770,23 @@ class MgMultiplayerService {
         throw new Error('Must be signed in to join the online lobby');
       }
 
-      let inst = institutionName?.trim() ?? '';
+      const inst = institutionName?.trim() ?? '';
       const cc = countryCode?.trim().toUpperCase();
       const nextIdentity: LobbyIdentity = { userId, username, elo, beeFiveXp, schoolId };
 
-      // Always tear down and re-subscribe so the WebSocket uses the current JWT (matches Dart).
+      if (this.lobbyIdentityMatches(userId, schoolId)) {
+        this.lobbyIdentity = nextIdentity;
+        this.lobbyInstitutionName = inst.length > 0 ? displayInstitutionName(inst) : this.lobbyInstitutionName;
+        this.lobbyCountryCode = cc && cc.length > 0 ? cc : this.lobbyCountryCode;
+        if (!this.activeMatchId) this.matchScreenCount = 0;
+        await this.refreshLobbyTrack();
+        return;
+      }
+
+      const generation = ++this.lobbyJoinGeneration;
+
       await this.leaveLobby();
+      await this.lobbyCleanupPromise;
       if (generation !== this.lobbyJoinGeneration) return;
 
       this.lobbyInstitutionName = inst.length > 0 ? displayInstitutionName(inst) : null;
@@ -623,72 +809,59 @@ class MgMultiplayerService {
           void this.refreshLobbyTrack();
         });
 
-      const client = supabase;
-      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`, {
-        config: {
-          presence: { key: userId },
-        },
-      });
-
       const onPresenceChange = () => {
         if (generation !== this.lobbyJoinGeneration) return;
         this.publishOnlinePlayersFromIdentity();
       };
 
-      channel.on('broadcast', { event: 'challenge' }, ({ payload }) => {
-        const data = unwrapChallengePayload((payload ?? {}) as Record<string, unknown>);
-        if (data.to_id?.toString() !== userId) return;
-        this.handleIncomingChallengeBroadcast(data, userId, username);
-      });
+      const createChannel = () => {
+        const channel = supabase!.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`);
+        this.attachLobbyChannelListeners(channel, generation, userId, username, onPresenceChange);
+        return channel;
+      };
 
-      channel.on('broadcast', { event: 'challenge_response' }, ({ payload }) => {
-        const data = unwrapChallengeResponsePayload((payload ?? {}) as Record<string, unknown>);
-        if (data.challenger_id?.toString() !== userId) return;
-        const responderId = data.responder_id?.toString();
-        if (responderId) this.pendingOutgoingChallenges.delete(responderId);
-        this.challengeResponseEmitter.emit(data);
-      });
+      let channel = createChannel();
 
-      channel.on('presence', { event: 'sync' }, onPresenceChange);
-      channel.on('presence', { event: 'join' }, onPresenceChange);
-      channel.on('presence', { event: 'leave' }, onPresenceChange);
+      const subscribe = async (target: RealtimeChannel) => {
+        await this.waitForChannelSubscribe(
+          target,
+          generation,
+          userId,
+          username,
+          elo,
+          beeFiveXp,
+          onPresenceChange,
+        );
+      };
 
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Lobby channel subscribe timeout')), 20_000);
-        channel.subscribe(async (status) => {
-          if (generation !== this.lobbyJoinGeneration) {
-            clearTimeout(timeout);
-            await supabase!.removeChannel(channel);
-            resolve();
+      try {
+        await subscribe(channel);
+      } catch (firstErr) {
+        if (this.isJoinSupersededError(firstErr) || generation !== this.lobbyJoinGeneration) {
+          return;
+        }
+        console.warn('joinLobby: subscribe failed, retrying once:', firstErr);
+        await this.enqueueChannelRemoval(channel);
+        await this.lobbyCleanupPromise;
+        if (generation !== this.lobbyJoinGeneration) return;
+        channel = createChannel();
+        try {
+          await subscribe(channel);
+        } catch (retryErr) {
+          if (this.isJoinSupersededError(retryErr) || generation !== this.lobbyJoinGeneration) {
             return;
           }
-
-          if (status === 'SUBSCRIBED') {
-            clearTimeout(timeout);
-            try {
-              await channel.track(
-                this.lobbyPresencePayload(userId, username, elo, beeFiveXp, 'idle'),
-              );
-              onPresenceChange();
-              resolve();
-            } catch (err) {
-              reject(err);
-            }
-            return;
-          }
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            clearTimeout(timeout);
-            reject(new Error(`Lobby channel ${status}`));
-          }
-        });
-      });
+          throw retryErr;
+        }
+      }
 
       if (generation !== this.lobbyJoinGeneration) {
-        await supabase.removeChannel(channel);
+        this.scheduleRemoveChannel(channel);
         return;
       }
 
       this.lobbyChannel = channel;
+      if (!this.activeMatchId) this.matchScreenCount = 0;
       this.bindLobbyVisibilityRefresh(userId, username, elo, beeFiveXp);
       this.bindPresenceSyncTimer();
       this.publishOnlinePlayersFromIdentity();
@@ -750,11 +923,7 @@ class MgMultiplayerService {
   async leaveLobby(): Promise<void> {
     this.unbindLobbyVisibilityRefresh();
     this.unbindPresenceSyncTimer();
-    if (this.lobbyChannel && supabase) {
-      await this.lobbyChannel.untrack();
-      await supabase.removeChannel(this.lobbyChannel);
-      this.lobbyChannel = null;
-    }
+    await this.detachLobbyChannel();
     this.lobbyInstitutionName = null;
     this.lobbyCountryCode = null;
     this.lobbyIdentity = null;
@@ -821,9 +990,26 @@ class MgMultiplayerService {
   }
 
   /** Re-subscribe to lobby:universal after JWT is set (same pool as Dart app). */
-  async rejoinLobbyIfActive(): Promise<void> {
+  rejoinLobbyIfActive(): void {
+    if (this.rejoinLobbyTimer) {
+      clearTimeout(this.rejoinLobbyTimer);
+    }
+    this.rejoinLobbyTimer = setTimeout(() => {
+      this.rejoinLobbyTimer = null;
+      void this.rejoinLobbyIfActiveNow();
+    }, 300);
+  }
+
+  private async rejoinLobbyIfActiveNow(): Promise<void> {
     const identity = this.lobbyIdentity;
     if (!identity) return;
+
+    if (this.isLobbyChannelReady(this.lobbyChannel)) {
+      await this.ensureRealtimeAuth();
+      await this.refreshLobbyTrack();
+      return;
+    }
+
     try {
       await this.joinLobby({
         schoolId: identity.schoolId,
@@ -997,72 +1183,118 @@ class MgMultiplayerService {
     }, MgMultiplayerService.opponentDisconnectGraceMs);
   }
 
-  async joinMatch(matchId: string, userId: string, opponentId: string): Promise<void> {
+  private async removeStaleMatchChannels(matchId: string): Promise<void> {
     if (!supabase) return;
+    const topic = `realtime:match:${matchId}`;
+    const stale = supabase.getChannels().filter((ch) => ch.topic === topic);
+    await Promise.all(
+      stale.map((ch) => supabase!.removeChannel(ch).catch(() => undefined)),
+    );
+  }
 
-    await this.leaveMatch();
+  async joinMatch(matchId: string, userId: string, opponentId: string): Promise<void> {
+    if (this.joinMatchPromise) {
+      await this.joinMatchPromise;
+    }
 
-    this.activeMatchId = matchId;
-    this.matchOpponentId = opponentId;
+    const run = async () => {
+      if (!supabase) return;
 
-    const channel = supabase.channel(`match:${matchId}`);
+      await this.leaveMatch();
 
-    channel.on('broadcast', { event: 'game_event' }, ({ payload }) => {
-      const data = unwrapGameEventPayload((payload ?? {}) as Record<string, unknown>);
-      const sender = (data.player_id ?? data.playerId)?.toString();
-      if (sender && sender !== userId) {
-        this.gameEventEmitter.emit(data);
-      }
-    });
+      const generation = ++this.matchJoinGeneration;
 
-    channel.on('broadcast', { event: 'match_over' }, ({ payload }) => {
-      this.matchOverEmitter.emit(unwrapMatchOverPayload((payload ?? {}) as Record<string, unknown>));
-    });
+      await this.removeStaleMatchChannels(matchId);
+      if (generation !== this.matchJoinGeneration) return;
 
-    const onOpponentPresenceMaybeReturned = () => {
-      if (this.isOpponentPresentOnMatchChannel(opponentId)) {
-        this.cancelOpponentDisconnectTimer();
-      }
-    };
+      this.activeMatchId = matchId;
+      this.matchOpponentId = opponentId;
 
-    channel.on('presence', { event: 'sync' }, onOpponentPresenceMaybeReturned);
-    channel.on('presence', { event: 'join' }, onOpponentPresenceMaybeReturned);
-    channel.on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-      void key;
-      const opponentLeft = (leftPresences ?? []).some((p) => {
-        const raw = p as Record<string, unknown>;
-        return raw.user_id?.toString() === opponentId;
-      });
-      if (opponentLeft) {
-        this.scheduleOpponentDisconnectWin(userId, opponentId);
-      }
-    });
+      const channel = supabase.channel(`match:${matchId}`);
 
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => resolve(), 20_000);
-      channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          clearTimeout(timeout);
-          await channel.track({ user_id: userId });
-          resolve();
+      channel.on('broadcast', { event: 'game_event' }, ({ payload }) => {
+        const data = unwrapGameEventPayload((payload ?? {}) as Record<string, unknown>);
+        const sender = (data.player_id ?? data.playerId)?.toString();
+        if (sender && sender !== userId) {
+          this.gameEventEmitter.emit(data);
         }
       });
-    });
 
-    this.matchChannel = channel;
+      channel.on('broadcast', { event: 'match_over' }, (message) => {
+        this.matchOverEmitter.emit(unwrapMatchOverPayload((message ?? {}) as Record<string, unknown>));
+      });
+
+      const onOpponentPresenceMaybeReturned = () => {
+        if (this.isOpponentPresentOnMatchChannel(opponentId)) {
+          this.cancelOpponentDisconnectTimer();
+        }
+      };
+
+      channel.on('presence', { event: 'sync' }, onOpponentPresenceMaybeReturned);
+      channel.on('presence', { event: 'join' }, onOpponentPresenceMaybeReturned);
+      channel.on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        void key;
+        const opponentLeft = (leftPresences ?? []).some((p) => {
+          const raw = p as Record<string, unknown>;
+          return raw.user_id?.toString() === opponentId;
+        });
+        if (opponentLeft) {
+          this.scheduleOpponentDisconnectWin(userId, opponentId);
+        }
+      });
+
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => resolve(), 20_000);
+        channel.subscribe(async (status) => {
+          if (generation !== this.matchJoinGeneration) {
+            clearTimeout(timeout);
+            resolve();
+            return;
+          }
+          if (status === 'SUBSCRIBED') {
+            clearTimeout(timeout);
+            await channel.track({ user_id: userId });
+            resolve();
+          }
+        });
+      });
+
+      if (generation !== this.matchJoinGeneration) {
+        await supabase.removeChannel(channel).catch(() => undefined);
+        return;
+      }
+
+      this.matchChannel = channel;
+    };
+
+    this.joinMatchPromise = run().finally(() => {
+      this.joinMatchPromise = null;
+    });
+    await this.joinMatchPromise;
   }
 
   async leaveMatch(onlyIfMatchId?: string): Promise<void> {
     if (onlyIfMatchId && this.activeMatchId !== onlyIfMatchId) return;
 
+    this.matchJoinGeneration++;
     this.cancelOpponentDisconnectTimer();
+    const endedMatchId = this.activeMatchId;
     this.matchOpponentId = null;
     this.activeMatchId = null;
 
     if (this.matchChannel && supabase) {
-      await this.matchChannel.untrack();
-      await supabase.removeChannel(this.matchChannel);
+      const channel = this.matchChannel;
       this.matchChannel = null;
+      try {
+        await channel.untrack();
+        await supabase.removeChannel(channel);
+      } catch (err) {
+        console.warn('leaveMatch:', err);
+      }
+    }
+
+    if (endedMatchId) {
+      await this.removeStaleMatchChannels(endedMatchId);
     }
   }
 
@@ -1107,6 +1339,10 @@ class MgMultiplayerService {
   }): Promise<Record<string, unknown>> {
     if (!supabase) throw new Error('Supabase not configured');
 
+    if (!(await this.ensureAuthenticatedQuery())) {
+      throw new Error('Must be signed in to submit match results');
+    }
+
     const body: Record<string, unknown> = {
       player1_id: player1Id,
       player2_id: player2Id,
@@ -1115,10 +1351,28 @@ class MgMultiplayerService {
     if (!isDraw && winnerId) body.winner_id = winnerId;
     if (voidNoMoves) body.void_no_moves = true;
 
-    const { data, error } = await supabase.functions.invoke('submit-match', { body });
-    if (error) throw error;
+    const token = this.boundAuthSession?.access_token;
+    let result: Record<string, unknown>;
 
-    const result = (data ?? {}) as Record<string, unknown>;
+    if (token) {
+      const direct = await callEdgeFunctionWithToken<Record<string, unknown>>(
+        'submit-match',
+        body,
+        token,
+      );
+      if (direct.error || !direct.data) {
+        throw new Error(direct.error ?? 'submit-match returned no data');
+      }
+      result = direct.data;
+    } else {
+      const { data, error } = await supabase.functions.invoke('submit-match', { body });
+      if (error) throw error;
+      result = (data ?? {}) as Record<string, unknown>;
+    }
+
+    if (result.error) {
+      throw new Error(String(result.error));
+    }
 
     if (isDraw) {
       await this.sendMatchBroadcast('match_over', {
@@ -1140,6 +1394,7 @@ class MgMultiplayerService {
 
   async countCompletedMatchesBetween(userA: string, userB: string): Promise<number> {
     if (!supabase || userA === userB) return 0;
+    if (!(await this.ensureAuthenticatedQuery())) return 0;
     try {
       const { count, error } = await supabase
         .from('mg_matches')
@@ -1152,6 +1407,46 @@ class MgMultiplayerService {
     }
   }
 
+  async fetchLatestHeadToHeadMatch(userA: string, userB: string): Promise<Record<string, unknown> | null> {
+    if (!supabase || userA === userB) return null;
+    if (!(await this.ensureAuthenticatedQuery())) return null;
+    try {
+      const { data, error } = await supabase
+        .from('mg_matches')
+        .select(
+          'winner_id, player1_id, player2_id, player1_elo_change, player2_elo_change, created_at',
+        )
+        .or(headToHeadOrFilter(userA, userB))
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error || !data?.length) return null;
+      return data[0] as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  eloResultFromMatchRow(
+    row: Record<string, unknown>,
+    myId: string,
+  ): { winnerChange?: number; loserChange?: number; player1Change?: number; player2Change?: number } {
+    const winnerId = row.winner_id?.toString();
+    const p1Id = row.player1_id?.toString() ?? '';
+    const p2Id = row.player2_id?.toString() ?? '';
+    const p1Change = parseEloChange(row.player1_elo_change);
+    const p2Change = parseEloChange(row.player2_elo_change);
+
+    if (!winnerId) {
+      return { player1Change: p1Change, player2Change: p2Change };
+    }
+
+    const winnerIsP1 = userIdsEqual(winnerId, p1Id);
+    return {
+      winnerChange: winnerIsP1 ? p1Change : p2Change,
+      loserChange: winnerIsP1 ? p2Change : p1Change,
+    };
+  }
+
   async fetchHeadToHeadSeriesScore(userA: string, userB: string): Promise<HeadToHeadSeriesScore> {
     if (!supabase || userA === userB) {
       return {
@@ -1160,6 +1455,14 @@ class MgMultiplayerService {
         player1Wins: 0,
         player2Wins: 0,
       };
+    }
+
+    if (!(await this.ensureAuthenticatedQuery())) {
+      return computeHeadToHeadSeriesScore({
+        userA,
+        userB,
+        matchesOldestFirst: [],
+      });
     }
 
     try {
@@ -1187,19 +1490,17 @@ class MgMultiplayerService {
 
   private async ensureAuthenticatedQuery(): Promise<boolean> {
     if (!supabase) return false;
-    if (this.boundAuthSession) {
+    if (this.boundAuthSession?.access_token) {
       await bindSupabaseSession(this.boundAuthSession);
+      syncSupabaseAuth(this.boundAuthSession);
+      return true;
     }
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
+        this.boundAuthSession = session;
         syncSupabaseAuth(session);
         return true;
-      }
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && this.boundAuthSession) {
-        const bound = await bindSupabaseSession(this.boundAuthSession);
-        if (bound) return true;
       }
       await new Promise((resolve) => setTimeout(resolve, 75 * (attempt + 1)));
     }
@@ -1209,33 +1510,49 @@ class MgMultiplayerService {
 
   /** Call before leaderboard reads when the UI already has a session from AuthContext. */
   async prepareAuthenticatedSession(session: Session | null | undefined): Promise<boolean> {
-    if (!supabase || !session?.access_token) return false;
-    this.boundAuthSession = session;
-    const bound = await bindSupabaseSession(session);
-    if (bound) return true;
-
-    const { data: refreshed, error } = await supabase.auth.refreshSession();
-    if (error) {
-      console.warn('prepareAuthenticatedSession: refreshSession failed', error.message);
+    if (!supabase || !session?.access_token) {
+      this.boundAuthSession = null;
       return false;
     }
-    if (refreshed.session?.access_token) {
-      this.boundAuthSession = refreshed.session;
-      return bindSupabaseSession(refreshed.session);
-    }
-    console.warn('prepareAuthenticatedSession: could not bind session for REST/RLS');
-    return false;
+    this.boundAuthSession = session;
+    syncSupabaseAuth(session);
+    await bindSupabaseSession(session);
+    return true;
   }
 
   private async fetchLeaderboardsRpc(schoolId: string): Promise<{
     global: Record<string, unknown>[];
     institutional: Record<string, unknown>[];
   } | null> {
-    if (!supabase || !(await this.ensureAuthenticatedQuery())) return null;
+    if (!(await this.ensureAuthenticatedQuery())) return null;
+
+    const token = this.boundAuthSession?.access_token;
+    const args = { p_school_id: schoolId.trim() || null };
+
+    if (token) {
+      const direct = await callRpcWithToken<{
+        global?: unknown;
+        institutional?: unknown;
+      }>('mg_fetch_leaderboards', args, token);
+      if (!direct.error && direct.data) {
+        const payload = direct.data;
+        return {
+          global: Array.isArray(payload.global)
+            ? (payload.global as Record<string, unknown>[])
+            : [],
+          institutional: Array.isArray(payload.institutional)
+            ? (payload.institutional as Record<string, unknown>[])
+            : [],
+        };
+      }
+      if (direct.error && !direct.error.includes('Could not find')) {
+        console.warn('mg_fetch_leaderboards (direct JWT) failed:', direct.error);
+      }
+    }
+
+    if (!supabase) return null;
     try {
-      const { data, error } = await supabase.rpc('mg_fetch_leaderboards', {
-        p_school_id: schoolId.trim() || null,
-      });
+      const { data, error } = await supabase.rpc('mg_fetch_leaderboards', args);
       if (error) {
         if (
           error.code !== '42883'
@@ -1325,8 +1642,8 @@ class MgMultiplayerService {
     }
 
     const { data: { session } } = await supabase.auth.getSession();
-    base.hasSession = Boolean(session?.access_token);
-    base.userId = session?.user?.id ?? null;
+    base.hasSession = Boolean(this.boundAuthSession?.access_token || session?.access_token);
+    base.userId = this.boundAuthSession?.user?.id ?? session?.user?.id ?? null;
 
     if (this.lobbyChannel) {
       const counts = countPresenceEntries(this.lobbyChannel.presenceState(), userId);
@@ -1669,12 +1986,13 @@ class MgMultiplayerService {
   async createMgProfile(
     username: string,
     options?: { fullName?: string; countryCode?: string },
+    knownUser?: User,
   ): Promise<void> {
     if (!supabase) {
       throw new Error('Supabase is not configured');
     }
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
+    const user = knownUser ?? (await supabase.auth.getUser()).data.user;
+    if (!user) {
       throw new Error('Must be signed in to create your online profile');
     }
 
@@ -1721,17 +2039,36 @@ class MgMultiplayerService {
    * Ensure mg_profiles exists after sign-in/sign-up (Dart createProfile parity).
    * Creates the row when missing; patches metadata when present.
    */
-  async ensureMgProfileFromAuth(options?: {
-    username?: string;
-    fullName?: string;
-    countryCode?: string;
-  }): Promise<void> {
+  async ensureMgProfileFromAuth(
+    options?: {
+      username?: string;
+      fullName?: string;
+      countryCode?: string;
+    },
+    session?: Session | null,
+  ): Promise<void> {
     if (!supabase) {
       throw new Error('Supabase is not configured');
     }
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('Must be signed in to load your online profile');
+
+    const activeSession = session?.access_token ? session : this.boundAuthSession;
+    if (activeSession?.access_token) {
+      this.boundAuthSession = activeSession;
+      syncSupabaseAuth(activeSession);
+      await bindSupabaseSession(activeSession);
+    }
+
+    let user: User | null = activeSession?.user ?? null;
+    if (!user) {
+      const { data: { session: stored } } = await supabase.auth.getSession();
+      user = stored?.user ?? null;
+    }
+    if (!user) {
+      const { data: { user: fetched }, error: userError } = await supabase.auth.getUser();
+      if (userError || !fetched) {
+        throw new Error('Must be signed in to load your online profile');
+      }
+      user = fetched;
     }
 
     await this.syncMgProfileFromAuthMetadata();
@@ -1757,7 +2094,7 @@ class MgMultiplayerService {
     await this.createMgProfile(username, {
       fullName: options?.fullName,
       countryCode: options?.countryCode,
-    });
+    }, user);
   }
 
   async syncMgProfileFromAuthMetadata(): Promise<void> {

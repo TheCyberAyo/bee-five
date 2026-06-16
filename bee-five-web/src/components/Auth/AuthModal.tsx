@@ -229,11 +229,14 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         if (data.user || data.session) {
           if (data.session) {
             try {
-              await mgMultiplayerService.ensureMgProfileFromAuth({
-                username: un,
-                fullName: trimmedFullName,
-                countryCode: countryCode.trim().toUpperCase(),
-              });
+              await mgMultiplayerService.ensureMgProfileFromAuth(
+                {
+                  username: un,
+                  fullName: trimmedFullName,
+                  countryCode: countryCode.trim().toUpperCase(),
+                },
+                data.session,
+              );
             } catch (profileErr) {
               console.error('Sign up: mg profile failed', profileErr);
               setError(
@@ -286,14 +289,9 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
       }
 
       try {
-        await mgMultiplayerService.ensureMgProfileFromAuth();
+        await mgMultiplayerService.ensureMgProfileFromAuth(undefined, signedInSession);
       } catch (profileErr) {
-        console.error('Sign in: mg profile ensure failed', profileErr);
-        setError(
-          'Signed in, but your online profile could not be loaded. Try Live Matches again or contact support if this persists.',
-        );
-        setLoading(false);
-        return;
+        console.warn('Sign in: mg profile ensure failed (non-blocking)', profileErr);
       }
 
       setError(null);

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { mgMultiplayerService } from '../../services/mgMultiplayerService';
+import { mgMultiplayerService, parseEloChange, userIdsEqual } from '../../services/mgMultiplayerService';
 import {
   onlineMatchFirstSeat,
   onlineMatchPlayer1Id,
@@ -18,6 +18,7 @@ import { winsForSeries, type HeadToHeadSeriesScore } from '../../utils/headToHea
 import { multiplayerTheme, primaryBlackButtonStyle, yellowDialogStyle } from '../../constants/multiplayerTheme';
 import OnlineBeeFiveBoard, { type OnlineBeeFiveBoardHandle } from './OnlineBeeFiveBoard';
 import ChallengeDialog from './ChallengeDialog';
+import { useAuth } from '../../contexts/AuthContext';
 
 export interface LiveMatchScreenProps {
   matchId: string;
@@ -49,6 +50,7 @@ export default function LiveMatchScreen({
   onRematch,
   restoreSearchingWhenLeaving = false,
 }: LiveMatchScreenProps) {
+  const { session } = useAuth();
   const boardRef = useRef<OnlineBeeFiveBoardHandle>(null);
   const p1Id = onlineMatchPlayer1Id(myId, opponentId);
   const p2Id = onlineMatchPlayer2Id(myId, opponentId);
@@ -73,7 +75,30 @@ export default function LiveMatchScreen({
     setSeriesScore(score);
   }, [myId, opponentId]);
 
+  const enrichEloResult = useCallback(
+    async (partial: Record<string, unknown> | undefined): Promise<Record<string, unknown> | undefined> => {
+      const hasWinChanges =
+        parseEloChange(partial?.winnerChange) != null
+        || parseEloChange(partial?.loserChange) != null;
+      const hasDrawChanges =
+        parseEloChange(partial?.player1Change) != null
+        || parseEloChange(partial?.player2Change) != null;
+      if (hasWinChanges || hasDrawChanges) return partial;
+
+      const row = await mgMultiplayerService.fetchLatestHeadToHeadMatch(myId, opponentId);
+      if (!row) return partial;
+      return { ...partial, ...mgMultiplayerService.eloResultFromMatchRow(row, myId) };
+    },
+    [myId, opponentId],
+  );
+
   useEffect(() => {
+    void mgMultiplayerService.prepareAuthenticatedSession(session);
+  }, [session]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     mgMultiplayerService.notifyMatchScreenOpened();
 
     const unsubs = [
@@ -85,25 +110,34 @@ export default function LiveMatchScreen({
       }),
     ];
 
-    void mgMultiplayerService.setInMatch(myId, myUsername, myElo, lobbyBeeFiveXp);
-    void mgMultiplayerService.joinMatch(matchId, myId, opponentId);
-
     void (async () => {
+      await mgMultiplayerService.setInMatch(myId, myUsername, myElo, lobbyBeeFiveXp);
+      await mgMultiplayerService.joinMatch(matchId, myId, opponentId);
+      if (cancelled) {
+        await mgMultiplayerService.leaveMatch(matchId);
+        return;
+      }
+
       const [count, series] = await Promise.all([
         mgMultiplayerService.countCompletedMatchesBetween(myId, opponentId),
         mgMultiplayerService.fetchHeadToHeadSeriesScore(myId, opponentId),
       ]);
-      setPriorMatchCount(count);
-      setSeriesScore(series);
+      if (!cancelled) {
+        setPriorMatchCount(count);
+        setSeriesScore(series);
+      }
     })();
 
     return () => {
+      cancelled = true;
       unsubs.forEach((u) => u());
-      if (mgMultiplayerService.isActiveMatch(matchId)) {
-        void mgMultiplayerService.leaveMatch(matchId);
-        void restoreLobbyPresence();
-      }
-      mgMultiplayerService.notifyMatchScreenClosed();
+      void (async () => {
+        if (mgMultiplayerService.isActiveMatch(matchId)) {
+          await mgMultiplayerService.leaveMatch(matchId);
+          await restoreLobbyPresence();
+        }
+        mgMultiplayerService.notifyMatchScreenClosed();
+      })();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
@@ -148,7 +182,8 @@ export default function LiveMatchScreen({
               ? (result.winner_id?.toString() ?? winnerId)
               : winnerId;
           await refreshSeries();
-          setEndDialog({ kind: 'result', winnerId: resolvedWinner, eloResult: result });
+          const eloResult = await enrichEloResult(result);
+          setEndDialog({ kind: 'result', winnerId: resolvedWinner, eloResult });
         }
       } catch {
         setMatchEnded(false);
@@ -176,7 +211,8 @@ export default function LiveMatchScreen({
       });
       await mgMultiplayerService.leaveMatch(matchId);
       await refreshSeries();
-      setEndDialog({ kind: 'draw', payload: result });
+      const eloResult = await enrichEloResult(result);
+      setEndDialog({ kind: 'draw', payload: eloResult ?? result });
     } catch {
       setMatchEnded(false);
       setStatusMessage('Could not record draw. Try again.');
@@ -200,7 +236,8 @@ export default function LiveMatchScreen({
         setEndDialog({ kind: 'void' });
         return;
       }
-      setEndDialog({ kind: 'draw', payload });
+      const eloResult = await enrichEloResult(payload);
+      setEndDialog({ kind: 'draw', payload: eloResult ?? payload });
       return;
     }
 
@@ -210,13 +247,16 @@ export default function LiveMatchScreen({
     setMatchEnded(true);
     await mgMultiplayerService.leaveMatch(matchId);
     await refreshSeries();
+    const eloResult = await enrichEloResult({
+      winnerChange: payload.winnerChange,
+      loserChange: payload.loserChange,
+      player1Change: payload.player1Change,
+      player2Change: payload.player2Change,
+    });
     setEndDialog({
       kind: 'result',
       winnerId: wid,
-      eloResult: {
-        winnerChange: payload.winnerChange,
-        loserChange: payload.loserChange,
-      },
+      eloResult,
     });
   };
 
@@ -300,7 +340,7 @@ export default function LiveMatchScreen({
 
   useEffect(() => {
     if (endDialog?.kind === 'result' && !resultXpRecorded) {
-      recordSchoolLobbyMatchOutcome(endDialog.winnerId === myId);
+      recordSchoolLobbyMatchOutcome(userIdsEqual(endDialog.winnerId, myId));
       setResultXpRecorded(true);
     }
   }, [endDialog, resultXpRecorded, myId]);
@@ -325,12 +365,13 @@ export default function LiveMatchScreen({
     if (endDialog.kind === 'draw') {
       const d1 = endDialog.payload.player1Change;
       const d2 = endDialog.payload.player2Change;
-      const mine = myId === p1Id ? d1 : d2;
+      const mine = userIdsEqual(myId, p1Id) ? d1 : d2;
+      const mineNum = parseEloChange(mine);
       const mineStr =
-        typeof mine === 'number'
-          ? mine >= 0
-            ? `+${mine}`
-            : `${mine}`
+        mineNum != null
+          ? mineNum >= 0
+            ? `+${mineNum}`
+            : `${mineNum}`
           : null;
 
       return (
@@ -349,14 +390,14 @@ export default function LiveMatchScreen({
       );
     }
 
-    const iWon = endDialog.winnerId === myId;
+    const iWon = userIdsEqual(endDialog.winnerId, myId);
 
     let eloChange: number | undefined;
     const eloResult = endDialog.eloResult;
     if (eloResult) {
       eloChange = iWon
-        ? (eloResult.winnerChange as number | undefined)
-        : (eloResult.loserChange as number | undefined);
+        ? parseEloChange(eloResult.winnerChange)
+        : parseEloChange(eloResult.loserChange);
     }
 
     return (

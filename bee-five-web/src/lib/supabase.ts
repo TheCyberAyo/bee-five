@@ -37,7 +37,6 @@ export const supabase = isConfigured
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        flowType: 'pkce',
       },
     })
   : null;
@@ -50,7 +49,7 @@ if (typeof window !== 'undefined' && supabase) {
 
   supabase.auth.onAuthStateChange((event, session) => {
     syncSupabaseAuth(session);
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+    if (event === 'SIGNED_IN') {
       void import('../services/mgMultiplayerService').then(({ mgMultiplayerService }) =>
         mgMultiplayerService.rejoinLobbyIfActive(),
       );

@@ -7,6 +7,7 @@ import { hasUsableAuthSession, bindSupabaseSession, syncSupabaseAuth } from '../
 import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAuthEmail';
 import { loadUserProfile, UserProfile } from '../services/profileService';
 import { resolveLoginEmail, signInEmailForIdentifier } from '../services/authLoginService';
+import { mgMultiplayerService } from '../services/mgMultiplayerService';
 
 type SignUpResult = {
   data: AuthResponse['data'];
@@ -125,6 +126,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (session?.access_token) {
+      void mgMultiplayerService.prepareAuthenticatedSession(session);
+    } else {
+      mgMultiplayerService.clearBoundSession();
+    }
+  }, [session]);
 
   const refreshProfile = async () => {
     if (user) {

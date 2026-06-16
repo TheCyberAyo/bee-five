@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { mgMultiplayerService, type JoinSchoolOutcome } from '../../services/mgMultiplayerService';
+import { mgMultiplayerService, type JoinSchoolOutcome, userIdsEqual, isChallengeAccepted } from '../../services/mgMultiplayerService';
 import {
   canPlayLiveMatches,
   ensureXpInitialized,
@@ -63,6 +63,10 @@ export default function LiveMatchesFlow({
 
   const openMatch = useCallback(
     (match: ActiveMatch) => {
+      if (!match.matchId.trim() || !match.opponentId.trim()) {
+        console.warn('LiveMatches: openMatch ignored — missing matchId or opponentId', match);
+        return;
+      }
       setActiveMatch(match);
       setIncomingChallenge(null);
     },
@@ -134,6 +138,8 @@ export default function LiveMatchesFlow({
         return;
       }
 
+      await mgMultiplayerService.prepareAuthenticatedSession(session);
+
       ensureXpInitialized();
       const xp = getXp();
       setLobbyXp(xp);
@@ -145,7 +151,7 @@ export default function LiveMatchesFlow({
       }
 
       try {
-        await mgMultiplayerService.ensureMgProfileFromAuth();
+        await mgMultiplayerService.ensureMgProfileFromAuth(undefined, session);
       } catch (profileErr) {
         console.warn('LiveMatches: ensureMgProfileFromAuth failed', profileErr);
       }
@@ -178,14 +184,12 @@ export default function LiveMatchesFlow({
 
     const unsubs = [
       mgMultiplayerService.onChallenge((payload) => {
-        if (!mgMultiplayerService.shouldRouteLobbyChallenges) return;
-        if (payload.to_id?.toString() !== profile.userId) return;
+        if (!userIdsEqual(payload.to_id, profile.userId)) return;
         setIncomingChallenge(payload);
       }),
       mgMultiplayerService.onChallengeResponse((payload) => {
-        if (!mgMultiplayerService.shouldRouteLobbyChallenges) return;
-        if (payload.challenger_id?.toString() !== profile.userId) return;
-        if (payload.accepted === true) {
+        if (!userIdsEqual(payload.challenger_id, profile.userId)) return;
+        if (isChallengeAccepted(payload.accepted)) {
           const responderId = payload.responder_id?.toString() ?? '';
           const responderName = payload.responder_username?.toString() ?? 'Player';
           openMatch({
@@ -199,7 +203,6 @@ export default function LiveMatchesFlow({
         }
       }),
       mgMultiplayerService.onMatchStart((payload) => {
-        if (!mgMultiplayerService.shouldRouteLobbyChallenges) return;
         openMatch({
           matchId: payload.match_id?.toString() ?? '',
           opponentId: payload.opponent_id?.toString() ?? '',
@@ -286,6 +289,18 @@ export default function LiveMatchesFlow({
           setActiveMatch(null);
           ensureXpInitialized();
           setLobbyXp(getXp());
+          void (async () => {
+            const refreshed = await loadProfile();
+            if (refreshed) {
+              setProfile(refreshed);
+              await mgMultiplayerService.setIdle(
+                refreshed.userId,
+                refreshed.username,
+                refreshed.elo,
+                getXp(),
+              );
+            }
+          })();
           onRestoreGlobalLobby?.();
         }}
         onRematch={(matchId, opponentId, opponentUsername) => {

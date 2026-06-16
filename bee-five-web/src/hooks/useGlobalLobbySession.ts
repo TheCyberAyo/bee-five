@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { mgMultiplayerService } from '../services/mgMultiplayerService';
+import { mgMultiplayerService, userIdsEqual, isChallengeAccepted } from '../services/mgMultiplayerService';
 import {
   canPlayLiveMatches,
   ensureXpInitialized,
@@ -88,14 +88,14 @@ export function useGlobalLobbySession({
       mgMultiplayerService.onChallenge((payload) => {
         if (!routeChallenges || !mgMultiplayerService.shouldRouteLobbyChallenges) return;
         const id = identityRef.current;
-        if (!id || payload.to_id?.toString() !== id.userId) return;
+        if (!id || !userIdsEqual(payload.to_id, id.userId)) return;
         setIncomingChallenge(payload);
       }),
       mgMultiplayerService.onChallengeResponse((payload) => {
         if (!routeChallenges || !mgMultiplayerService.shouldRouteLobbyChallenges) return;
         const id = identityRef.current;
-        if (!id || payload.challenger_id?.toString() !== id.userId) return;
-        if (payload.accepted === true) {
+        if (!id || !userIdsEqual(payload.challenger_id, id.userId)) return;
+        if (isChallengeAccepted(payload.accepted)) {
           openMatchIfNew({
             matchId: payload.match_id?.toString() ?? '',
             opponentId: payload.responder_id?.toString() ?? '',
