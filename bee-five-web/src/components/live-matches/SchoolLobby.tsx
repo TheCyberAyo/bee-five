@@ -348,7 +348,7 @@ export default function SchoolLobby({
             listRef={globalListRef}
             scrollToSelfPendingRef={globalScrollToSelfPending}
             columns={['Global Rank', 'Username', 'Institution', 'Rank', 'ELO']}
-            renderCells={(p, isMe) => [
+            renderCells={(p) => [
               usernameWithFlag(p.username?.toString() ?? 'Player', p.country_code?.toString()),
               institutionLabel(p),
               eloRankTitle(profileElo(p)),
@@ -528,7 +528,6 @@ function LeaderboardTab({
   myRank,
   elo,
   rankLabel,
-  userId,
   emptyMessage = 'No ranked players yet',
   columns,
   renderCells,
