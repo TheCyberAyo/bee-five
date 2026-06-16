@@ -26,6 +26,21 @@ export function validateUsername(raw: string): string | null {
   return null;
 }
 
+/** Sign-in only — matches Dart sign-in (no max length). */
+export function validateUsernameForSignIn(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) {
+    return 'Please enter your username';
+  }
+  if (value.length < MIN_USERNAME_LENGTH) {
+    return `Username must be at least ${MIN_USERNAME_LENGTH} characters`;
+  }
+  if (!USERNAME_REGEX.test(value)) {
+    return 'Username can only contain letters, numbers, underscores, and hyphens';
+  }
+  return null;
+}
+
 export function internalEmailFromUsername(username: string): string {
   return `${normalizeUsername(username)}@${INTERNAL_EMAIL_DOMAIN}`;
 }

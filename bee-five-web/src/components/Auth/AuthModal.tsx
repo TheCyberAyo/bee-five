@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, normalizeUsername, validateUsername } from '../../lib/internalAuthEmail';
+import { MAX_USERNAME_LENGTH, MIN_USERNAME_LENGTH, normalizeUsername, validateUsername, validateUsernameForSignIn } from '../../lib/internalAuthEmail';
 import { isUsernameAvailable } from '../../services/usernameService';
 import { mgMultiplayerService } from '../../services/mgMultiplayerService';
+import { mapSignInErrorMessage } from '../../services/authLoginService';
 import { SIGNUP_COUNTRIES, countryLabelWithFlag } from '../../utils/countryData';
 
 interface AuthModalProps {
@@ -252,7 +253,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         return;
       }
 
-      const loginFormatError = validateUsername(loginUsername);
+      const loginFormatError = validateUsernameForSignIn(loginUsername);
       if (loginFormatError) {
         setError(loginFormatError);
         setLoading(false);
@@ -267,16 +268,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
 
       const { error: signInErr, session: signedInSession } = await signIn(loginUsername.trim(), password);
       if (signInErr) {
-        const m = signInErr.message?.toLowerCase() ?? '';
-        if (
-          m.includes('invalid login') ||
-          m.includes('invalid_credentials') ||
-          m.includes('invalid grant')
-        ) {
-          setError('Invalid username or password. Please try again.');
-        } else {
-          setError(signInErr.message || 'Failed to sign in');
-        }
+        setError(mapSignInErrorMessage(signInErr.message));
         setLoading(false);
         return;
       }
@@ -511,7 +503,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
                 style={inputStyle}
               />
               <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
-                Same username you chose at sign up
+                Same username you use on the mobile app (not your email address)
               </div>
             </div>
           )}

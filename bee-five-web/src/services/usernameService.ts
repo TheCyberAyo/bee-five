@@ -16,15 +16,18 @@ export async function isUsernameAvailable(username: string): Promise<{ available
     const normalizedUsername = normalizeUsername(username);
 
     type Row = { username: string | null };
-    const { data, error } = await supabase.from('profiles').select('username');
+    const [profilesRes, mgProfilesRes] = await Promise.all([
+      supabase.from('profiles').select('username'),
+      supabase.from('mg_profiles').select('username'),
+    ]);
 
-    if (error) {
-      console.error('Error checking username:', error);
+    if (profilesRes.error && mgProfilesRes.error) {
+      console.error('Error checking username:', profilesRes.error, mgProfilesRes.error);
       return { available: true };
     }
 
-    const exists =
-      (data as Row[] | null)?.some((p) => p.username?.toLowerCase() === normalizedUsername) || false;
+    const allRows = [...(profilesRes.data ?? []), ...(mgProfilesRes.data ?? [])] as Row[];
+    const exists = allRows.some((p) => p.username?.toLowerCase() === normalizedUsername);
 
     return { available: !exists };
   } catch (error) {

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { hasUsableAuthSession, syncSupabaseAuth } from '../lib/syncSupabaseAuth';
 import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAuthEmail';
 import { loadUserProfile, UserProfile } from '../services/profileService';
+import { resolveLoginEmail } from '../services/authLoginService';
 
 type SignUpResult = {
   data: AuthResponse['data'];
@@ -176,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const trimmed = identifier.trim();
-    const email = trimmed.includes('@') ? trimmed : internalEmailFromUsername(trimmed);
+    const email = await resolveLoginEmail(trimmed);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
