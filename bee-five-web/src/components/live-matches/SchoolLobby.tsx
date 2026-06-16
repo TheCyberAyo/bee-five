@@ -36,7 +36,7 @@ export default function SchoolLobby({
   onBack,
   onChallengeSent,
 }: SchoolLobbyProps) {
-  const { session } = useAuth();
+  const { session, isAuthenticated } = useAuth();
   const [selectedTab, setSelectedTab] = useState(0);
   const [onlinePlayers, setOnlinePlayers] = useState<PlayerPresence[]>([]);
   const [globalLeaderboard, setGlobalLeaderboard] = useState<Record<string, unknown>[]>([]);
@@ -81,7 +81,7 @@ export default function SchoolLobby({
   }, [onlinePlayers, playerSearch]);
 
   useEffect(() => {
-    if (!session?.access_token) {
+    if (!isAuthenticated || !session?.access_token) {
       setLobbyJoinError('Sign in again to load rankings and online players.');
       setIsLoading(false);
       return;
@@ -207,7 +207,7 @@ export default function SchoolLobby({
       cancelled = true;
       unsubs.forEach((u) => u());
     };
-  }, [schoolId, schoolName, userId, username, elo, session]);
+  }, [schoolId, schoolName, userId, username, elo, session, isAuthenticated]);
 
   useEffect(() => {
     const q = globalSearch.trim();

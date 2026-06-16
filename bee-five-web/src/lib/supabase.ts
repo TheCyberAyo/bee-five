@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { syncSupabaseAuth } from './syncSupabaseAuth';
 
 // Supabase configuration
 // Trim values to handle any whitespace issues
@@ -35,25 +36,20 @@ export const supabase = isConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+      },
     })
   : null;
 
 /** Keep Realtime WebSocket auth in sync with the signed-in session (browser only). */
 if (typeof window !== 'undefined' && supabase) {
-  const syncRealtimeAuth = (accessToken: string | undefined) => {
-    if (accessToken) {
-      supabase.realtime.setAuth(accessToken);
-    }
-  };
-
   void supabase.auth.getSession().then(({ data: { session } }) => {
-    syncRealtimeAuth(session?.access_token);
+    syncSupabaseAuth(session);
   });
 
   supabase.auth.onAuthStateChange((event, session) => {
-    syncRealtimeAuth(session?.access_token);
+    syncSupabaseAuth(session);
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
       void import('../services/mgMultiplayerService').then(({ mgMultiplayerService }) =>
         mgMultiplayerService.rejoinLobbyIfActive(),

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthResponse, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { hasUsableAuthSession, syncSupabaseAuth } from '../lib/syncSupabaseAuth';
 import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAuthEmail';
 import { loadUserProfile, UserProfile } from '../services/profileService';
 
@@ -11,11 +12,18 @@ type SignUpResult = {
   error: AuthError | null;
 };
 
+type SignInResult = {
+  error: AuthError | null;
+  session: Session | null;
+};
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
+  /** Session has access_token — safe for RLS reads and Realtime lobby. */
+  isAuthenticated: boolean;
   signUp: (
     username: string,
     password: string,
@@ -23,13 +31,25 @@ interface AuthContextType {
     countryCode: string,
   ) => Promise<SignUpResult>;
   /** Pass username, or a full email (e.g. re-auth with `user.email`). */
-  signIn: (identifier: string, password: string) => Promise<{ error: AuthError | null }>;
+  signIn: (identifier: string, password: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   signInWithProvider: (provider: 'google' | 'github') => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function applySessionToState(
+  session: Session | null,
+  setSession: (s: Session | null) => void,
+  setUser: (u: User | null) => void,
+): User | null {
+  setSession(session);
+  const nextUser = session?.user ?? null;
+  setUser(nextUser);
+  syncSupabaseAuth(session);
+  return nextUser;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -43,18 +63,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // If Supabase is not configured, just set loading to false
     if (!supabase) {
       setLoading(false);
       return;
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await loadProfile(session.user.id);
+    void supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      const nextUser = applySessionToState(initialSession, setSession, setUser);
+      if (nextUser) {
+        void loadProfile(nextUser.id);
       }
       setLoading(false);
     }).catch((error) => {
@@ -62,13 +79,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session?.user?.email || 'no user');
-      
-      // If SIGNED_OUT event, ensure we clear everything
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      console.log('Auth state change:', event, nextSession?.user?.email || 'no user');
+
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
@@ -76,15 +91,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await loadProfile(session.user.id);
+
+      const nextUser = applySessionToState(nextSession, setSession, setUser);
+      setLoading(false);
+
+      if (nextUser) {
+        // Defer — avoid Supabase auth deadlock from async work inside this callback.
+        queueMicrotask(() => {
+          void loadProfile(nextUser.id);
+        });
       } else {
         setProfile(null);
       }
-      setLoading(false);
     });
 
     return () => {
@@ -132,15 +150,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
+    if (!error && data.session) {
+      const nextUser = applySessionToState(data.session, setSession, setUser);
+      if (nextUser) {
+        void loadProfile(nextUser.id);
+      }
+    }
+
     return { data, error };
   };
 
   const signIn = async (
     identifier: string,
-    password: string
-  ): Promise<{ error: AuthError | null }> => {
+    password: string,
+  ): Promise<SignInResult> => {
     if (!supabase) {
       return {
+        session: null,
         error: {
           message: 'Supabase is not configured',
           name: 'AuthConfigurationError',
@@ -148,106 +174,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } as AuthError,
       };
     }
+
     const trimmed = identifier.trim();
     const email = trimmed.includes('@') ? trimmed : internalEmailFromUsername(trimmed);
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    return { error };
+
+    if (!error && data.session) {
+      const nextUser = applySessionToState(data.session, setSession, setUser);
+      if (nextUser) {
+        void loadProfile(nextUser.id);
+      }
+    } else if (!error && data.user && !data.session) {
+      return {
+        session: null,
+        error: {
+          message:
+            'Account exists but no active session. Confirm your email in Supabase, or use the same username/password as the mobile app.',
+          name: 'AuthSessionMissingError',
+          status: 401,
+        } as AuthError,
+      };
+    }
+
+    return { session: data.session ?? null, error };
   };
 
   const signOut = async () => {
     if (!supabase) {
-      console.error('SignOut: Supabase is not configured');
-      // Clear state anyway
       setSession(null);
       setUser(null);
       setProfile(null);
       return;
     }
-    
-    console.log('SignOut: Starting sign out process...');
-    
-    // Clear storage first to prevent auth state listener from restoring session
+
     if (typeof window !== 'undefined') {
       try {
-        // Clear all Supabase auth-related keys
-        const keys = Object.keys(localStorage);
-        keys.forEach(key => {
+        for (const key of Object.keys(localStorage)) {
           if (key.includes('supabase') || key.includes('sb-')) {
             localStorage.removeItem(key);
           }
-        });
-        
-        // Also clear sessionStorage
-        const sessionKeys = Object.keys(sessionStorage);
-        sessionKeys.forEach(key => {
+        }
+        for (const key of Object.keys(sessionStorage)) {
           if (key.includes('supabase') || key.includes('sb-')) {
             sessionStorage.removeItem(key);
           }
-        });
-        
-        console.log('SignOut: Cleared localStorage and sessionStorage');
+        }
       } catch (storageError) {
         console.warn('SignOut: Could not clear storage:', storageError);
       }
     }
-    
-    // Clear local state immediately
+
     setSession(null);
     setUser(null);
     setProfile(null);
-    
-    // Try to sign out from Supabase with a timeout
+
     try {
-      console.log('SignOut: Attempting to sign out from Supabase...');
-      
-      // Add a timeout to prevent hanging
-      const signOutPromise = supabase.auth.signOut().then(({ error }) => {
-        if (error) {
-          throw error;
-        }
-      });
-      
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Sign out timeout')), 2000)
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Sign out timeout')), 2000),
       );
-      
       await Promise.race([signOutPromise, timeoutPromise]);
-      console.log('SignOut: Successfully signed out from Supabase');
     } catch (error) {
       console.warn('SignOut: Error or timeout during Supabase signOut:', error);
-      // State already cleared, so we continue anyway
     }
-    
-    // Double-check: ensure state is cleared
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    console.log('SignOut: Sign out process completed');
   };
 
   const signInWithProvider = async (provider: 'google' | 'github') => {
-    if (!supabase) {
-      return;
-    }
-    
-    // Get the redirect URL - use environment variable if set, otherwise use window.location.origin
-    // OAuth callbacks must redirect to /auth/callback for proper handling
+    if (!supabase) return;
+
     const getRedirectUrl = () => {
       if (typeof window === 'undefined') return undefined;
-      
-      // Check for configured site URL (for production)
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
       if (siteUrl && siteUrl.startsWith('http')) {
         return `${siteUrl}/auth/callback`;
       }
-      
-      // Fall back to window.location.origin with /auth/callback (for local development)
       return `${window.location.origin}/auth/callback`;
     };
-    
+
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -261,6 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     loading,
+    isAuthenticated: hasUsableAuthSession(session),
     signUp,
     signIn,
     signOut,
@@ -278,4 +285,3 @@ export function useAuth() {
   }
   return context;
 }
-

@@ -265,7 +265,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         return;
       }
 
-      const { error: signInErr } = await signIn(loginUsername.trim(), password);
+      const { error: signInErr, session: signedInSession } = await signIn(loginUsername.trim(), password);
       if (signInErr) {
         const m = signInErr.message?.toLowerCase() ?? '';
         if (
@@ -277,6 +277,12 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         } else {
           setError(signInErr.message || 'Failed to sign in');
         }
+        setLoading(false);
+        return;
+      }
+
+      if (!signedInSession?.access_token) {
+        setError('Signed in, but no session was returned. If you just signed up, confirm your email or sign in again.');
         setLoading(false);
         return;
       }

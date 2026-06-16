@@ -43,7 +43,7 @@ export default function LiveMatchesFlow({
   onInitialMatchConsumed,
   onRestoreGlobalLobby,
 }: LiveMatchesFlowProps) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<LobbyProfile | null>(null);
   const [activeMatch, setActiveMatch] = useState<ActiveMatch | null>(initialActiveMatch);
@@ -109,7 +109,7 @@ export default function LiveMatchesFlow({
       setXpGate(false);
       setProfile(null);
 
-      if (!user) {
+      if (!user || !isAuthenticated || !session?.access_token) {
         setLoading(false);
         return;
       }
@@ -128,7 +128,7 @@ export default function LiveMatchesFlow({
       setProfile(p);
       setLoading(false);
     })();
-  }, [user, authLoading, loadProfile]);
+  }, [user, session, isAuthenticated, authLoading, loadProfile]);
 
   useEffect(() => {
     if (!initialActiveMatch) return;

@@ -1,6 +1,7 @@
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { INTERNAL_EMAIL_DOMAIN } from '../lib/internalAuthEmail';
 import { supabase } from '../lib/supabase';
+import { syncSupabaseAuth } from '../lib/syncSupabaseAuth';
 import {
   playerPresenceFromMap,
   statusRank,
@@ -363,9 +364,10 @@ class MgMultiplayerService {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (token) {
-      supabase.realtime.setAuth(token);
+      syncSupabaseAuth(session);
+      return token;
     }
-    return token ?? null;
+    return null;
   }
 
   private isLobbyChannelReady(channel: RealtimeChannel | null): boolean {
@@ -1172,8 +1174,16 @@ class MgMultiplayerService {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
-        supabase.realtime.setAuth(session.access_token);
+        syncSupabaseAuth(session);
         return true;
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: { session: retrySession } } = await supabase.auth.getSession();
+        if (retrySession?.access_token) {
+          syncSupabaseAuth(retrySession);
+          return true;
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 75 * (attempt + 1)));
     }
@@ -1185,6 +1195,11 @@ class MgMultiplayerService {
   async prepareAuthenticatedSession(accessToken: string | undefined | null): Promise<boolean> {
     if (!supabase || !accessToken) return false;
     supabase.realtime.setAuth(accessToken);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.warn('prepareAuthenticatedSession: access token passed but getSession empty');
+      return false;
+    }
     return true;
   }
 
