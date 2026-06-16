@@ -49,7 +49,6 @@ function applySessionToState(
   const nextUser = session?.user ?? null;
   setUser(nextUser);
   syncSupabaseAuth(session);
-  void bindSupabaseSession(session);
   return nextUser;
 }
 
@@ -70,8 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    void supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      const nextUser = applySessionToState(initialSession, setSession, setUser);
+    void supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
+      const usable = hasUsableAuthSession(initialSession) ? initialSession : null;
+      const nextUser = applySessionToState(usable, setSession, setUser);
+      if (usable) {
+        await bindSupabaseSession(usable);
+      }
       if (nextUser) {
         void loadProfile(nextUser.id);
       }
@@ -94,8 +97,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const nextUser = applySessionToState(nextSession, setSession, setUser);
+      const nextUser = applySessionToState(
+        hasUsableAuthSession(nextSession) ? nextSession : null,
+        setSession,
+        setUser,
+      );
       setLoading(false);
+
+      if (nextSession?.access_token) {
+        // Defer — never call setSession inside this callback synchronously.
+        setTimeout(() => {
+          void bindSupabaseSession(nextSession);
+        }, 0);
+      }
 
       if (nextUser) {
         // Defer — avoid Supabase auth deadlock from async work inside this callback.
@@ -154,6 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!error && data.session) {
       const nextUser = applySessionToState(data.session, setSession, setUser);
+      await bindSupabaseSession(data.session);
       if (nextUser) {
         void loadProfile(nextUser.id);
       }
@@ -177,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const trimmed = identifier.trim();
+    const trimmed = normalizeUsername(identifier);
     const email = await resolveLoginEmail(trimmed);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -186,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!error && data.session) {
       const nextUser = applySessionToState(data.session, setSession, setUser);
+      await bindSupabaseSession(data.session);
       if (nextUser) {
         void loadProfile(nextUser.id);
       }

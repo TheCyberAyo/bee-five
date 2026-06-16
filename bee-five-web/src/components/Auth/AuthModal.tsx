@@ -49,7 +49,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const { signUp, signIn, user } = useAuth();
+  const { signUp, signIn, isAuthenticated, session } = useAuth();
 
   const onCloseRef = useRef(onClose);
   const onSuccessRef = useRef(onSuccess);
@@ -66,7 +66,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
   }, [initialSignUp]);
 
   useEffect(() => {
-    if (user) {
+    if (isAuthenticated && session?.access_token) {
       setIsClosing(true);
       setLoading(false);
       const timer = setTimeout(() => {
@@ -75,7 +75,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [user]);
+  }, [isAuthenticated, session?.access_token]);
 
   useEffect(() => {
     if (!isSignUp || !username.trim()) {
@@ -116,7 +116,7 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
     };
   }, [username, isSignUp]);
 
-  if (isClosing || user) {
+  if (isClosing) {
     return null;
   }
 
@@ -266,14 +266,15 @@ export default function AuthModal({ onClose, onSuccess, initialSignUp = false }:
         return;
       }
 
-      const registered = await isUsernameRegistered(loginUsername);
+      const loginName = normalizeUsername(loginUsername);
+      const registered = await isUsernameRegistered(loginName);
       if (registered === false) {
-        setError(usernameNotFoundMessage(loginUsername));
+        setError(usernameNotFoundMessage(loginName));
         setLoading(false);
         return;
       }
 
-      const { error: signInErr, session: signedInSession } = await signIn(loginUsername.trim(), password);
+      const { error: signInErr, session: signedInSession } = await signIn(loginName, password);
       if (signInErr) {
         setError(mapSignInErrorMessage(signInErr.message));
         setLoading(false);
