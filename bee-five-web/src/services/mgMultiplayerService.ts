@@ -1,7 +1,7 @@
-import type { RealtimeChannel, User } from '@supabase/supabase-js';
+import type { RealtimeChannel, Session, User } from '@supabase/supabase-js';
 import { INTERNAL_EMAIL_DOMAIN } from '../lib/internalAuthEmail';
 import { supabase } from '../lib/supabase';
-import { syncSupabaseAuth } from '../lib/syncSupabaseAuth';
+import { bindSupabaseSession, syncSupabaseAuth } from '../lib/syncSupabaseAuth';
 import {
   playerPresenceFromMap,
   statusRank,
@@ -355,6 +355,7 @@ class MgMultiplayerService {
   private lastInstitutionalLeaderboard = new Map<string, Record<string, unknown>[]>();
   private visibilityRefreshHandler: (() => void) | null = null;
   private presenceSyncTimer: ReturnType<typeof setInterval> | null = null;
+  private boundAuthSession: Session | null = null;
 
   private static readonly opponentDisconnectGraceMs = 12_000;
   private static readonly presenceSyncIntervalMs = 8_000;
@@ -1186,6 +1187,9 @@ class MgMultiplayerService {
 
   private async ensureAuthenticatedQuery(): Promise<boolean> {
     if (!supabase) return false;
+    if (this.boundAuthSession) {
+      await bindSupabaseSession(this.boundAuthSession);
+    }
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -1193,12 +1197,9 @@ class MgMultiplayerService {
         return true;
       }
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: { session: retrySession } } = await supabase.auth.getSession();
-        if (retrySession?.access_token) {
-          syncSupabaseAuth(retrySession);
-          return true;
-        }
+      if (user && this.boundAuthSession) {
+        const bound = await bindSupabaseSession(this.boundAuthSession);
+        if (bound) return true;
       }
       await new Promise((resolve) => setTimeout(resolve, 75 * (attempt + 1)));
     }
@@ -1207,24 +1208,56 @@ class MgMultiplayerService {
   }
 
   /** Call before leaderboard reads when the UI already has a session from AuthContext. */
-  async prepareAuthenticatedSession(accessToken: string | undefined | null): Promise<boolean> {
-    if (!supabase || !accessToken) return false;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      syncSupabaseAuth(session);
-      return true;
-    }
+  async prepareAuthenticatedSession(session: Session | null | undefined): Promise<boolean> {
+    if (!supabase || !session?.access_token) return false;
+    this.boundAuthSession = session;
+    const bound = await bindSupabaseSession(session);
+    if (bound) return true;
+
     const { data: refreshed, error } = await supabase.auth.refreshSession();
     if (error) {
       console.warn('prepareAuthenticatedSession: refreshSession failed', error.message);
       return false;
     }
     if (refreshed.session?.access_token) {
-      syncSupabaseAuth(refreshed.session);
-      return true;
+      this.boundAuthSession = refreshed.session;
+      return bindSupabaseSession(refreshed.session);
     }
-    console.warn('prepareAuthenticatedSession: access token passed but getSession empty');
+    console.warn('prepareAuthenticatedSession: could not bind session for REST/RLS');
     return false;
+  }
+
+  private async fetchLeaderboardsRpc(schoolId: string): Promise<{
+    global: Record<string, unknown>[];
+    institutional: Record<string, unknown>[];
+  } | null> {
+    if (!supabase || !(await this.ensureAuthenticatedQuery())) return null;
+    try {
+      const { data, error } = await supabase.rpc('mg_fetch_leaderboards', {
+        p_school_id: schoolId,
+      });
+      if (error) {
+        if (
+          error.code !== '42883'
+          && !error.message.includes('Could not find the function')
+          && !error.message.includes('schema cache')
+        ) {
+          console.warn('mg_fetch_leaderboards failed:', error.message);
+        }
+        return null;
+      }
+      const payload = data as { global?: unknown; institutional?: unknown } | null;
+      return {
+        global: Array.isArray(payload?.global)
+          ? (payload.global as Record<string, unknown>[])
+          : [],
+        institutional: Array.isArray(payload?.institutional)
+          ? (payload.institutional as Record<string, unknown>[])
+          : [],
+      };
+    } catch {
+      return null;
+    }
   }
 
   /** Prevent realtime subscription refresh from wiping a good first fetch. */
@@ -1328,22 +1361,36 @@ class MgMultiplayerService {
         .eq('school_id', schoolId)
         .order('elo', { ascending: false })
         .limit(100);
-      if (instErr) base.institutionalLeaderboardError = instErr.message;
-      else {
+
+      const rpcLeaderboards = await this.fetchLeaderboardsRpc(schoolId);
+      if (rpcLeaderboards) {
+        base.globalLeaderboardCount = rpcLeaderboards.global.length;
+        base.globalLeaderboardRows = rpcLeaderboards.global;
+        base.institutionalLeaderboardCount = rpcLeaderboards.institutional.length;
+        base.institutionalLeaderboardRows = rpcLeaderboards.institutional;
+      } else if (instErr) {
+        base.institutionalLeaderboardError = instErr.message;
+      } else {
         base.institutionalLeaderboardCount = instData?.length ?? 0;
         base.institutionalLeaderboardRows = (instData ?? []) as Record<string, unknown>[];
       }
 
-      const { data: globalData, error: globalErr } = await supabase
-        .from('mg_profiles')
-        .select('id, username, elo, wins, losses, school_id, country_code')
-        .not('school_id', 'is', null)
-        .order('elo', { ascending: false })
-        .limit(100);
-      if (globalErr) base.globalLeaderboardError = globalErr.message;
-      else {
-        base.globalLeaderboardCount = globalData?.length ?? 0;
-        base.globalLeaderboardRows = (globalData ?? []) as Record<string, unknown>[];
+      if (!rpcLeaderboards) {
+        const { data: globalData, error: globalErr } = await supabase
+          .from('mg_profiles')
+          .select('id, username, elo, wins, losses, school_id, country_code')
+          .not('school_id', 'is', null)
+          .order('elo', { ascending: false })
+          .limit(100);
+        if (globalErr) base.globalLeaderboardError = globalErr.message;
+        else {
+          base.globalLeaderboardCount = globalData?.length ?? 0;
+          base.globalLeaderboardRows = (globalData ?? []) as Record<string, unknown>[];
+        }
+        if (!instErr && !base.institutionalLeaderboardRows.length) {
+          base.institutionalLeaderboardCount = instData?.length ?? 0;
+          base.institutionalLeaderboardRows = (instData ?? []) as Record<string, unknown>[];
+        }
       }
     }
 
@@ -1381,6 +1428,15 @@ class MgMultiplayerService {
 
   async getLeaderboard(schoolId: string): Promise<Record<string, unknown>[]> {
     if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
+
+    const rpc = await this.fetchLeaderboardsRpc(schoolId);
+    if (rpc) {
+      if (rpc.institutional.length > 0) {
+        this.lastInstitutionalLeaderboard.set(schoolId, rpc.institutional);
+      }
+      return rpc.institutional;
+    }
+
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const { data, error } = await supabase
         .from('mg_profiles')
@@ -1408,6 +1464,16 @@ class MgMultiplayerService {
 
   async getGlobalLeaderboard(): Promise<Record<string, unknown>[]> {
     if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
+
+    const schoolId = this.lobbyIdentity?.schoolId ?? '';
+    if (schoolId) {
+      const rpc = await this.fetchLeaderboardsRpc(schoolId);
+      if (rpc) {
+        if (rpc.global.length > 0) this.lastGlobalLeaderboard = rpc.global;
+        return rpc.global;
+      }
+    }
+
     const client = supabase;
 
     const runQuery = async (withSchoolEmbed: boolean) => {

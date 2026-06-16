@@ -95,9 +95,7 @@ export default function SchoolLobby({
       return;
     }
 
-    const accessToken = session.access_token;
-
-    let cancelled = false;
+    if (!session?.access_token) return;
     const unsubs: (() => void)[] = [];
 
     async function init() {
@@ -174,7 +172,7 @@ export default function SchoolLobby({
         setSchoolIdToInstitution(map);
       }
 
-      const authReady = await mgMultiplayerService.prepareAuthenticatedSession(accessToken);
+      const authReady = await mgMultiplayerService.prepareAuthenticatedSession(session);
       if (!authReady) {
         console.warn('SchoolLobby: auth session not ready for leaderboard reads');
       }
