@@ -75,7 +75,7 @@ export default function LiveMatchesFlow({
     try {
       const { data: rows, error } = await supabase
         .from('mg_profiles')
-        .select('school_id, username, elo')
+        .select('school_id, username, elo, mg_schools(name, join_code)')
         .eq('id', user.id)
         .limit(1);
 
@@ -142,6 +142,12 @@ export default function LiveMatchesFlow({
         setXpGate(true);
         setLoading(false);
         return;
+      }
+
+      try {
+        await mgMultiplayerService.syncMgProfileFromAuthMetadata();
+      } catch {
+        // non-blocking — same as mobile after sign-in
       }
 
       const p = await loadProfile();

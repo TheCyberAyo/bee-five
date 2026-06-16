@@ -13,6 +13,7 @@ import {
 } from '../../services/xpService';
 import { eloRankTitle, formatPlayerRankTitle } from '../../utils/playerRank';
 import { usernameWithFlag } from '../../utils/countryFlag';
+import { displayInstitutionName, presenceInstitutionLabel } from '../../utils/institutionDisplay';
 import { multiplayerTheme } from '../../constants/multiplayerTheme';
 
 const ROW_HEIGHT = 40;
@@ -45,7 +46,7 @@ export default function SchoolLobby({
   const [myLobbyXp, setMyLobbyXp] = useState(getXp());
   const [institutionName, setInstitutionName] = useState(schoolName?.trim() ?? '');
   const [myCountryCode, setMyCountryCode] = useState('');
-  const [schoolIdToName, setSchoolIdToName] = useState<Record<string, string>>({});
+  const [schoolIdToInstitution, setSchoolIdToInstitution] = useState<Record<string, string>>({});
   const [myGlobalRank, setMyGlobalRank] = useState<number | null>(null);
   const [myInstitutionalRank, setMyInstitutionalRank] = useState<number | null>(null);
 
@@ -70,9 +71,9 @@ export default function SchoolLobby({
 
   const institutionLabel = (row: Record<string, unknown>) => {
     const fromJoin = MgMultiplayerServiceInstitutionName(row);
-    if (fromJoin) return fromJoin;
+    if (fromJoin && fromJoin !== '—') return fromJoin;
     const sid = row.school_id?.toString();
-    if (sid && schoolIdToName[sid]) return schoolIdToName[sid];
+    if (sid && schoolIdToInstitution[sid]) return schoolIdToInstitution[sid];
     return '—';
   };
 
@@ -101,7 +102,6 @@ export default function SchoolLobby({
 
     async function init() {
       setIsLoading(true);
-      await mgMultiplayerService.prepareAuthenticatedSession(accessToken);
 
       ensureXpInitialized();
       const xp = getXp();
@@ -118,8 +118,8 @@ export default function SchoolLobby({
           .limit(1);
 
         const institutionQuery = resolvedInstitution
-          ? Promise.resolve({ data: null as { name?: string }[] | null })
-          : supabase.from('mg_schools').select('name').eq('id', schoolId).limit(1);
+          ? Promise.resolve({ data: null as { name?: string; join_code?: string }[] | null })
+          : supabase.from('mg_schools').select('name, join_code').eq('id', schoolId).limit(1);
 
         const [{ data: profileRows }, { data: schoolRows }] = await Promise.all([
           profileQuery,
@@ -127,7 +127,12 @@ export default function SchoolLobby({
         ]);
 
         if (!resolvedInstitution) {
-          resolvedInstitution = schoolRows?.[0]?.name?.toString().trim() ?? '';
+          const schoolRow = schoolRows?.[0];
+          resolvedInstitution = displayInstitutionName(
+            schoolRow?.name?.toString(),
+            schoolRow?.join_code?.toString(),
+          );
+          if (resolvedInstitution === '—') resolvedInstitution = '';
         }
         const cc = profileRows?.[0]?.country_code?.toString().trim();
         if (cc) resolvedCountry = cc.toUpperCase();
@@ -155,14 +160,23 @@ export default function SchoolLobby({
       }
 
       if (supabase && !cancelled) {
-        const { data: schools } = await supabase.from('mg_schools').select('id, name');
+        const { data: schools } = await supabase.from('mg_schools').select('id, name, join_code');
         const map: Record<string, string> = {};
         for (const row of schools ?? []) {
           const id = row.id?.toString();
-          const name = row.name?.toString().trim();
-          if (id && name) map[id] = name;
+          if (id) {
+            map[id] = displayInstitutionName(
+              row.name?.toString(),
+              row.join_code?.toString(),
+            );
+          }
         }
-        setSchoolIdToName(map);
+        setSchoolIdToInstitution(map);
+      }
+
+      const authReady = await mgMultiplayerService.prepareAuthenticatedSession(accessToken);
+      if (!authReady) {
+        console.warn('SchoolLobby: auth session not ready for leaderboard reads');
       }
 
       const diag = await mgMultiplayerService.collectLobbyDiagnostics(schoolId, userId);
@@ -183,6 +197,7 @@ export default function SchoolLobby({
       if (!cancelled) {
         setGlobalLeaderboard(globalRows);
         setInstitutionalLeaderboard(institutionalRows);
+        mgMultiplayerService.seedLeaderboardCache(globalRows, institutionalRows, schoolId);
         setMyGlobalRank(globalRank);
         setMyInstitutionalRank(institutionalRank);
         if (diag.schoolName) setInstitutionName(diag.schoolName);
@@ -391,8 +406,13 @@ export default function SchoolLobby({
 function MgMultiplayerServiceInstitutionName(row: Record<string, unknown>): string | null {
   const nested = row.mg_schools;
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    const n = (nested as Record<string, unknown>).name?.toString().trim();
-    if (n) return n;
+    const m = nested as Record<string, unknown>;
+    const name = m.name?.toString().trim();
+    const joinCode = m.join_code?.toString();
+    if (name || joinCode) {
+      const label = displayInstitutionName(name, joinCode);
+      return label === '—' ? null : label;
+    }
   }
   return null;
 }
@@ -497,7 +517,7 @@ function OnlineTab({
               }}
             >
               <Cell flex={3}>{usernameWithFlag(player.username, player.countryCode)}</Cell>
-              <Cell flex={2}>{player.institution || '—'}</Cell>
+              <Cell flex={2}>{presenceInstitutionLabel(player.institution)}</Cell>
               <Cell flex={2}>{player.rankTitle}</Cell>
               <Cell flex={1}>{player.elo}</Cell>
               <Cell flex={2} align="right">

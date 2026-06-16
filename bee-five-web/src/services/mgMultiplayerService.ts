@@ -12,11 +12,14 @@ import {
   computeHeadToHeadSeriesScore,
   type HeadToHeadSeriesScore,
 } from '../utils/headToHeadSeries';
+import {
+  DEFAULT_LOBBY_DISPLAY_NAME,
+  DEFAULT_LOBBY_JOIN_CODE,
+  displayInstitutionName,
+} from '../utils/institutionDisplay';
 import { canPlayLiveMatches, ensureXpInitialized, getXp } from './xpService';
 
-export const DEFAULT_LOBBY_JOIN_CODE = '00BEE00';
-/** Display name for the default lobby row in mg_schools (join code 00BEE00). */
-export const DEFAULT_LOBBY_DISPLAY_NAME = 'Bee Five Default Lobby';
+export { DEFAULT_LOBBY_JOIN_CODE, DEFAULT_LOBBY_DISPLAY_NAME };
 export const UNIVERSAL_LOBBY_CHANNEL_KEY = 'universal';
 
 export interface LobbyDiagnostics {
@@ -148,8 +151,12 @@ function parseProfileInt(v: unknown, fallback = 0): number {
 function institutionNameFromProfileRow(row: Record<string, unknown>): string | null {
   const nested = row.mg_schools;
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    const n = (nested as Record<string, unknown>).name?.toString().trim();
-    if (n) return n;
+    const m = nested as Record<string, unknown>;
+    const name = m.name?.toString().trim();
+    const joinCode = m.join_code?.toString();
+    if (name || joinCode) {
+      return displayInstitutionName(name, joinCode);
+    }
   }
   return null;
 }
@@ -595,7 +602,7 @@ class MgMultiplayerService {
       await this.leaveLobby();
       if (generation !== this.lobbyJoinGeneration) return;
 
-      this.lobbyInstitutionName = inst.length > 0 ? inst : null;
+      this.lobbyInstitutionName = inst.length > 0 ? displayInstitutionName(inst) : null;
       this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
       this.lobbyIdentity = nextIdentity;
 
@@ -603,13 +610,15 @@ class MgMultiplayerService {
 
       void supabase
         .from('mg_schools')
-        .select('name')
+        .select('name, join_code')
         .eq('id', schoolId)
         .limit(1)
         .then(({ data: schoolRows }) => {
-          const dbName = schoolRows?.[0]?.name?.toString().trim();
-          if (!dbName || !this.lobbyChannel || !this.lobbyIdentity) return;
-          this.lobbyInstitutionName = dbName;
+          const row = schoolRows?.[0];
+          const dbName = row?.name?.toString().trim();
+          const joinCode = row?.join_code?.toString();
+          if ((!dbName && !joinCode) || !this.lobbyChannel || !this.lobbyIdentity) return;
+          this.lobbyInstitutionName = displayInstitutionName(dbName, joinCode);
           void this.refreshLobbyTrack();
         });
 
@@ -837,7 +846,7 @@ class MgMultiplayerService {
     try {
       const { data: rows, error } = await supabase
         .from('mg_profiles')
-        .select('school_id, username, elo, country_code, mg_schools(name)')
+        .select('school_id, username, elo, country_code, mg_schools(name, join_code)')
         .eq('id', user.id)
         .limit(1);
 
@@ -1200,13 +1209,34 @@ class MgMultiplayerService {
   /** Call before leaderboard reads when the UI already has a session from AuthContext. */
   async prepareAuthenticatedSession(accessToken: string | undefined | null): Promise<boolean> {
     if (!supabase || !accessToken) return false;
-    supabase.realtime.setAuth(accessToken);
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      console.warn('prepareAuthenticatedSession: access token passed but getSession empty');
+    if (session?.access_token) {
+      syncSupabaseAuth(session);
+      return true;
+    }
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (error) {
+      console.warn('prepareAuthenticatedSession: refreshSession failed', error.message);
       return false;
     }
-    return true;
+    if (refreshed.session?.access_token) {
+      syncSupabaseAuth(refreshed.session);
+      return true;
+    }
+    console.warn('prepareAuthenticatedSession: access token passed but getSession empty');
+    return false;
+  }
+
+  /** Prevent realtime subscription refresh from wiping a good first fetch. */
+  seedLeaderboardCache(
+    globalRows: Record<string, unknown>[],
+    institutionalRows: Record<string, unknown>[],
+    schoolId: string,
+  ): void {
+    if (globalRows.length > 0) this.lastGlobalLeaderboard = globalRows;
+    if (institutionalRows.length > 0) {
+      this.lastInstitutionalLeaderboard.set(schoolId, institutionalRows);
+    }
   }
 
   private publishLeaderboardRows(
@@ -1278,7 +1308,10 @@ class MgMultiplayerService {
         .eq('id', schoolId)
         .limit(1);
       if (schoolRows?.[0]) {
-        base.schoolName = schoolRows[0].name?.toString().trim() || null;
+        base.schoolName = displayInstitutionName(
+          schoolRows[0].name?.toString(),
+          schoolRows[0].join_code?.toString(),
+        );
         base.schoolJoinCode = schoolRows[0].join_code?.toString().trim().toUpperCase() || null;
       }
 
@@ -1320,7 +1353,7 @@ class MgMultiplayerService {
       base.hint = 'Your saved school does not match this lobby. Leave the lobby in Settings and re-join with your school code.';
     } else if (base.schoolJoinCode === DEFAULT_LOBBY_JOIN_CODE) {
       base.hint =
-        'You are in the default lobby (00BEE00). Friends at a real school only appear under Global Rankings and Online Players when they are online — join your school code from the menu if you have one.';
+        'You are in the Unclassified lobby (00BEE00). Join your real school code from Settings → Leave lobby, then Live Matches, if you have one.';
     } else if (
       base.globalLeaderboardCount === 0
       && base.institutionalLeaderboardCount === 0
@@ -1381,7 +1414,7 @@ class MgMultiplayerService {
       if (withSchoolEmbed) {
         return client
           .from('mg_profiles')
-          .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name)')
+          .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name, join_code)')
           .not('school_id', 'is', null)
           .order('elo', { ascending: false })
           .limit(100);
@@ -1431,9 +1464,11 @@ class MgMultiplayerService {
     if (!client) return () => {};
 
     const refresh = () => {
-      void this.getLeaderboard(schoolId).then((rows) => {
+      void (async () => {
+        if (!(await this.ensureAuthenticatedQuery())) return;
+        const rows = await this.getLeaderboard(schoolId);
         this.publishLeaderboardRows('institutional', schoolId, rows, onUpdate);
-      });
+      })();
     };
 
     const { data: { subscription: authSub } } = client.auth.onAuthStateChange((event, session) => {
@@ -1474,9 +1509,11 @@ class MgMultiplayerService {
     if (!client) return () => {};
 
     const refresh = () => {
-      void this.getGlobalLeaderboard().then((rows) => {
+      void (async () => {
+        if (!(await this.ensureAuthenticatedQuery())) return;
+        const rows = await this.getGlobalLeaderboard();
         this.publishLeaderboardRows('global', null, rows, onUpdate);
-      });
+      })();
     };
 
     const { data: { subscription: authSub } } = client.auth.onAuthStateChange((event, session) => {
@@ -1514,7 +1551,7 @@ class MgMultiplayerService {
 
     const { data, error } = await supabase
       .from('mg_profiles')
-      .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name)')
+      .select('id, username, elo, wins, losses, school_id, country_code, mg_schools(name, join_code)')
       .not('school_id', 'is', null)
       .ilike('username', pattern)
       .order('elo', { ascending: false })

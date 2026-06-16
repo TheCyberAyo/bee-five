@@ -7,6 +7,6 @@ begin
     select 1 from public.mg_schools where join_code = '00BEE00'
   ) then
     insert into public.mg_schools (name, join_code)
-    values ('Bee Five Default Lobby', '00BEE00');
+    values ('Unclassified', '00BEE00');
   end if;
 end $$;
