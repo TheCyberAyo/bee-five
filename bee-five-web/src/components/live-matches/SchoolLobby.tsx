@@ -11,7 +11,7 @@ import {
   getXp,
   liveMatchesRequiresXpMessage,
 } from '../../services/xpService';
-import { eloRankTitle, formatPlayerRankTitle } from '../../utils/playerRank';
+import { eloRankTitle, formatLobbyHeaderStats, formatPlayerRankTitle } from '../../utils/playerRank';
 import { usernameWithFlag } from '../../utils/countryFlag';
 import { displayInstitutionName, presenceInstitutionLabel } from '../../utils/institutionDisplay';
 import { multiplayerTheme } from '../../constants/multiplayerTheme';
@@ -49,6 +49,7 @@ export default function SchoolLobby({
   const [schoolIdToInstitution, setSchoolIdToInstitution] = useState<Record<string, string>>({});
   const [myGlobalRank, setMyGlobalRank] = useState<number | null>(null);
   const [myInstitutionalRank, setMyInstitutionalRank] = useState<number | null>(null);
+  const [displayElo, setDisplayElo] = useState(elo);
 
   const [playerSearch, setPlayerSearch] = useState('');
   const [globalSearch, setGlobalSearch] = useState('');
@@ -68,6 +69,16 @@ export default function SchoolLobby({
     if (typeof v === 'number') return Math.trunc(v);
     return parseInt(String(v ?? '1200'), 10) || 1200;
   };
+
+  useEffect(() => {
+    setDisplayElo(elo);
+  }, [elo]);
+
+  const headerStats = formatLobbyHeaderStats({
+    globalRank: myGlobalRank,
+    institutionalRank: myInstitutionalRank,
+    elo: displayElo,
+  });
 
   const institutionLabel = (row: Record<string, unknown>) => {
     const fromJoin = MgMultiplayerServiceInstitutionName(row);
@@ -114,11 +125,12 @@ export default function SchoolLobby({
 
       let resolvedInstitution = schoolName?.trim() ?? '';
       let resolvedCountry = '';
+      let resolvedElo = elo;
 
       if (supabase) {
         const profileQuery = supabase
           .from('mg_profiles')
-          .select('country_code')
+          .select('country_code, elo')
           .eq('id', userId)
           .limit(1);
 
@@ -141,6 +153,15 @@ export default function SchoolLobby({
         }
         const cc = profileRows?.[0]?.country_code?.toString().trim();
         if (cc) resolvedCountry = cc.toUpperCase();
+        const profileEloRaw = profileRows?.[0]?.elo;
+        const profileEloValue =
+          typeof profileEloRaw === 'number'
+            ? Math.trunc(profileEloRaw)
+            : parseInt(String(profileEloRaw ?? ''), 10);
+        if (!cancelled && !Number.isNaN(profileEloValue)) {
+          resolvedElo = profileEloValue;
+          setDisplayElo(profileEloValue);
+        }
       }
 
       if (!cancelled) {
@@ -152,7 +173,7 @@ export default function SchoolLobby({
         schoolId,
         userId,
         username,
-        elo,
+        elo: resolvedElo,
         beeFiveXp: xp,
         institutionName: resolvedInstitution || undefined,
         countryCode: resolvedCountry || undefined,
@@ -190,8 +211,8 @@ export default function SchoolLobby({
           : await mgMultiplayerService.getLeaderboard(schoolId);
 
       const [globalRank, institutionalRank] = await Promise.all([
-        mgMultiplayerService.getLeaderboardRank(elo),
-        mgMultiplayerService.getLeaderboardRank(elo, schoolId),
+        mgMultiplayerService.getLeaderboardRank(resolvedElo),
+        mgMultiplayerService.getLeaderboardRank(resolvedElo, schoolId),
       ]);
 
       if (!cancelled) {
@@ -305,13 +326,16 @@ export default function SchoolLobby({
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: '17px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {usernameWithFlag(formatPlayerRankTitle(username, elo), myCountryCode)}
+              {usernameWithFlag(formatPlayerRankTitle(username, displayElo), myCountryCode)}
             </div>
             {institutionName && (
               <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.72 }}>
                 {institutionName}
               </div>
             )}
+            <div style={{ fontSize: '13px', fontWeight: 700, marginTop: institutionName ? 4 : 2, lineHeight: 1.35 }}>
+              {headerStats}
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', background: '#000' }}>
@@ -357,9 +381,6 @@ export default function SchoolLobby({
             searchLoading={globalSearchLoading}
             searching={globalSearch.trim().length > 0}
             players={globalSearch.trim() ? globalSearchResults : globalLeaderboard}
-            myRank={myGlobalRank}
-            elo={elo}
-            rankLabel="global"
             listRef={globalListRef}
             scrollToSelfPendingRef={globalScrollToSelfPending}
             columns={['Global Rank', 'Username', 'Institution', 'Rank', 'ELO']}
@@ -378,9 +399,6 @@ export default function SchoolLobby({
             searchLoading={institutionalSearchLoading}
             searching={institutionalSearch.trim().length > 0}
             players={institutionalSearch.trim() ? institutionalSearchResults : institutionalLeaderboard}
-            myRank={myInstitutionalRank}
-            elo={elo}
-            rankLabel="institutional"
             listRef={institutionalListRef}
             scrollToSelfPendingRef={institutionalScrollToSelfPending}
             emptyMessage={
@@ -545,9 +563,6 @@ function LeaderboardTab({
   searchLoading,
   searching,
   players,
-  myRank,
-  elo,
-  rankLabel,
   emptyMessage = 'No ranked players yet',
   columns,
   renderCells,
@@ -560,9 +575,6 @@ function LeaderboardTab({
   searchLoading: boolean;
   searching: boolean;
   players: Record<string, unknown>[];
-  myRank: number | null;
-  elo: number;
-  rankLabel: string;
   emptyMessage?: string;
   columns: string[];
   renderCells: (p: Record<string, unknown>, isMe: boolean) => string[];
@@ -601,11 +613,6 @@ function LeaderboardTab({
           loading={searchLoading}
           resultCount={searchLoading ? null : players.length}
         />
-      )}
-      {!searching && myRank != null && (
-        <div style={{ margin: '4px 8px', padding: '4px 8px', background: '#fff', border: '2px solid #000', fontWeight: 700, fontSize: '12px' }}>
-          Your {rankLabel} rank · #{myRank} · {elo} ELO
-        </div>
       )}
       <TableHeader labels={columns} showRank />
       <div ref={listRef} style={{ flex: 1, overflow: 'auto' }}>
