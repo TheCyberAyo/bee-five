@@ -52,8 +52,13 @@ if (typeof window !== 'undefined' && supabase) {
     syncRealtimeAuth(session?.access_token);
   });
 
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabase.auth.onAuthStateChange((event, session) => {
     syncRealtimeAuth(session?.access_token);
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      void import('../services/mgMultiplayerService').then(({ mgMultiplayerService }) =>
+        mgMultiplayerService.rejoinLobbyIfActive(),
+      );
+    }
   });
 }
 

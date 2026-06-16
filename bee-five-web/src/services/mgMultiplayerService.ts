@@ -257,11 +257,23 @@ function presenceEntryToMap(entry: unknown): Record<string, unknown> {
 
 function iterPresenceEntries(state: Record<string, unknown>): unknown[] {
   const entries: unknown[] = [];
+
+  const pushEntry = (entry: unknown) => {
+    if (!entry || typeof entry !== 'object') return;
+    const e = entry as Record<string, unknown>;
+    const nested = e.presences;
+    if (Array.isArray(nested)) {
+      for (const child of nested) pushEntry(child);
+      return;
+    }
+    entries.push(entry);
+  };
+
   for (const value of Object.values(state)) {
     if (Array.isArray(value)) {
-      entries.push(...value);
-    } else if (value && typeof value === 'object') {
-      entries.push(value);
+      for (const entry of value) pushEntry(entry);
+    } else {
+      pushEntry(value);
     }
   }
   return entries;
@@ -346,18 +358,26 @@ class MgMultiplayerService {
   private matchOverEmitter = new SimpleEmitter<Record<string, unknown>>();
   private matchStartEmitter = new SimpleEmitter<Record<string, unknown>>();
 
-  private async ensureRealtimeAuth(): Promise<void> {
-    if (!supabase) return;
+  private async ensureRealtimeAuth(): Promise<string | null> {
+    if (!supabase) return null;
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      supabase.realtime.setAuth(session.access_token);
+    const token = session?.access_token;
+    if (token) {
+      supabase.realtime.setAuth(token);
     }
+    return token ?? null;
+  }
+
+  private isLobbyChannelReady(channel: RealtimeChannel | null): boolean {
+    if (!channel) return false;
+    const state = String(channel.state);
+    return state === 'joined' || state === 'SUBSCRIBED';
   }
 
   private async refreshLobbyTrack(): Promise<void> {
     const identity = this.lobbyIdentity;
     const channel = this.lobbyChannel;
-    if (!identity || !channel || channel.state !== 'joined') return;
+    if (!identity || !channel || !this.isLobbyChannelReady(channel)) return;
 
     await channel.track(
       this.lobbyPresencePayload(
@@ -397,7 +417,18 @@ class MgMultiplayerService {
     viewerElo: number,
     viewerUserId: string,
   ): void {
-    const players = mergeOnlinePlayers(channel.presenceState(), viewerElo, viewerUserId);
+    const rawState = channel.presenceState();
+    const players = mergeOnlinePlayers(rawState, viewerElo, viewerUserId);
+    if (players.length === 0) {
+      const { total, others } = countPresenceEntries(rawState, viewerUserId);
+      if (others > 0) {
+        console.warn('mgMultiplayerService: presence sync had entries but parse returned 0', {
+          total,
+          others,
+          rawState,
+        });
+      }
+    }
     this.lastOnlinePlayers = players;
     this.onlinePlayersEmitter.emit(players);
   }
@@ -548,25 +579,17 @@ class MgMultiplayerService {
     const run = async () => {
       if (!supabase) return;
 
-      await this.ensureRealtimeAuth();
+      const accessToken = await this.ensureRealtimeAuth();
+      if (!accessToken) {
+        console.error('joinLobby: no auth session — Realtime presence requires sign-in');
+        throw new Error('Must be signed in to join the online lobby');
+      }
 
       let inst = institutionName?.trim() ?? '';
       const cc = countryCode?.trim().toUpperCase();
       const nextIdentity: LobbyIdentity = { userId, username, elo, beeFiveXp, schoolId };
 
-      const canRefreshExisting =
-        this.lobbyChannel?.state === 'joined' &&
-        this.lobbyIdentity?.userId === userId;
-
-      if (canRefreshExisting && this.lobbyChannel) {
-        this.lobbyInstitutionName = inst.length > 0 ? inst : null;
-        this.lobbyCountryCode = cc && cc.length > 0 ? cc : null;
-        this.lobbyIdentity = nextIdentity;
-        void this.touchAccountActivity();
-        await this.refreshLobbyTrack();
-        return;
-      }
-
+      // Always tear down and re-subscribe so the WebSocket uses the current JWT (matches Dart).
       await this.leaveLobby();
       if (generation !== this.lobbyJoinGeneration) return;
 
@@ -589,7 +612,11 @@ class MgMultiplayerService {
         });
 
       const client = supabase;
-      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`);
+      const channel = client.channel(`lobby:${UNIVERSAL_LOBBY_CHANNEL_KEY}`, {
+        config: {
+          presence: { key: userId },
+        },
+      });
 
       const onPresenceChange = () => {
         if (generation !== this.lobbyJoinGeneration) return;
@@ -781,8 +808,27 @@ class MgMultiplayerService {
     return this.joinLobbyFromCurrentProfile();
   }
 
+  /** Re-subscribe to lobby:universal after JWT is set (same pool as Dart app). */
+  async rejoinLobbyIfActive(): Promise<void> {
+    const identity = this.lobbyIdentity;
+    if (!identity) return;
+    try {
+      await this.joinLobby({
+        schoolId: identity.schoolId,
+        userId: identity.userId,
+        username: identity.username,
+        elo: identity.elo,
+        beeFiveXp: identity.beeFiveXp,
+      });
+    } catch (err) {
+      console.warn('rejoinLobbyIfActive failed:', err);
+    }
+  }
+
   async joinLobbyFromCurrentProfile(): Promise<boolean> {
     if (!supabase) return false;
+    const token = await this.ensureRealtimeAuth();
+    if (!token) return false;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
 
@@ -1270,7 +1316,9 @@ class MgMultiplayerService {
     } else if (base.lobbyChannelState !== 'joined') {
       base.hint = 'Not connected to the live lobby channel. Refresh the page.';
     } else if (base.presenceOthers === 0 && base.globalLeaderboardCount > 1) {
-      base.hint = 'No one else is online right now. Ranked players may still appear on the other tabs.';
+      base.hint = `No one else is online right now (${base.globalLeaderboardCount} ranked players on Global Rankings). Open Live Matches on another device to test.`;
+    } else if (base.globalLeaderboardCount > 0 && base.institutionalLeaderboardCount <= 1) {
+      base.hint = `${base.globalLeaderboardCount} players on Global Rankings. Institutional shows only your school (${base.schoolJoinCode ?? 'code unknown'}).`;
     }
 
     console.info('Lobby diagnostics', base);
