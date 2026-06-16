@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthResponse, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { hasUsableAuthSession, syncSupabaseAuth } from '../lib/syncSupabaseAuth';
+import { hasUsableAuthSession, bindSupabaseSession, syncSupabaseAuth } from '../lib/syncSupabaseAuth';
 import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAuthEmail';
 import { loadUserProfile, UserProfile } from '../services/profileService';
 import { resolveLoginEmail } from '../services/authLoginService';
@@ -49,6 +49,7 @@ function applySessionToState(
   const nextUser = session?.user ?? null;
   setUser(nextUser);
   syncSupabaseAuth(session);
+  void bindSupabaseSession(session);
   return nextUser;
 }
 

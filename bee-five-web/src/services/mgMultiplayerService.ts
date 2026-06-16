@@ -1234,7 +1234,7 @@ class MgMultiplayerService {
     if (!supabase || !(await this.ensureAuthenticatedQuery())) return null;
     try {
       const { data, error } = await supabase.rpc('mg_fetch_leaderboards', {
-        p_school_id: schoolId,
+        p_school_id: schoolId.trim() || null,
       });
       if (error) {
         if (
@@ -1462,16 +1462,14 @@ class MgMultiplayerService {
     return this.lastInstitutionalLeaderboard.get(schoolId) ?? [];
   }
 
-  async getGlobalLeaderboard(): Promise<Record<string, unknown>[]> {
+  async getGlobalLeaderboard(schoolId?: string): Promise<Record<string, unknown>[]> {
     if (!supabase || !(await this.ensureAuthenticatedQuery())) return [];
 
-    const schoolId = this.lobbyIdentity?.schoolId ?? '';
-    if (schoolId) {
-      const rpc = await this.fetchLeaderboardsRpc(schoolId);
-      if (rpc) {
-        if (rpc.global.length > 0) this.lastGlobalLeaderboard = rpc.global;
-        return rpc.global;
-      }
+    const rpcSchoolId = schoolId?.trim() || this.lobbyIdentity?.schoolId?.trim() || '';
+    const rpc = await this.fetchLeaderboardsRpc(rpcSchoolId);
+    if (rpc) {
+      if (rpc.global.length > 0) this.lastGlobalLeaderboard = rpc.global;
+      return rpc.global;
     }
 
     const client = supabase;

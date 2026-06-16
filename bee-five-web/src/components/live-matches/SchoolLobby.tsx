@@ -96,10 +96,17 @@ export default function SchoolLobby({
     }
 
     if (!session?.access_token) return;
+
+    let cancelled = false;
     const unsubs: (() => void)[] = [];
 
     async function init() {
       setIsLoading(true);
+
+      const authReady = await mgMultiplayerService.prepareAuthenticatedSession(session);
+      if (!authReady) {
+        console.warn('SchoolLobby: auth session not ready for leaderboard reads');
+      }
 
       ensureXpInitialized();
       const xp = getXp();
@@ -172,16 +179,11 @@ export default function SchoolLobby({
         setSchoolIdToInstitution(map);
       }
 
-      const authReady = await mgMultiplayerService.prepareAuthenticatedSession(session);
-      if (!authReady) {
-        console.warn('SchoolLobby: auth session not ready for leaderboard reads');
-      }
-
       const diag = await mgMultiplayerService.collectLobbyDiagnostics(schoolId, userId);
       const globalRows =
         diag.globalLeaderboardRows.length > 0
           ? diag.globalLeaderboardRows
-          : await mgMultiplayerService.getGlobalLeaderboard();
+          : await mgMultiplayerService.getGlobalLeaderboard(schoolId);
       const institutionalRows =
         diag.institutionalLeaderboardRows.length > 0
           ? diag.institutionalLeaderboardRows

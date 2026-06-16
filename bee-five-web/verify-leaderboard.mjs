@@ -21,6 +21,24 @@ if (!url || !key) {
 
 const supabase = createClient(url, key);
 
+async function fetchRankedRpc(label, schoolId) {
+  const { data, error } = await supabase.rpc('mg_fetch_leaderboards', {
+    p_school_id: schoolId ?? null,
+  });
+  console.log(`\n[${label}] mg_fetch_leaderboards RPC:`);
+  if (error) {
+    console.log('  error:', error.message, error.code ?? '');
+    return;
+  }
+  const global = data?.global ?? [];
+  const institutional = data?.institutional ?? [];
+  console.log('  global count:', global.length);
+  console.log('  institutional count:', institutional.length);
+  for (const row of global.slice(0, 5)) {
+    console.log(`  - ${row.username} elo=${row.elo}`);
+  }
+}
+
 async function fetchRanked(label) {
   const { data, error } = await supabase
     .from('mg_profiles')
@@ -70,6 +88,7 @@ async function main() {
 
   if (own?.[0]?.school_id) {
     const sid = own[0].school_id;
+    await fetchRankedRpc('authenticated RPC', sid);
     const { data: inst, error: instErr } = await supabase
       .from('mg_profiles')
       .select('id, username, elo')
