@@ -86,19 +86,21 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
         {/* Hamburger menu button */}
         <button
           onClick={toggleDropdown}
+          aria-label={isDropdownOpen ? 'Close menu' : 'Open menu'}
           style={{
             background: 'transparent',
             border: '2px solid #FFC30B',
             borderRadius: '6px',
             color: '#FFC30B',
-            padding: '0.35rem',
+            padding: '0.25rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'all 0.3s ease',
-            minWidth: '34px',
-            minHeight: '34px'
+            width: '30px',
+            height: '30px',
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 195, 11, 0.2)';
@@ -107,7 +109,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <span style={{ fontSize: '1.5em' }}>
+          <span style={{ fontSize: '1.15rem', lineHeight: 1 }}>
             {isDropdownOpen ? '✕' : '☰'}
           </span>
         </button>
@@ -124,7 +126,8 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
           opacity: 1,
           transform: 'translateY(0)',
           transition: 'opacity 0.3s ease, transform 0.3s ease',
-          width: '50%',
+          width: 'min(42vw, 11.5rem)',
+          minWidth: '9.5rem',
           position: 'absolute',
           right: 0,
           top: '100%',
@@ -141,8 +144,8 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.75rem',
-                padding: '1rem 1.25rem',
+                gap: '0.5rem',
+                padding: '0.65rem 0.75rem',
                 color: '#ffffff',
                 textDecoration: 'none',
                 borderBottom: index < menuItems.length - 1 ? '1px solid rgba(255, 195, 11, 0.2)' : 'none',
@@ -155,16 +158,16 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
                 e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
-              <span style={{ fontSize: '1.3em' }}>{item.icon}</span>
+              <span style={{ fontSize: '1.1em' }}>{item.icon}</span>
               <span style={{ 
                 fontWeight: '500', 
-                fontSize: '1rem',
+                fontSize: '0.9rem',
                 flex: 1
               }}>
                 {item.label}
               </span>
               <span style={{ 
-                fontSize: '0.9em',
+                fontSize: '0.8em',
                 color: 'rgba(255,255,255,0.5)'
               }}>
                 ›
