@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { INFO_MENU_ITEMS, type InfoMenuMode } from '../constants/infoMenuItems';
 import InfoMenuItemIcon from './InfoMenuItemIcon';
+import { useAuth } from '../contexts/AuthContext';
+import { ensureXpInitialized, getXp } from '../services/xpService';
 import { soundManager } from '../utils/sounds';
 
 type GameMode = 'menu' | InfoMenuMode | 'local-multiplayer' | 'live-matches' | 'classic-game';
@@ -15,8 +17,36 @@ interface MobileHeaderProps {
 
 export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [headerXp, setHeaderXp] = useState(0);
+  const { user } = useAuth();
   /** Bar height below safe-area; keep in sync with SimpleWelcome mobile top padding. */
   const barHeightPx = 49; // 46px bar + 3px bottom border
+
+  const refreshHeaderXp = useCallback(() => {
+    ensureXpInitialized();
+    setHeaderXp(getXp());
+  }, []);
+
+  useEffect(() => {
+    refreshHeaderXp();
+  }, [refreshHeaderXp, user?.id]);
+
+  useEffect(() => {
+    const onFocus = () => refreshHeaderXp();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key?.includes('user_xp') || event.key?.includes('beeAdventureProgress')) {
+        refreshHeaderXp();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [refreshHeaderXp]);
 
   if (!isMobile) {
     return null;
@@ -75,6 +105,43 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
           </div>
         </div>
 
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              paddingRight: '2px',
+            }}
+            aria-label={`${headerXp} XP`}
+          >
+            <img
+              src="/homeImagery/xp_gem.png"
+              alt=""
+              width={28}
+              height={28}
+              style={{ objectFit: 'contain', display: 'block' }}
+            />
+            <span
+              style={{
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                color: '#FFC30B',
+                lineHeight: 1,
+                minWidth: '1.25rem',
+              }}
+            >
+              {headerXp}
+            </span>
+          </div>
+
         {/* Hamburger menu button */}
         <button
           onClick={toggleDropdown}
@@ -105,6 +172,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
             {isDropdownOpen ? '✕' : '☰'}
           </span>
         </button>
+        </div>
       </div>
 
       {/* Dropdown menu */}
