@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { type GameState } from '../hooks/useGameLogic';
+import { type GameState, getEffectiveBlindPlay } from '../hooks/useGameLogic';
 import { GRID_SIZE, CELL_SIZE, BORDER_WIDTH, CANVAS_SIZE, MULTIPLAYER_CELL_SIZE, MULTIPLAYER_CANVAS_SIZE } from '../constants/gameConstants';
 import { useTheme } from '../hooks/useTheme';
 
@@ -122,11 +122,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Optimized rendering function
   const drawGame = useCallback((ctx: CanvasRenderingContext2D) => {
+    const effectiveBlindPlay = getEffectiveBlindPlay(gameState.isBlindPlay, gameState.temporaryBlindPlay);
     // Clear canvas
     ctx.clearRect(0, 0, currentCanvasSize, currentCanvasSize);
 
     // If in blind play mode, show a blank canvas with a message
-    if (gameState.isBlindPlay) {
+    if (effectiveBlindPlay) {
       // Draw a dark background
       ctx.fillStyle = '#2C2C2C';
       ctx.fillRect(0, 0, currentCanvasSize, currentCanvasSize);
@@ -248,8 +249,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const row = Math.floor((y - BORDER_WIDTH) / (currentCellSize + BORDER_WIDTH));
 
     if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
+      const effectiveBlindPlay = getEffectiveBlindPlay(gameState.isBlindPlay, gameState.temporaryBlindPlay);
       // In blind play mode, allow clicking anywhere (the game logic will handle valid moves)
-      if (gameState.isBlindPlay) {
+      if (effectiveBlindPlay) {
         onCellClick(row, col);
       } else {
         // Check if the cell is empty and not a mud zone
@@ -295,7 +297,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       }, 150);
       
       // In blind play mode, allow clicking anywhere (the game logic will handle valid moves)
-      if (gameState.isBlindPlay) {
+      const effectiveBlindPlay = getEffectiveBlindPlay(gameState.isBlindPlay, gameState.temporaryBlindPlay);
+      if (effectiveBlindPlay) {
         onCellClick(row, col);
       } else {
         // Check if the cell is empty and not a mud zone

@@ -38,6 +38,7 @@ function emptyGameStateExtras() {
     mudZones: [] as { row: number; col: number }[],
     stuckPieces: {} as Record<string, number>,
     isBlindPlay: false,
+    temporaryBlindPlay: false,
     totalMoveCount: 0,
     blockShiftMoveCount: 0,
     blindPlayTriggerMove: 0,

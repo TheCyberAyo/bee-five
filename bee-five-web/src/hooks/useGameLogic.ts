@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { getWinningPieces, isBoardFull, createEmptyBoard, createBoardWithBlocks, removeTwoBlockedCells, gameEndsWith3, gameEndsWith7After250, gameEndsWith8After600, isMultipleOf7Between500And1000, isMultipleOf4From1000, getProgressiveBlockRules, addProgressiveBlocks, shiftAllBlocks, moveRandomBlockToStrategicPosition, removeOldestPiecesOfPlayer, ageAllPieces, initializePieceAges, generateMudZones, isInMudZone, processMudZoneEffects, gameEndsWith1InSpecifiedRanges, addStrategicBlock, gameEndsWith2SpecificPattern, isMultipleOf50Match2, isMultipleOf50Match3, isMultipleOf50Match4, isMultipleOf17, isMultipleOf10Match1From60, isMultipleOf10Match1From210, isMultipleOf10Match1From810, isMultipleOf10Match1From1210, isMultipleOf10Match2From30, isMultipleOf10Match2From330, isMultipleOf10Match2From730, enforcePieceCapacity, rearrangeBoard, swapOpponentPiecePairs, swapAllPieces } from '../utils/gameLogic';
+import { getWinningPieces, isBoardFull, createEmptyBoard, createBoardWithBlocks, ageAllPieces, initializePieceAges, generateMudZones, isInMudZone, processMudZoneEffects } from '../utils/gameLogic';
+import { getGameRules } from '../utils/adventureGameRules';
+import {
+  applyAIMoveObstacles,
+  applyHumanMoveObstacles,
+  getEffectiveBlindPlay,
+} from '../utils/adventureMoveEngine';
 import { soundManager } from '../utils/sounds';
 
 export interface GameState {
@@ -10,18 +16,23 @@ export interface GameState {
   isGameActive: boolean;
   winner: 0 | 1 | 2;
   timeLeft: number;
-  humanMoveCount: number; // Track human moves for disappearing blocks
-  pieceAges: number[][]; // Track how long pieces have been on the board
-  player1MoveCount: number; // Track moves made by player 1
-  player2MoveCount: number; // Track moves made by player 2
-  mudZones: { row: number; col: number }[]; // Track mud zone positions
-  stuckPieces: { [key: string]: number }; // Track pieces stuck in mud (key: "row,col", value: turns remaining)
-  isBlindPlay: boolean; // Track if game is in blind play mode
-  totalMoveCount: number; // Track total moves made in the game
-  blockShiftMoveCount: number; // Track moves for block shifting timing
-  blindPlayTriggerMove: number; // Track the move number when blind play was triggered
-  winningPieces: { row: number; col: number }[]; // Track the 5 pieces that won the game
+  humanMoveCount: number;
+  pieceAges: number[][];
+  player1MoveCount: number;
+  player2MoveCount: number;
+  mudZones: { row: number; col: number }[];
+  stuckPieces: { [key: string]: number };
+  /** Persistent blind play (42-pattern levels, ×50 match 2) */
+  isBlindPlay: boolean;
+  /** Temporary blind play (×10 match 1 triggers at 15/13/9 player moves) */
+  temporaryBlindPlay: boolean;
+  totalMoveCount: number;
+  blockShiftMoveCount: number;
+  blindPlayTriggerMove: number;
+  winningPieces: { row: number; col: number }[];
 }
+
+export { getEffectiveBlindPlay };
 
 export interface UseGameLogicOptions {
   timeLimit: number;
@@ -32,6 +43,12 @@ export interface UseGameLogicOptions {
   initialBoard?: (0 | 1 | 2 | 3)[][];
 }
 
+const initialBlindFlags = (gameNumber?: number, currentMatch = 1) => {
+  if (!gameNumber) return { isBlindPlay: false, temporaryBlindPlay: false };
+  const rules = getGameRules(gameNumber, currentMatch);
+  return { isBlindPlay: rules.hasBlindPlay, temporaryBlindPlay: false };
+};
+
 export const useGameLogic = (options: UseGameLogicOptions) => {
   const { timeLimit, startingPlayer = 1, gameNumber, currentMatch = 1, pauseTimer = false, initialBoard } = options;
   const timerRef = useRef<number | null>(null);
@@ -39,46 +56,16 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
   const buildBoard = useCallback(() => {
     if (initialBoard) return initialBoard.map(row => [...row]);
     if (gameNumber) {
-      return createBoardWithBlocks(
-        gameNumber,
-        gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch),
-        currentMatch
-      );
+      const rules = getGameRules(gameNumber, currentMatch);
+      return createBoardWithBlocks(gameNumber, rules.hasBlindPlay, currentMatch);
     }
     return createEmptyBoard();
   }, [initialBoard, gameNumber, currentMatch]);
 
-  const [gameState, setGameState] = useState<GameState>({
-    board: buildBoard(),
-    currentPlayer: startingPlayer,
-    isGameActive: true,
-    winner: 0,
-    timeLeft: timeLimit,
-    humanMoveCount: 0,
-    pieceAges: initializePieceAges(),
-    player1MoveCount: 0,
-    player2MoveCount: 0,
-    mudZones: gameNumber ? generateMudZones(gameNumber) : [],
-    stuckPieces: {},
-    isBlindPlay: gameNumber ? (gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch)) : false,
-      totalMoveCount: 0,
-      blockShiftMoveCount: 0,
-      blindPlayTriggerMove: 0,
-      winningPieces: []
-    });
-
-  // Update time limit when game number changes
-  useEffect(() => {
-    setGameState(prevState => ({
-      ...prevState,
-      timeLeft: timeLimit
-    }));
-  }, [timeLimit]);
-
-  // Update board when game number changes
-  useEffect(() => {
-    setGameState(prevState => ({
-      ...prevState,
+  const [gameState, setGameState] = useState<GameState>(() => {
+    const blind = initialBlindFlags(gameNumber, currentMatch);
+    const rules = gameNumber ? getGameRules(gameNumber, currentMatch) : null;
+    return {
       board: buildBoard(),
       currentPlayer: startingPlayer,
       isGameActive: true,
@@ -88,252 +75,143 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       pieceAges: initializePieceAges(),
       player1MoveCount: 0,
       player2MoveCount: 0,
-      mudZones: gameNumber ? generateMudZones(gameNumber) : [],
+      mudZones: rules?.hasMudZones ? generateMudZones(gameNumber!) : [],
       stuckPieces: {},
-      isBlindPlay: gameNumber ? (gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch)) : false,
+      isBlindPlay: blind.isBlindPlay,
+      temporaryBlindPlay: blind.temporaryBlindPlay,
       totalMoveCount: 0,
       blockShiftMoveCount: 0,
       blindPlayTriggerMove: 0,
-      winningPieces: []
+      winningPieces: [],
+    };
+  });
+
+  useEffect(() => {
+    setGameState(prevState => ({
+      ...prevState,
+      timeLeft: timeLimit,
     }));
-  }, [buildBoard, startingPlayer, timeLimit, currentMatch]);
+  }, [timeLimit]);
 
+  useEffect(() => {
+    const blind = initialBlindFlags(gameNumber, currentMatch);
+    const rules = gameNumber ? getGameRules(gameNumber, currentMatch) : null;
+    setGameState({
+      board: buildBoard(),
+      currentPlayer: startingPlayer,
+      isGameActive: true,
+      winner: 0,
+      timeLeft: timeLimit,
+      humanMoveCount: 0,
+      pieceAges: initializePieceAges(),
+      player1MoveCount: 0,
+      player2MoveCount: 0,
+      mudZones: rules?.hasMudZones ? generateMudZones(gameNumber!) : [],
+      stuckPieces: {},
+      isBlindPlay: blind.isBlindPlay,
+      temporaryBlindPlay: blind.temporaryBlindPlay,
+      totalMoveCount: 0,
+      blockShiftMoveCount: 0,
+      blindPlayTriggerMove: 0,
+      winningPieces: [],
+    });
+  }, [buildBoard, startingPlayer, timeLimit, currentMatch, gameNumber]);
 
-  // Handle cell click
   const handleCellClick = useCallback((row: number, col: number) => {
     if (!gameState.isGameActive || gameState.board[row][col] !== 0) {
       return;
     }
 
-    // In blind play mode, also check if the cell is not in a mud zone
-    if (gameState.isBlindPlay && isInMudZone(row, col, gameState.mudZones)) {
+    const effectiveBlindPlay = getEffectiveBlindPlay(gameState.isBlindPlay, gameState.temporaryBlindPlay);
+    if (effectiveBlindPlay && isInMudZone(row, col, gameState.mudZones)) {
       return;
     }
 
-    // Play move sound
     soundManager.playBuzzSound();
 
-    // Process mud zone effects - reduce stuck turns
     const updatedStuckPieces = processMudZoneEffects(gameState.stuckPieces);
-
-    // Age all existing pieces (both player 1 and player 2) after each move
     let updatedPieceAges = ageAllPieces(gameState.board, gameState.pieceAges);
-    
-    // Place the new piece
+
     const newBoard = gameState.board.map(r => [...r]);
     newBoard[row][col] = gameState.currentPlayer;
-    
-    // Set age for the newly placed piece to 0
     updatedPieceAges[row][col] = 0;
-    
-    // Check if the piece was placed in a mud zone
+
     const pieceKey = `${row},${col}`;
     let finalStuckPieces = updatedStuckPieces;
     if (isInMudZone(row, col, gameState.mudZones)) {
-      // Piece gets stuck for 1 turn
       finalStuckPieces = { ...updatedStuckPieces, [pieceKey]: 1 };
     }
-    
-    // Increment the current player's move count
+
     const newPlayer1MoveCount = gameState.currentPlayer === 1 ? gameState.player1MoveCount + 1 : gameState.player1MoveCount;
     const newPlayer2MoveCount = gameState.currentPlayer === 2 ? gameState.player2MoveCount + 1 : gameState.player2MoveCount;
-    
-    // Increment total move count
     const newTotalMoveCount = gameState.totalMoveCount + 1;
-    
-    // Handle piece capacity limitation for multiples of 17 levels (max 35 pieces)
-    let finalBoard = newBoard;
-    if (gameNumber && isMultipleOf17(gameNumber)) {
-      // Enforce 35 piece capacity - remove oldest pieces when 36th piece is played
-      let result = enforcePieceCapacity(newBoard, updatedPieceAges, 35);
-      finalBoard = result.board;
-      updatedPieceAges = result.pieceAges;
+
+    if (!gameNumber) {
+      const winningPieces = getWinningPieces(newBoard, row, col, gameState.currentPlayer);
+      const winner = winningPieces.length >= 5 ? gameState.currentPlayer : 0;
+      const boardFull = isBoardFull(newBoard);
+      setGameState(prev => ({
+        ...prev,
+        board: newBoard,
+        currentPlayer: prev.currentPlayer === 1 ? 2 : 1,
+        winner,
+        isGameActive: winner === 0 && !boardFull,
+        timeLeft: winner === 0 && !boardFull ? timeLimit : prev.timeLeft,
+        pieceAges: updatedPieceAges,
+        player1MoveCount: newPlayer1MoveCount,
+        player2MoveCount: newPlayer2MoveCount,
+        stuckPieces: finalStuckPieces,
+        totalMoveCount: newTotalMoveCount,
+        winningPieces: winner > 0 ? winningPieces : [],
+      }));
+      return;
     }
 
-    // Handle disappearing pieces based on individual player move counts (Adventure Game only, within specified ranges)
-    if (gameNumber && (isMultipleOf7Between500And1000(gameNumber) || isMultipleOf4From1000(gameNumber))) {
-      const currentPlayerMoveCount = gameState.currentPlayer === 1 ? newPlayer1MoveCount : newPlayer2MoveCount;
-      
-      if (currentPlayerMoveCount % 4 === 0) {
-        // When a player makes their 4th move (or multiple of 4), remove 2 pieces of the opponent
-        const opponent = gameState.currentPlayer === 1 ? 2 : 1;
-        
-        // Remove 2 oldest pieces of the opponent
-        let result = removeOldestPiecesOfPlayer(finalBoard, updatedPieceAges, opponent, 2);
-        
-        finalBoard = result.board;
-        updatedPieceAges = result.pieceAges;
-      }
-    }
-
-    const winningPieces = getWinningPieces(finalBoard, row, col, gameState.currentPlayer);
-    const winner = winningPieces.length >= 5 ? gameState.currentPlayer : 0;
-    const boardFull = isBoardFull(finalBoard);
-    const newGameActive = winner === 0 && !boardFull;
-
-    // Track human moves and handle special blocking systems
-    let updatedBoard = finalBoard;
+    const rules = getGameRules(gameNumber, currentMatch);
+    let updatedBoard = newBoard;
     let newHumanMoveCount = gameState.humanMoveCount;
-    
+    let newBlockShiftMoveCount = gameState.blockShiftMoveCount;
+    let temporaryBlindPlay = gameState.temporaryBlindPlay;
+    let blindPlayTriggerMove = gameState.blindPlayTriggerMove;
+
     if (gameState.currentPlayer === 1) {
-      // Human made a move
       newHumanMoveCount = gameState.humanMoveCount + 1;
-      
-      if (gameNumber && gameNumber % 10 === 4) {
-        // Games ending with 4: Every 3 human moves, remove 2 blocked cells
-        if (newHumanMoveCount % 3 === 0) {
-          updatedBoard = removeTwoBlockedCells(finalBoard);
-        }
-      } else if (gameNumber !== undefined && gameEndsWith3(gameNumber)) {
-        // Games ending with 3: Progressive blocking system
-        const rules = getProgressiveBlockRules(gameNumber);
-        if (rules.blocksToAdd > 0 && newHumanMoveCount % rules.movesInterval === 0) {
-          updatedBoard = addProgressiveBlocks(finalBoard, rules.blocksToAdd);
-        }
-      } else if (gameNumber && gameNumber % 50 === 0 && currentMatch === 1) {
-        // First match of best-of-5 levels only (200, 250, 300, etc.): Every 8 human moves, add 1 strategic block
-        if (newHumanMoveCount % 8 === 0) {
-          updatedBoard = addStrategicBlock(finalBoard);
-        }
-      } else if (gameNumber && gameEndsWith1InSpecifiedRanges(gameNumber)) {
-        // Games ending with 1 in ranges 500-700 and 1001-1591: Every 8 human moves, add 1 strategic block
-        if (newHumanMoveCount % 8 === 0) {
-          updatedBoard = addStrategicBlock(finalBoard);
-        }
-      }
-    }
-    
-    // Handle block shifting for games ending with 7 after game 250
-    let newBlockShiftMoveCount = gameState.blockShiftMoveCount + 1;
-    if (gameNumber !== undefined && gameEndsWith7After250(gameNumber)) {
-      // Shift all blocks one position every 2 moves
-      if (newBlockShiftMoveCount % 2 === 0) {
-        updatedBoard = shiftAllBlocks(updatedBoard);
-      }
-      // Note: Block shifting doesn't affect piece ages since it only moves blocks, not pieces
-    }
-    
-    // Handle block shifting for games ending with 8 after game 600
-    if (gameNumber !== undefined && gameEndsWith8After600(gameNumber)) {
-      // Shift all blocks one position every 5 moves
-      if (newBlockShiftMoveCount % 5 === 0) {
-        updatedBoard = shiftAllBlocks(updatedBoard);
-      }
-      // Note: Block shifting doesn't affect piece ages since it only moves blocks, not pieces
-    }
-
-    // Handle strategic block movement for games ending with 9 from game 400
-    if (gameNumber && gameNumber >= 400 && gameNumber % 10 === 9 && newTotalMoveCount === 27) {
-      // Move one random block to a strategic position after exactly 27 moves
-      updatedBoard = moveRandomBlockToStrategicPosition(updatedBoard);
-    }
-
-    // Handle blind play logic
-    let shouldBeBlindPlay = gameState.isBlindPlay;
-    let newBlindPlayTriggerMove = gameState.blindPlayTriggerMove;
-    
-    // Check if this is a multiple of 50 in match 2/5 (persistent blind play for entire game)
-    const isMultipleOf50Match2BlindPlay = gameNumber !== undefined && isMultipleOf50Match2(gameNumber, currentMatch);
-    
-    // Check if this is a game ending with 42, 92, 142, 192, etc. (persistent blind play for entire game)
-    const isGameEndsWith2BlindPlay = gameNumber !== undefined && gameEndsWith2SpecificPattern(gameNumber);
-    
-    if (isMultipleOf50Match2BlindPlay || isGameEndsWith2BlindPlay) {
-      // These games should have blind play for the entire game
-      shouldBeBlindPlay = true;
-      newBlindPlayTriggerMove = 0; // No trigger move needed for persistent blind play
+      const obstacleResult = applyHumanMoveObstacles({
+        gameNumber,
+        currentMatch,
+        rules,
+        board: updatedBoard,
+        pieceAges: updatedPieceAges,
+        humanMoveCount: newHumanMoveCount,
+        player1MoveCount: newPlayer1MoveCount,
+        totalMoveCount: newTotalMoveCount,
+        blockShiftMoveCount: gameState.blockShiftMoveCount,
+        temporaryBlindPlay,
+        blindPlayTriggerMove,
+      });
+      updatedBoard = obstacleResult.board;
+      updatedPieceAges = obstacleResult.pieceAges;
+      newBlockShiftMoveCount = obstacleResult.blockShiftMoveCount;
+      temporaryBlindPlay = obstacleResult.temporaryBlindPlay;
+      blindPlayTriggerMove = obstacleResult.blindPlayTriggerMove;
     } else {
-      // For all other games (temporary blind play only):
-      
-      // Handle temporary blind play for multiples of 10 from game 60 in match 1/3
-      if (gameNumber !== undefined && isMultipleOf10Match1From60(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 17 === 0) {
-        // After multiples of 17 moves, the match becomes blind play for one move
-        shouldBeBlindPlay = true;
-      }
-
-      // Handle temporary blind play for multiples of 10 from game 210 in match 1/3
-      if (gameNumber !== undefined && isMultipleOf10Match1From210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 15 === 0) {
-        // After multiples of 15 moves, the match becomes blind play for one move
-        shouldBeBlindPlay = true;
-      }
-
-      // Handle temporary blind play for multiples of 10 from game 810 in match 1/3
-      if (gameNumber !== undefined && isMultipleOf10Match1From810(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
-        // After multiples of 13 moves, the match becomes blind play for one move
-        shouldBeBlindPlay = true;
-      }
-
-      // Handle temporary blind play for multiples of 10 from game 1210 in match 1/3
-      if (gameNumber !== undefined && isMultipleOf10Match1From1210(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
-        // After multiples of 9 moves, the match becomes blind play for one move
-        shouldBeBlindPlay = true;
-      }
-
-      // Reset temporary blind play after one move (only for temporary blind play, not persistent)
-      if (gameState.isBlindPlay && gameNumber !== undefined && !isMultipleOf50Match2(gameNumber, currentMatch) && !isGameEndsWith2BlindPlay && newTotalMoveCount > gameState.blindPlayTriggerMove) {
-        shouldBeBlindPlay = false;
-        newBlindPlayTriggerMove = 0;
-      } else if (shouldBeBlindPlay && !gameState.isBlindPlay && !isMultipleOf50Match2BlindPlay && !isGameEndsWith2BlindPlay) {
-        // Set the trigger move when temporary blind play starts
-        newBlindPlayTriggerMove = newTotalMoveCount;
-      }
+      const obstacleResult = applyAIMoveObstacles({
+        gameNumber,
+        currentMatch,
+        rules,
+        board: updatedBoard,
+        pieceAges: updatedPieceAges,
+        player2MoveCount: newPlayer2MoveCount,
+        totalMoveCount: newTotalMoveCount,
+      });
+      updatedBoard = obstacleResult.board;
+      updatedPieceAges = obstacleResult.pieceAges;
     }
 
-    // Handle board rearrangement for Game 50, Match 3/5 every 5 moves
-    if (gameNumber !== undefined && isMultipleOf50Match3(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
-      // Rearrange board every 5 moves for Game 50, Match 3/5
-      let result = rearrangeBoard(updatedBoard, updatedPieceAges);
-      updatedBoard = result.board;
-      updatedPieceAges = result.pieceAges;
-    }
-
-    // Handle piece swapping for Game 50, Match 4/5 every 5 moves
-    if (gameNumber !== undefined && isMultipleOf50Match4(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
-      // Swap 1 random pair of opponent pieces every 5 moves for Game 50, Match 4/5
-      let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
-      updatedBoard = result.board;
-      updatedPieceAges = result.pieceAges;
-    }
-
-    // Handle piece swapping for multiples of 10 Match 2/3 from game 30 every 9 moves
-    if (gameNumber !== undefined && isMultipleOf10Match2From30(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 9 === 0) {
-      // Swap 1 random pair of AI and human pieces every 9 moves for multiples of 10 Match 2/3 from game 30
-      let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
-      updatedBoard = result.board;
-      updatedPieceAges = result.pieceAges;
-    }
-
-    // Handle piece swapping for multiples of 10 Match 2/3 from game 330 every 7 moves
-    if (gameNumber !== undefined && isMultipleOf10Match2From330(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 7 === 0) {
-      // Swap 1 random pair of AI and human pieces every 7 moves for multiples of 10 Match 2/3 from game 330
-      let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
-      updatedBoard = result.board;
-      updatedPieceAges = result.pieceAges;
-    }
-
-    // Handle piece swapping for multiples of 10 Match 2/3 from game 730 every 5 moves
-    if (gameNumber !== undefined && isMultipleOf10Match2From730(gameNumber, currentMatch) && newTotalMoveCount > 0 && newTotalMoveCount % 5 === 0) {
-      // Swap 1 random pair of AI and human pieces every 5 moves for multiples of 10 Match 2/3 from game 730
-      let result = swapOpponentPiecePairs(updatedBoard, updatedPieceAges);
-      updatedBoard = result.board;
-      updatedPieceAges = result.pieceAges;
-    }
-
-    // Swap all pieces for multiples of 10 match 1 from game 60 every 11 moves
-    if (gameNumber !== undefined && isMultipleOf10Match1From60(gameNumber, currentMatch || 1) && newTotalMoveCount > 0 && newTotalMoveCount % 11 === 0) {
-      const swapAllResult = swapAllPieces(updatedBoard, updatedPieceAges);
-      updatedBoard = swapAllResult.board;
-      updatedPieceAges = swapAllResult.pieceAges;
-    }
-    
-    // Swap all pieces for games ending with 1 (31, 41, 61, 81, 101, 121, etc.) every 13 moves
-    // Exclude games in strategic blocking ranges (500-700 and 1001-1591)
-    // Starts from game 31 (not game 1, 11, or 21)
-    if (gameNumber && gameNumber % 10 === 1 && gameNumber >= 31 && !gameEndsWith1InSpecifiedRanges(gameNumber) && newTotalMoveCount > 0 && newTotalMoveCount % 13 === 0) {
-      const swapAllResult = swapAllPieces(updatedBoard, updatedPieceAges);
-      updatedBoard = swapAllResult.board;
-      updatedPieceAges = swapAllResult.pieceAges;
-    }
+    const winningPieces = getWinningPieces(updatedBoard, row, col, gameState.currentPlayer);
+    const winner = winningPieces.length >= 5 ? gameState.currentPlayer : 0;
+    const boardFull = isBoardFull(updatedBoard);
+    const newGameActive = winner === 0 && !boardFull;
 
     setGameState(prevState => ({
       ...prevState,
@@ -349,14 +227,15 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       stuckPieces: finalStuckPieces,
       totalMoveCount: newTotalMoveCount,
       blockShiftMoveCount: newBlockShiftMoveCount,
-      blindPlayTriggerMove: newBlindPlayTriggerMove,
-      isBlindPlay: shouldBeBlindPlay,
-      winningPieces: winner > 0 ? winningPieces : []
+      blindPlayTriggerMove,
+      temporaryBlindPlay,
+      winningPieces: winner > 0 ? winningPieces : [],
     }));
-  }, [gameState.isGameActive, gameState.board, gameState.currentPlayer, gameState.humanMoveCount, gameState.player1MoveCount, gameState.player2MoveCount, gameState.mudZones, gameState.stuckPieces, gameState.blockShiftMoveCount, gameState.blindPlayTriggerMove, gameState.isBlindPlay, gameState.pieceAges, gameState.totalMoveCount, gameNumber, currentMatch, timeLimit]);
+  }, [gameState, gameNumber, currentMatch, timeLimit]);
 
-  // Reset game
   const resetGame = useCallback((newStartingPlayer?: 1 | 2) => {
+    const blind = initialBlindFlags(gameNumber, currentMatch);
+    const rules = gameNumber ? getGameRules(gameNumber, currentMatch) : null;
     setGameState({
       board: buildBoard(),
       currentPlayer: newStartingPlayer || startingPlayer,
@@ -367,25 +246,24 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
       pieceAges: initializePieceAges(),
       player1MoveCount: 0,
       player2MoveCount: 0,
-      mudZones: gameNumber ? generateMudZones(gameNumber) : [],
+      mudZones: rules?.hasMudZones ? generateMudZones(gameNumber!) : [],
       stuckPieces: {},
-      isBlindPlay: gameNumber ? (gameEndsWith2SpecificPattern(gameNumber) || isMultipleOf50Match2(gameNumber, currentMatch)) : false,
+      isBlindPlay: blind.isBlindPlay,
+      temporaryBlindPlay: blind.temporaryBlindPlay,
       totalMoveCount: 0,
       blockShiftMoveCount: 0,
       blindPlayTriggerMove: 0,
-      winningPieces: []
+      winningPieces: [],
     });
   }, [buildBoard, timeLimit, startingPlayer, gameNumber, currentMatch]);
 
-  // Update game state (for external updates)
   const updateGameState = useCallback((newState: Partial<GameState>) => {
     setGameState(prevState => ({
       ...prevState,
-      ...newState
+      ...newState,
     }));
   }, []);
 
-  // Timer effect
   useEffect(() => {
     if (!gameState.isGameActive || gameState.winner > 0 || pauseTimer) {
       if (timerRef.current) {
@@ -398,18 +276,17 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     timerRef.current = window.setInterval(() => {
       setGameState(prevState => {
         if (prevState.timeLeft <= 1) {
-          // Time's up - current player loses
           return {
             ...prevState,
             timeLeft: 0,
             isGameActive: false,
             winner: prevState.currentPlayer === 1 ? 2 : 1,
-            winningPieces: [] // No winning pieces for timeout
+            winningPieces: [],
           };
         }
         return {
           ...prevState,
-          timeLeft: prevState.timeLeft - 1
+          timeLeft: prevState.timeLeft - 1,
         };
       });
     }, 1000);
@@ -422,7 +299,6 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     };
   }, [gameState.isGameActive, gameState.winner, pauseTimer]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) {
@@ -435,6 +311,6 @@ export const useGameLogic = (options: UseGameLogicOptions) => {
     gameState,
     handleCellClick,
     resetGame,
-    updateGameState
+    updateGameState,
   };
 };

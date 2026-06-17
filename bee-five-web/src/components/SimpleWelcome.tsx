@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { soundManager } from '../utils/sounds';
 import LiveMatchesFlow from './live-matches/LiveMatchesFlow';
 import ChallengeDialog from './live-matches/ChallengeDialog';
@@ -18,6 +18,10 @@ import MobileHeader from './MobileHeader';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './Auth/AuthModal';
 import { useGlobalLobbySession } from '../hooks/useGlobalLobbySession';
+import AdventureGame from './AdventureGame';
+import AdventureBoardPreview, { adventurePlayButtonStyle, homeBoardMaxWidth } from './AdventureBoardPreview';
+import { loadSessionAdventureProgress, syncAdventureProgress } from '../services/progressService';
+import { getXp, onAppOpen } from '../services/xpService';
 
 const HOME_ICONS = {
   localChallenge: '/homeImagery/play-with-friend.png',
@@ -32,11 +36,11 @@ const modeIconStyle: React.CSSProperties = {
 };
 
 const homeMenuButtonStyle: React.CSSProperties = {
-  background: '#43A047',
-  color: 'white',
-  border: '3px solid #000000',
+  background: 'rgba(67, 160, 71, 0.3)',
+  color: '#000000',
+  border: '1px solid #FFC30B',
   borderRadius: '20px',
-  padding: '1rem 2rem',
+  padding: '1rem 1.25rem',
   fontSize: '1.2rem',
   fontWeight: 'bold',
   cursor: 'pointer',
@@ -48,13 +52,29 @@ const homeMenuButtonStyle: React.CSSProperties = {
   gap: '0.5rem',
   minHeight: '60px',
   width: '100%',
-  maxWidth: '300px',
+  whiteSpace: 'nowrap',
   touchAction: 'manipulation',
   WebkitTapHighlightColor: 'transparent',
 };
 
+/** Equal-width menu buttons sized to the longest label */
+const homeMenuListStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  width: 'max-content',
+  maxWidth: '100%',
+};
+
 export default function SimpleWelcome() {
-  const [gameMode, setGameMode] = useState<'menu' | 'local-multiplayer' | 'live-matches' | 'classic-game' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
+  const [gameMode, setGameMode] = useState<'menu' | 'adventure-game' | 'local-multiplayer' | 'live-matches' | 'classic-game' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
+  const [currentGame, setCurrentGame] = useState(1);
+  const [highestUnlockedGame, setHighestUnlockedGame] = useState(1);
+  const [gamesCompleted, setGamesCompleted] = useState<number[]>([]);
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [showNoXpModal, setShowNoXpModal] = useState(false);
+  const boardSlotRef = useRef<HTMLDivElement>(null);
+  const [homeBoardSize, setHomeBoardSize] = useState(320);
   const [isMobile, setIsMobile] = useState(false);
   const [lobbyMatchLaunch, setLobbyMatchLaunch] = useState<{
     matchId: string;
@@ -67,7 +87,73 @@ export default function SimpleWelcome() {
   const { user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const routeGlobalChallenges = gameMode !== 'live-matches';
+  const routeGlobalChallenges = gameMode !== 'live-matches' && gameMode !== 'adventure-game';
+
+  useEffect(() => {
+    onAppOpen();
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void syncAdventureProgress(user.id).catch((error) => {
+      console.warn('Failed to refresh synced progress on home', error);
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadProgress = async () => {
+      try {
+        const progress = await loadSessionAdventureProgress(user?.id ?? null);
+        if (cancelled) return;
+        if (progress) {
+          const loadedCurrent = progress.current_game || 1;
+          const loadedHighest = Math.max(1, progress.highest_unlocked_game || 1, loadedCurrent);
+          setCurrentGame(loadedCurrent);
+          setHighestUnlockedGame(loadedHighest);
+          setGamesCompleted(progress.games_completed || []);
+        }
+      } catch (error) {
+        console.error('Failed to load adventure progress:', error);
+      } finally {
+        if (!cancelled) setProgressLoaded(true);
+      }
+    };
+    void loadProgress();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const tryStartAdventure = useCallback((start: () => void) => {
+    if (getXp() <= 0) {
+      setShowNoXpModal(true);
+      return;
+    }
+    start();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (gameMode !== 'menu') return;
+    const el = boardSlotRef.current;
+    if (!el) return;
+
+    const updateBoardSize = () => {
+      const { width, height } = el.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
+      const cap = homeBoardMaxWidth(isMobile);
+      setHomeBoardSize(Math.floor(Math.min(width, height, cap)));
+    };
+
+    updateBoardSize();
+    const ro = new ResizeObserver(updateBoardSize);
+    ro.observe(el);
+    window.addEventListener('resize', updateBoardSize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateBoardSize);
+    };
+  }, [isMobile, progressLoaded, gameMode]);
 
   const handleGlobalOpenMatch = useCallback(
     (match: { matchId: string; opponentId: string; opponentUsername: string }) => {
@@ -87,7 +173,7 @@ export default function SimpleWelcome() {
   } = useGlobalLobbySession({
     user,
     routeChallenges: routeGlobalChallenges,
-    manageLobbyPresence: gameMode !== 'live-matches',
+    manageLobbyPresence: gameMode !== 'live-matches' && gameMode !== 'adventure-game',
     onOpenMatch: handleGlobalOpenMatch,
     onToast: setGlobalToast,
   });
@@ -141,6 +227,37 @@ export default function SimpleWelcome() {
       )}
     </>
   );
+
+  if (gameMode === 'adventure-game') {
+    return (
+      <>
+        <AdventureGame
+          initialGame={currentGame}
+          autoStart
+          onBackToMenu={async () => {
+            try {
+              const progress = await loadSessionAdventureProgress(user?.id ?? null);
+              if (progress) {
+                const loadedCurrent = progress.current_game || 1;
+                const loadedHighest = Math.max(1, progress.highest_unlocked_game || 1, loadedCurrent);
+                setCurrentGame(loadedCurrent);
+                setHighestUnlockedGame(loadedHighest);
+                setGamesCompleted(progress.games_completed || []);
+              }
+            } catch (error) {
+              console.error('Failed to reload adventure progress:', error);
+            }
+            setGameMode('menu');
+          }}
+          onGameChange={(gameNumber) => {
+            setCurrentGame(gameNumber);
+            setHighestUnlockedGame((prev) => Math.max(1, prev, gameNumber));
+          }}
+        />
+        {globalLobbyOverlays}
+      </>
+    );
+  }
 
   // Handle local multiplayer mode
   if (gameMode === 'local-multiplayer') {
@@ -252,23 +369,24 @@ export default function SimpleWelcome() {
   }
 
 
-  // Main menu component
+  // Main menu — original yellow card with blurred board background + overlaid menu
   return (
     <div style={{
       background: '#000000',
-      minHeight: '100vh',
+      height: isMobile ? '100dvh' : '100vh',
+      maxHeight: isMobile ? '100dvh' : '100vh',
       width: '100%',
       maxWidth: '100vw',
       display: 'flex',
       flexDirection: isMobile ? 'column' : 'row',
       justifyContent: 'center',
-      alignItems: 'center',
-      padding: isMobile ? '60px 0 0 0' : 'clamp(1rem, 2vw, 2rem)',
+      alignItems: isMobile ? 'stretch' : 'center',
+      padding: isMobile ? '60px 0 8px 0' : 'clamp(1rem, 2vw, 2rem)',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       position: 'relative',
-      overflow: 'visible',
+      overflow: 'hidden',
       boxSizing: 'border-box',
-      gap: isMobile ? '1rem' : '1.5rem'
+      gap: isMobile ? '0' : '1.5rem',
     }}>
       <MobileHeader onMenuItemClick={setGameMode} isMobile={isMobile} />
       <SidebarMenu onMenuItemClick={setGameMode} isMobile={isMobile} />
@@ -287,7 +405,7 @@ export default function SimpleWelcome() {
           gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
           gap: '2rem',
           padding: '2rem',
-          zIndex: 0
+          zIndex: 0,
         }}>
           {['🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯', '🍯'].map((emoji, i) => (
             <div key={i} style={{ textAlign: 'center', transform: `rotate(${i * 15}deg)` }}>
@@ -300,159 +418,268 @@ export default function SimpleWelcome() {
       <div style={{
         background: '#FFC30B',
         borderRadius: isMobile ? '20px' : 'clamp(15px, 3vw, 25px)',
-        padding: isMobile ? '1.5rem 1rem' : 'clamp(1.5rem, 3vw, 2rem)',
-        width: isMobile ? '90vw' : 'auto',
-        maxWidth: isMobile ? '90vw' : 'none',
-        flex: isMobile ? 'none' : '1 1 auto',
-        minHeight: isMobile ? 'calc(100vh - 140px)' : '90vh',
-        maxHeight: isMobile ? 'calc(100vh - 140px)' : '90vh',
+        padding: isMobile ? '0.75rem 1rem' : 'clamp(1rem, 2vw, 1.5rem)',
+        width: isMobile ? '100%' : 'auto',
+        maxWidth: isMobile ? '100%' : 'none',
+        flex: isMobile ? '1 1 auto' : '1 1 auto',
+        minHeight: 0,
+        height: isMobile ? '100%' : '90vh',
+        maxHeight: isMobile ? '100%' : '90vh',
         boxShadow: '0 20px 40px rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.2)',
         textAlign: 'center',
         position: 'relative',
         zIndex: 1,
-        margin: '0 auto',
+        margin: isMobile ? '0 0.5rem' : '0 auto',
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
-        overflowY: 'auto'
+        justifyContent: 'flex-start',
+        gap: isMobile ? '0.35rem' : '0.5rem',
+        overflow: 'hidden',
       }}>
-        <div style={{ marginBottom: isMobile ? '1.5rem' : 'clamp(1.5rem, 3vw, 2rem)' }}>
+        <div style={{ position: 'relative', zIndex: 2, flexShrink: 0 }}>
           <h1 style={{
-            fontSize: isMobile ? '2.25rem' : '2.5rem',
+            fontSize: isMobile ? '1.85rem' : '2.5rem',
             color: '#000000',
-            margin: '0 0 0.25rem 0',
-            lineHeight: '1.2',
+            margin: '0 0 0.15rem 0',
+            lineHeight: '1.15',
             fontWeight: 900,
             letterSpacing: '0.5px',
-            textTransform: 'uppercase'
+            textTransform: 'uppercase',
           }}>
             BEE FIVE
           </h1>
           <p style={{
-            fontSize: isMobile ? '0.95rem' : '1.125rem',
-            margin: '0 0 clamp(1rem, 3vw, 1.5rem) 0',
+            fontSize: isMobile ? '0.85rem' : '1.125rem',
+            margin: 0,
             fontWeight: 600,
-            lineHeight: 1.4
+            lineHeight: 1.3,
           }}>
-            <span style={{ color: '#FF9800' }}>Outthink</span>
+            <span style={{ color: '#C62828' }}>Outthink</span>
             <span style={{ color: 'rgba(0, 0, 0, 0.87)' }}> ● </span>
-            <span style={{ color: '#E53935' }}>Connect 5</span>
+            <span style={{ color: '#C2410C' }}>Connect 5</span>
             <span style={{ color: 'rgba(0, 0, 0, 0.87)' }}> ● </span>
             <span style={{ color: '#4CAF50' }}>Win</span>
           </p>
         </div>
 
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: isMobile ? '1rem' : 'clamp(0.75rem, 2vw, 1rem)',
-          marginBottom: isMobile ? '1.5rem' : 'clamp(1.5rem, 4vw, 2rem)',
-          width: '100%',
-          maxWidth: '100%',
-          alignItems: 'center'
-        }}>
-          <button
-            onClick={() => { setGameMode('live-matches'); soundManager.playClickSound(); }}
-            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
-            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
-            style={{
-              ...homeMenuButtonStyle,
-              borderRadius: isMobile ? '16px' : '20px',
-              padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
-              fontSize: isMobile ? '1.1rem' : '1.2rem',
-              minHeight: isMobile ? '56px' : '60px',
-              maxWidth: isMobile ? '100%' : '300px',
-            }}
-          >
-            <span>Live Matches</span>
-          </button>
-
-          <button
-            onClick={() => { soundManager.playClickSound(); setGameMode('local-multiplayer'); }}
-            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
-            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
-            style={{
-              ...homeMenuButtonStyle,
-              borderRadius: isMobile ? '16px' : '20px',
-              padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
-              fontSize: isMobile ? '1.1rem' : '1.2rem',
-              minHeight: isMobile ? '56px' : '60px',
-              maxWidth: isMobile ? '100%' : '300px',
-            }}
-          >
-            <img src={HOME_ICONS.localChallenge} alt="" style={modeIconStyle} />
-            <span>Local Challenge</span>
-          </button>
-
-          <button
-            onClick={() => { setGameMode('classic-game'); soundManager.playClickSound(); }}
-            onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
-            onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
-            style={{
-              ...homeMenuButtonStyle,
-              borderRadius: isMobile ? '16px' : '20px',
-              padding: isMobile ? '1.25rem 1.5rem' : '1rem 2rem',
-              fontSize: isMobile ? '1.1rem' : '1.2rem',
-              minHeight: isMobile ? '56px' : '60px',
-              maxWidth: isMobile ? '100%' : '300px',
-            }}
-          >
-            <img src={HOME_ICONS.classicMode} alt="" style={modeIconStyle} />
-            <span>Classic Mode</span>
-          </button>
-
-          {!user && (
+        {/* Board flexes to fill space between tagline and play button */}
+        <div
+          ref={boardSlotRef}
+          style={{
+            position: 'relative',
+            flex: 1,
+            minHeight: 0,
+            width: '100%',
+            background: 'transparent',
+          }}
+        >
+          {progressLoaded ? (
+            <AdventureBoardPreview
+              gameNumber={currentGame}
+              isMobile={isMobile}
+              variant="background"
+              size={homeBoardSize}
+            />
+          ) : (
             <div style={{
-              marginTop: isMobile ? '1rem' : '1.5rem',
-              paddingTop: isMobile ? '1rem' : '1.5rem',
-              borderTop: '2px solid rgba(255, 195, 11, 0.3)',
-              width: '100%',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem',
-              alignItems: 'center'
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: '#000',
+              fontWeight: 'bold',
             }}>
+              🐝 Loading…
+            </div>
+          )}
+
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: isMobile ? '0.5rem' : 'clamp(0.5rem, 1.5vw, 0.75rem)',
+            padding: isMobile ? '0.35rem 0.5rem' : '0.75rem 1rem',
+            zIndex: 2,
+          }}>
+            <div style={{
+              ...homeMenuListStyle,
+              gap: isMobile ? '0.5rem' : 'clamp(0.5rem, 1.5vw, 0.75rem)',
+            }}>
+            <button
+              type="button"
+              onClick={() => { setGameMode('live-matches'); soundManager.playClickSound(); }}
+              onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
+              onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
+              style={{
+                ...homeMenuButtonStyle,
+                borderRadius: isMobile ? '14px' : '20px',
+                padding: isMobile ? '0.65rem 1rem' : '1rem 1.25rem',
+                fontSize: isMobile ? '0.95rem' : '1.2rem',
+                minHeight: isMobile ? '44px' : '60px',
+              }}
+            >
+              <span>Live Matches</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { soundManager.playClickSound(); setGameMode('local-multiplayer'); }}
+              onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
+              onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
+              style={{
+                ...homeMenuButtonStyle,
+                borderRadius: isMobile ? '14px' : '20px',
+                padding: isMobile ? '0.65rem 1rem' : '1rem 1.25rem',
+                fontSize: isMobile ? '0.95rem' : '1.2rem',
+                minHeight: isMobile ? '44px' : '60px',
+              }}
+            >
+              <img src={HOME_ICONS.localChallenge} alt="" style={modeIconStyle} />
+              <span>Local Challenge</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setGameMode('classic-game'); soundManager.playClickSound(); }}
+              onMouseEnter={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)'; } }}
+              onMouseLeave={(e) => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; } }}
+              style={{
+                ...homeMenuButtonStyle,
+                borderRadius: isMobile ? '14px' : '20px',
+                padding: isMobile ? '0.65rem 1rem' : '1rem 1.25rem',
+                fontSize: isMobile ? '0.95rem' : '1.2rem',
+                minHeight: isMobile ? '44px' : '60px',
+              }}
+            >
+              <img src={HOME_ICONS.classicMode} alt="" style={modeIconStyle} />
+              <span>Classic Mode</span>
+            </button>
+
+            {!user && (
               <button
+                type="button"
                 onClick={() => { setShowAuthModal(true); soundManager.playClickSound(); }}
                 style={{
-                  background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-                  color: '#fff',
-                  border: '2px solid #000',
+                  background: 'rgba(75, 85, 99, 0.3)',
+                  color: '#000000',
+                  border: '1px solid #FFC30B',
                   borderRadius: isMobile ? '12px' : '16px',
-                  padding: isMobile ? '0.75rem 1rem' : '0.75rem 1.5rem',
+                  padding: isMobile ? '0.65rem 1rem' : '0.75rem 1.25rem',
                   fontSize: isMobile ? '0.95rem' : '1rem',
                   fontWeight: 'bold',
                   cursor: 'pointer',
                   transition: 'all 0.3s ease',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                   width: '100%',
-                  maxWidth: isMobile ? '100%' : '250px',
-                  touchAction: 'manipulation'
+                  minHeight: isMobile ? '44px' : '60px',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  touchAction: 'manipulation',
                 }}
               >
                 🔐 Sign In / Sign Up
               </button>
+            )}
             </div>
-          )}
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          flexShrink: 0,
+          paddingTop: isMobile ? '0.15rem' : '0.25rem',
+        }}>
+          <button
+            type="button"
+            disabled={currentGame > highestUnlockedGame && currentGame > 1}
+            onClick={() => {
+              soundManager.playClickSound();
+              tryStartAdventure(() => setGameMode('adventure-game'));
+            }}
+            style={{
+              ...adventurePlayButtonStyle,
+              padding: isMobile ? '10px 20px' : '12px 24px',
+              fontSize: isMobile ? '16px' : '18px',
+              opacity: currentGame > highestUnlockedGame && currentGame > 1 ? 0.5 : 1,
+              cursor: currentGame > highestUnlockedGame && currentGame > 1 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <span style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: 'bold' }}>▶</span>
+            <span>Level {currentGame}</span>
+          </button>
         </div>
 
         <footer style={{
-          marginTop: isMobile ? '1rem' : 'clamp(1rem, 3vw, 2rem)',
+          marginTop: 0,
           color: 'rgba(0,0,0,0.7)',
-          fontSize: isMobile ? '0.8rem' : 'clamp(0.7rem, 2vw, 0.8rem)',
+          fontSize: isMobile ? '0.7rem' : 'clamp(0.7rem, 2vw, 0.8rem)',
           textAlign: 'center',
-          zIndex: 1,
-          padding: isMobile ? '0 1rem 0.5rem' : '0'
+          zIndex: 2,
+          position: 'relative',
+          padding: isMobile ? '0.25rem 0.5rem 0' : '0',
+          flexShrink: 0,
         }}>
-          <p style={{ margin: 0 }}>&copy; 2025 Bee Five. Product of MindGrind</p>
+          <p style={{ margin: 0 }}>&copy; 2026 Bee Five. Product of MindGrind</p>
         </footer>
       </div>
+
+      {showNoXpModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 2000,
+        }}>
+          <div style={{
+            backgroundColor: '#FFC30B',
+            padding: '30px',
+            borderRadius: '20px',
+            border: '4px solid black',
+            textAlign: 'center',
+            maxWidth: '90vw',
+            minWidth: '280px',
+          }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: '24px', color: '#000' }}>No XP</h2>
+            <p style={{ margin: '0 0 24px', fontSize: '16px', color: 'rgba(0,0,0,0.87)' }}>
+              You have zero XPs. Win Practice hard game, or win 3 games in Classic mode to gain XPs.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowNoXpModal(false)}
+              style={{
+                padding: '10px 24px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                backgroundColor: '#4CAF50',
+                color: '#fff',
+                border: '2px solid #000',
+                borderRadius: '10px',
+                cursor: 'pointer',
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
 
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
-          onSuccess={() => { setShowAuthModal(false); setGameMode('menu'); }}
+          onSuccess={() => {
+            setShowAuthModal(false);
+            setProgressLoaded(false);
+          }}
         />
       )}
 

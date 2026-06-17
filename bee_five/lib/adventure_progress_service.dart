@@ -9,6 +9,12 @@ import 'supabase_client.dart';
 const String _prefUserXpKey = 'user_xp';
 const String _prefLoginStreakKey = 'login_streak';
 const String _prefClassicBestStreakKey = 'classic_best_streak';
+const String _prefDailyChallengeDate = 'daily_challenge_date';
+const String _prefDailyChallengeWon = 'daily_challenge_won';
+const String _prefAdventureConsecutiveLosses = 'adventure_consecutive_losses';
+const String _prefAdventureConsecutiveWins = 'adventure_consecutive_wins';
+const String _prefAdventureLevelsFirstClearXp = 'adventure_levels_first_clear_xp';
+const String _prefAdventureFirstClearXpMigrated = 'adventure_first_clear_xp_migrated';
 
 /// Matches default XP in `xp_service.dart`.
 const int _defaultUserXp = 10;
@@ -42,6 +48,7 @@ class AdventureProgressData {
   final int? userXp;
   final int? loginStreak;
   final int? classicBestStreak;
+  final XpAuxState? xpAux;
 
   const AdventureProgressData({
     required this.currentGame,
@@ -51,6 +58,25 @@ class AdventureProgressData {
     this.userXp,
     this.loginStreak,
     this.classicBestStreak,
+    this.xpAux,
+  });
+}
+
+class XpAuxState {
+  final String? dailyChallengeDate;
+  final bool? dailyChallengeWon;
+  final int adventureConsecutiveWins;
+  final int adventureConsecutiveLosses;
+  final List<int> adventureLevelsFirstClear;
+  final bool adventureFirstClearXpMigrated;
+
+  const XpAuxState({
+    this.dailyChallengeDate,
+    this.dailyChallengeWon,
+    this.adventureConsecutiveWins = 0,
+    this.adventureConsecutiveLosses = 0,
+    this.adventureLevelsFirstClear = const [],
+    this.adventureFirstClearXpMigrated = false,
   });
 }
 
@@ -107,6 +133,7 @@ Future<AdventureProgressData?> _loadRemoteAdventureProgress(String userId) async
       userXp: xpRaw is num ? xpRaw.toInt() : null,
       loginStreak: streakRaw is num ? streakRaw.toInt() : null,
       classicBestStreak: classicRaw is num ? classicRaw.toInt() : null,
+      xpAux: _xpAuxFromRemoteMap(Map<String, dynamic>.from(data)),
     );
   } catch (_) {
     return null;
@@ -121,6 +148,7 @@ Future<void> _upsertRemoteAdventureProgress({
   int? dashboardXp,
   int? dashboardLoginStreak,
   int? dashboardClassicBest,
+  XpAuxState? xpAux,
 }) async {
   if (supabaseClient == null) return;
   final safeCurrent = _clampLevel(currentGame);
@@ -130,6 +158,7 @@ Future<void> _upsertRemoteAdventureProgress({
   final xpOut = dashboardXp ?? prefs.getInt(_prefUserXpKey) ?? _defaultUserXp;
   final streakOut = dashboardLoginStreak ?? prefs.getInt(_prefLoginStreakKey) ?? 0;
   final classicOut = dashboardClassicBest ?? prefs.getInt(_prefClassicBestStreakKey) ?? 0;
+  final auxOut = xpAux ?? await _readLocalXpAuxState(prefs);
   final ts = DateTime.now().toIso8601String();
   final legacyPayload = <String, dynamic>{
     'user_id': userId,
@@ -139,23 +168,176 @@ Future<void> _upsertRemoteAdventureProgress({
     'games_won': gamesWon ?? completed.length,
     'updated_at': ts,
   };
-  final fullPayload = <String, dynamic>{
+  final statsPayload = <String, dynamic>{
     ...legacyPayload,
     'user_xp': xpOut,
     'login_streak': streakOut,
     'classic_best_streak': classicOut,
   };
+  final fullPayload = <String, dynamic>{
+    ...statsPayload,
+    ..._xpAuxToRemoteMap(auxOut),
+  };
   try {
     await supabaseClient!.from('adventure_progress').upsert(fullPayload);
   } catch (_) {
-    // DB may not have player-stat columns until migration is applied.
-    await supabaseClient!.from('adventure_progress').upsert(legacyPayload);
+    try {
+      await supabaseClient!.from('adventure_progress').upsert(statsPayload);
+    } catch (_) {
+      await supabaseClient!.from('adventure_progress').upsert(legacyPayload);
+    }
   }
 }
 
 int _mergeMaxStat(int local, int? remote) {
   if (remote == null) return local;
   return math.max(local, remote);
+}
+
+String _todayDateString() {
+  final now = DateTime.now();
+  final month = now.month.toString().padLeft(2, '0');
+  final day = now.day.toString().padLeft(2, '0');
+  return '${now.year}-$month-$day';
+}
+
+Future<XpAuxState> _readLocalXpAuxState(SharedPreferences prefs) async {
+  final clearedRaw = prefs.getStringList(_prefAdventureLevelsFirstClearXp) ?? const [];
+  final cleared = clearedRaw
+      .map((e) => int.tryParse(e))
+      .whereType<int>()
+      .where((e) => e > 0)
+      .toList()
+    ..sort();
+  return XpAuxState(
+    dailyChallengeDate: prefs.getString(_prefDailyChallengeDate),
+    dailyChallengeWon: prefs.containsKey(_prefDailyChallengeWon)
+        ? prefs.getBool(_prefDailyChallengeWon)
+        : null,
+    adventureConsecutiveWins: prefs.getInt(_prefAdventureConsecutiveWins) ?? 0,
+    adventureConsecutiveLosses: prefs.getInt(_prefAdventureConsecutiveLosses) ?? 0,
+    adventureLevelsFirstClear: cleared,
+    adventureFirstClearXpMigrated:
+        prefs.getBool(_prefAdventureFirstClearXpMigrated) ?? false,
+  );
+}
+
+Future<void> _writeLocalXpAuxState(SharedPreferences prefs, XpAuxState aux) async {
+  if (aux.dailyChallengeDate == null) {
+    await prefs.remove(_prefDailyChallengeDate);
+  } else {
+    await prefs.setString(_prefDailyChallengeDate, aux.dailyChallengeDate!);
+  }
+  if (aux.dailyChallengeWon == null) {
+    await prefs.remove(_prefDailyChallengeWon);
+  } else {
+    await prefs.setBool(_prefDailyChallengeWon, aux.dailyChallengeWon!);
+  }
+  await prefs.setInt(_prefAdventureConsecutiveWins, aux.adventureConsecutiveWins);
+  await prefs.setInt(_prefAdventureConsecutiveLosses, aux.adventureConsecutiveLosses);
+  final list = aux.adventureLevelsFirstClear.map((e) => e.toString()).toList()
+    ..sort((a, b) => int.parse(a).compareTo(int.parse(b)));
+  await prefs.setStringList(_prefAdventureLevelsFirstClearXp, list);
+  await prefs.setBool(_prefAdventureFirstClearXpMigrated, aux.adventureFirstClearXpMigrated);
+}
+
+XpAuxState _xpAuxFromRemoteMap(Map<String, dynamic> data) {
+  final clearedRaw = data['adventure_levels_first_clear'] as List<dynamic>? ?? const [];
+  final cleared = clearedRaw
+      .map((e) => (e as num).toInt())
+      .where((e) => e > 0)
+      .toList()
+    ..sort();
+  final wonRaw = data['daily_challenge_won'];
+  return XpAuxState(
+    dailyChallengeDate: data['daily_challenge_date'] as String?,
+    dailyChallengeWon: wonRaw is bool ? wonRaw : null,
+    adventureConsecutiveWins: (data['adventure_consecutive_wins'] as num?)?.toInt() ?? 0,
+    adventureConsecutiveLosses: (data['adventure_consecutive_losses'] as num?)?.toInt() ?? 0,
+    adventureLevelsFirstClear: cleared,
+    adventureFirstClearXpMigrated: data['adventure_first_clear_xp_migrated'] == true,
+  );
+}
+
+Map<String, dynamic> _xpAuxToRemoteMap(XpAuxState aux) => {
+      'daily_challenge_date': aux.dailyChallengeDate,
+      'daily_challenge_won': aux.dailyChallengeWon,
+      'adventure_consecutive_wins': aux.adventureConsecutiveWins,
+      'adventure_consecutive_losses': aux.adventureConsecutiveLosses,
+      'adventure_levels_first_clear': aux.adventureLevelsFirstClear,
+      'adventure_first_clear_xp_migrated': aux.adventureFirstClearXpMigrated,
+    };
+
+List<int> _mergeFirstClearLevels(List<int> local, List<int> remote) {
+  final merged = <int>{...local, ...remote}.toList()..sort();
+  return merged;
+}
+
+({String? dailyChallengeDate, bool? dailyChallengeWon}) _mergeDailyChallenge(
+  XpAuxState local,
+  XpAuxState remote,
+) {
+  final today = _todayDateString();
+  final localPlayedToday = local.dailyChallengeDate == today;
+  final remotePlayedToday = remote.dailyChallengeDate == today;
+
+  if (localPlayedToday && remotePlayedToday) {
+    return (
+      dailyChallengeDate: today,
+      dailyChallengeWon: local.dailyChallengeWon == true || remote.dailyChallengeWon == true,
+    );
+  }
+  if (remotePlayedToday) {
+    return (dailyChallengeDate: today, dailyChallengeWon: remote.dailyChallengeWon);
+  }
+  if (localPlayedToday) {
+    return (dailyChallengeDate: today, dailyChallengeWon: local.dailyChallengeWon);
+  }
+  if (local.dailyChallengeDate == null && remote.dailyChallengeDate == null) {
+    return (dailyChallengeDate: null, dailyChallengeWon: null);
+  }
+  if (local.dailyChallengeDate == null) {
+    return (
+      dailyChallengeDate: remote.dailyChallengeDate,
+      dailyChallengeWon: remote.dailyChallengeWon,
+    );
+  }
+  if (remote.dailyChallengeDate == null) {
+    return (
+      dailyChallengeDate: local.dailyChallengeDate,
+      dailyChallengeWon: local.dailyChallengeWon,
+    );
+  }
+  if ((local.dailyChallengeDate ?? '') >= (remote.dailyChallengeDate ?? '')) {
+    return (
+      dailyChallengeDate: local.dailyChallengeDate,
+      dailyChallengeWon: local.dailyChallengeWon,
+    );
+  }
+  return (
+    dailyChallengeDate: remote.dailyChallengeDate,
+    dailyChallengeWon: remote.dailyChallengeWon,
+  );
+}
+
+XpAuxState _mergeXpAuxState(XpAuxState local, XpAuxState remote) {
+  final daily = _mergeDailyChallenge(local, remote);
+  return XpAuxState(
+    dailyChallengeDate: daily.dailyChallengeDate,
+    dailyChallengeWon: daily.dailyChallengeWon,
+    adventureConsecutiveWins: math.min(
+      1,
+      math.max(local.adventureConsecutiveWins, remote.adventureConsecutiveWins),
+    ),
+    adventureConsecutiveLosses: math.max(
+      local.adventureConsecutiveLosses,
+      remote.adventureConsecutiveLosses,
+    ),
+    adventureLevelsFirstClear:
+        _mergeFirstClearLevels(local.adventureLevelsFirstClear, remote.adventureLevelsFirstClear),
+    adventureFirstClearXpMigrated:
+        local.adventureFirstClearXpMigrated || remote.adventureFirstClearXpMigrated,
+  );
 }
 
 /// Merge local and remote progress.
@@ -169,6 +351,7 @@ Future<AdventureProgressData> syncAdventureProgress() async {
   final localXp = prefs.getInt(_prefUserXpKey) ?? _defaultUserXp;
   final localStreak = prefs.getInt(_prefLoginStreakKey) ?? 0;
   final localClassic = prefs.getInt(_prefClassicBestStreakKey) ?? 0;
+  final localXpAux = await _readLocalXpAuxState(prefs);
 
   final localCurrent = await getLocalAdventureCurrentLevel();
   final localHighest = await getLocalAdventureHighestUnlockedLevel();
@@ -200,8 +383,10 @@ Future<AdventureProgressData> syncAdventureProgress() async {
       dashboardXp: localXp,
       dashboardLoginStreak: localStreak,
       dashboardClassicBest: localClassic,
+      xpAux: localXpAux,
     );
     await prefs.setBool(_prefAdventureResetPending, false);
+    await _writeLocalXpAuxState(prefs, localXpAux);
     return AdventureProgressData(
       currentGame: localCurrent,
       highestUnlockedGame: forcedHighest,
@@ -210,6 +395,7 @@ Future<AdventureProgressData> syncAdventureProgress() async {
       userXp: localXp,
       loginStreak: localStreak,
       classicBestStreak: localClassic,
+      xpAux: localXpAux,
     );
   }
 
@@ -222,10 +408,12 @@ Future<AdventureProgressData> syncAdventureProgress() async {
       dashboardXp: localXp,
       dashboardLoginStreak: localStreak,
       dashboardClassicBest: localClassic,
+      xpAux: localXpAux,
     );
     if (mergedHighest != localHighest) {
       await setLocalAdventureHighestUnlockedLevel(mergedHighest);
     }
+    await _writeLocalXpAuxState(prefs, localXpAux);
     return AdventureProgressData(
       currentGame: localCurrent,
       highestUnlockedGame: mergedHighest,
@@ -234,6 +422,7 @@ Future<AdventureProgressData> syncAdventureProgress() async {
       userXp: localXp,
       loginStreak: localStreak,
       classicBestStreak: localClassic,
+      xpAux: localXpAux,
     );
   }
 
@@ -263,10 +452,12 @@ Future<AdventureProgressData> syncAdventureProgress() async {
   final mergedXp = _mergeMaxStat(localXp, remote.userXp);
   final mergedStreak = _mergeMaxStat(localStreak, remote.loginStreak);
   final mergedClassic = _mergeMaxStat(localClassic, remote.classicBestStreak);
+  final mergedXpAux = _mergeXpAuxState(localXpAux, remote.xpAux ?? const XpAuxState());
 
   if (mergedXp != localXp) await prefs.setInt(_prefUserXpKey, mergedXp);
   if (mergedStreak != localStreak) await prefs.setInt(_prefLoginStreakKey, mergedStreak);
   if (mergedClassic != localClassic) await prefs.setInt(_prefClassicBestStreakKey, mergedClassic);
+  await _writeLocalXpAuxState(prefs, mergedXpAux);
 
   await _upsertRemoteAdventureProgress(
     userId: userId,
@@ -276,6 +467,7 @@ Future<AdventureProgressData> syncAdventureProgress() async {
     dashboardXp: mergedXp,
     dashboardLoginStreak: mergedStreak,
     dashboardClassicBest: mergedClassic,
+    xpAux: mergedXpAux,
   );
 
   return AdventureProgressData(
@@ -286,6 +478,7 @@ Future<AdventureProgressData> syncAdventureProgress() async {
     userXp: mergedXp,
     loginStreak: mergedStreak,
     classicBestStreak: mergedClassic,
+    xpAux: mergedXpAux,
   );
 }
 

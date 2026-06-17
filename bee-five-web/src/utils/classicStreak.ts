@@ -1,3 +1,10 @@
+import {
+  getProgressSyncUserId,
+  readLocalPlayerStats,
+  scheduleProgressCloudSync,
+  writeLocalPlayerStats,
+} from '../services/progressService';
+
 export const CLASSIC_SESSION_SECONDS = 10 * 60;
 export const PREF_CLASSIC_BEST_STREAK = 'classic_best_streak';
 
@@ -37,14 +44,14 @@ export function blockedCellCountForGame(gameIndex: number): number {
 
 export function loadClassicBestStreak(): number {
   if (typeof window === 'undefined') return 0;
-  const raw = window.localStorage.getItem(PREF_CLASSIC_BEST_STREAK);
-  const parsed = raw ? parseInt(raw, 10) : 0;
-  return Number.isFinite(parsed) ? parsed : 0;
+  return readLocalPlayerStats(getProgressSyncUserId()).classicBestStreak;
 }
 
 export function saveClassicBestStreak(streak: number): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PREF_CLASSIC_BEST_STREAK, String(streak));
+  const userId = getProgressSyncUserId();
+  writeLocalPlayerStats(userId, { classicBestStreak: streak });
+  scheduleProgressCloudSync(userId);
 }
 
 export function formatSessionTime(seconds: number): string {

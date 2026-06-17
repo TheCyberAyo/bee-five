@@ -73,6 +73,7 @@ Future<void> _ensureAdventureFirstClearXpMigrated() async {
   final list = existing.toList()..sort((a, b) => int.parse(a).compareTo(int.parse(b)));
   await prefs.setStringList(_prefAdventureLevelsFirstClearXp, list);
   await prefs.setBool(_prefAdventureFirstClearXpMigrated, true);
+  scheduleProgressCloudSync();
 }
 
 /// Ensures XP is initialized to [defaultXp] if never set.
@@ -156,6 +157,7 @@ Future<(int, int)> onAdventureMatchLost({int? levelJustPlayed}) async {
   if (levelJustPlayed != null) {
     final eligible = await _isAdventureFrontierLevel(levelJustPlayed);
     if (!eligible) {
+      scheduleProgressCloudSync();
       final xp = await getXp();
       return (xp, 0);
     }
@@ -186,6 +188,7 @@ Future<(int, int)> onAdventureGameWon({int? levelJustPlayed}) async {
     final newXp = await addXp(xpAdventureTwoWins);
     return (newXp, xpAdventureTwoWins);
   }
+  scheduleProgressCloudSync();
   final xp = await getXp();
   return (xp, 0);
 }
@@ -209,10 +212,13 @@ Future<(int, int)> onAdventureLevelWon(int levelJustCompleted) async {
     await prefs.setStringList(_prefAdventureLevelsFirstClearXp, nextList);
     await addXp(xpAdventureFirstLevelComplete);
     delta += xpAdventureFirstLevelComplete;
+  } else {
+    scheduleProgressCloudSync();
   }
 
   final eligible = await _isAdventureFrontierLevel(levelJustCompleted);
   if (!eligible) {
+    scheduleProgressCloudSync();
     final xp = await getXp();
     return (xp, delta);
   }
@@ -220,6 +226,8 @@ Future<(int, int)> onAdventureLevelWon(int levelJustCompleted) async {
   if (levelJustCompleted > 0 && levelJustCompleted % 10 == 0) {
     await addXp(xpAdventureMultipleOf10);
     delta += xpAdventureMultipleOf10;
+  } else {
+    scheduleProgressCloudSync();
   }
   final xp = await getXp();
   return (xp, delta);

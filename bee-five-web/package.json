@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack --hostname 0.0.0.0",
     "build": "next build",
     "start": "node scripts/fixRoutesManifest.mjs && next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:adventure": "npx tsx scripts/adventure-parity.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

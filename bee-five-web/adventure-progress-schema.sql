@@ -39,6 +39,12 @@ CREATE TABLE IF NOT EXISTS adventure_progress (
   user_xp INTEGER NOT NULL DEFAULT 10,
   login_streak INTEGER NOT NULL DEFAULT 0,
   classic_best_streak INTEGER NOT NULL DEFAULT 0,
+  daily_challenge_date TEXT,
+  daily_challenge_won BOOLEAN,
+  adventure_consecutive_wins INTEGER NOT NULL DEFAULT 0,
+  adventure_consecutive_losses INTEGER NOT NULL DEFAULT 0,
+  adventure_levels_first_clear INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[],
+  adventure_first_clear_xp_migrated BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

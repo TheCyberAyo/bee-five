@@ -8,6 +8,11 @@ import { internalEmailFromUsername, normalizeUsername } from '../lib/internalAut
 import { loadUserProfile, UserProfile } from '../services/profileService';
 import { resolveLoginEmail, signInEmailForIdentifier } from '../services/authLoginService';
 import { mgMultiplayerService } from '../services/mgMultiplayerService';
+import {
+  promoteGuestProgressToUser,
+  setProgressSyncUserId,
+  syncAdventureProgress,
+} from '../services/progressService';
 
 type SignUpResult = {
   data: AuthResponse['data'];
@@ -94,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
         setUser(null);
         setProfile(null);
+        setProgressSyncUserId(null);
         setLoading(false);
         return;
       }
@@ -134,6 +140,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mgMultiplayerService.clearBoundSession();
     }
   }, [session]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setProgressSyncUserId(null);
+      return;
+    }
+
+    setProgressSyncUserId(user.id);
+    void (async () => {
+      try {
+        await promoteGuestProgressToUser(user.id);
+        await syncAdventureProgress(user.id);
+      } catch (error) {
+        console.warn('Failed to sync adventure progress on auth', error);
+      }
+    })();
+  }, [user?.id]);
 
   const refreshProfile = async () => {
     if (user) {
