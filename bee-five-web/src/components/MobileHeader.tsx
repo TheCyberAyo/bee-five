@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import { INFO_MENU_ITEMS, type InfoMenuMode } from '../constants/infoMenuItems';
+import InfoMenuItemIcon from './InfoMenuItemIcon';
 import { soundManager } from '../utils/sounds';
 
-type GameMode = 'menu' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us' | 'local-multiplayer' | 'live-matches' | 'classic-game';
+type GameMode = 'menu' | InfoMenuMode | 'local-multiplayer' | 'live-matches' | 'classic-game';
 
 interface MobileHeaderProps {
   onMenuItemClick: (mode: GameMode) => void;
@@ -15,16 +17,6 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   /** Bar height below safe-area; keep in sync with SimpleWelcome mobile top padding. */
   const barHeightPx = 49; // 46px bar + 3px bottom border
-
-  const menuItems: { id: GameMode; icon: string; label: string }[] = [
-    { id: 'about-us', icon: 'ℹ️', label: 'About Us' },
-    { id: 'how-to-play', icon: '📖', label: 'How to Play' },
-    { id: 'news-updates', icon: '📰', label: 'News/Updates' },
-    { id: 'privacy-policy', icon: '🔒', label: 'Privacy Policy' },
-    { id: 'profile', icon: '👤', label: 'Profile' },
-    { id: 'settings', icon: '⚙️', label: 'Settings' },
-    { id: 'contact-us', icon: '📧', label: 'Contact Us' },
-  ];
 
   if (!isMobile) {
     return null;
@@ -133,7 +125,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
           top: '100%',
           zIndex: 1001
         }}>
-          {menuItems.map((item, index) => (
+          {INFO_MENU_ITEMS.map((item, index) => (
             <a
               key={item.id}
               href={`#${item.id}`}
@@ -148,7 +140,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
                 padding: '0.65rem 0.75rem',
                 color: '#ffffff',
                 textDecoration: 'none',
-                borderBottom: index < menuItems.length - 1 ? '1px solid rgba(255, 195, 11, 0.2)' : 'none',
+                borderBottom: index < INFO_MENU_ITEMS.length - 1 ? '1px solid rgba(255, 195, 11, 0.2)' : 'none',
                 transition: 'all 0.2s ease'
               }}
               onTouchStart={(e) => {
@@ -158,7 +150,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
                 e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
-              <span style={{ fontSize: '1.1em' }}>{item.icon}</span>
+              <InfoMenuItemIcon icon={item.icon} iconImagePath={item.iconImagePath} />
               <span style={{ 
                 fontWeight: '500', 
                 fontSize: '0.9rem',

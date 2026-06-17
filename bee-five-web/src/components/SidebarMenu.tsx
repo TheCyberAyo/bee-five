@@ -2,9 +2,11 @@
 
 import React from 'react';
 import Image from 'next/image';
+import { INFO_MENU_ITEMS, type InfoMenuMode } from '../constants/infoMenuItems';
+import InfoMenuItemIcon from './InfoMenuItemIcon';
 import { soundManager } from '../utils/sounds';
 
-type GameMode = 'menu' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us' | 'local-multiplayer' | 'live-matches' | 'classic-game';
+type GameMode = 'menu' | InfoMenuMode | 'local-multiplayer' | 'live-matches' | 'classic-game';
 
 interface SidebarMenuProps {
   onMenuItemClick: (mode: GameMode) => void;
@@ -12,16 +14,6 @@ interface SidebarMenuProps {
 }
 
 export default function SidebarMenu({ onMenuItemClick, isMobile }: SidebarMenuProps) {
-  const menuItems: { id: GameMode; icon: string; label: string }[] = [
-    { id: 'about-us', icon: 'ℹ️', label: 'About Us' },
-    { id: 'how-to-play', icon: '📖', label: 'How to Play' },
-    { id: 'news-updates', icon: '📰', label: 'News/Updates' },
-    { id: 'privacy-policy', icon: '🔒', label: 'Privacy Policy' },
-    { id: 'profile', icon: '👤', label: 'Profile' },
-    { id: 'settings', icon: '⚙️', label: 'Settings' },
-    { id: 'contact-us', icon: '📧', label: 'Contact Us' },
-  ];
-
   if (isMobile) {
     return null;
   }
@@ -67,7 +59,7 @@ export default function SidebarMenu({ onMenuItemClick, isMobile }: SidebarMenuPr
         </div>
       </div>
       
-      {menuItems.map((item) => (
+      {INFO_MENU_ITEMS.map((item) => (
         <a
           key={item.id}
           href={`#${item.id}`}
@@ -98,7 +90,7 @@ export default function SidebarMenu({ onMenuItemClick, isMobile }: SidebarMenuPr
             e.currentTarget.style.transform = 'translateX(0)';
           }}
         >
-          <span style={{ fontSize: '1.1em' }}>{item.icon}</span>
+          <InfoMenuItemIcon icon={item.icon} iconImagePath={item.iconImagePath} />
           <span style={{ fontWeight: '500', fontSize: '0.9rem' }}>{item.label}</span>
         </a>
       ))}
