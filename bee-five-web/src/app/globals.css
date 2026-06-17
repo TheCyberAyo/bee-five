@@ -26,3 +26,64 @@
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* Portrait-only: block landscape play on touch devices (mirrors Dart mobile lock). */
+.portrait-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.92);
+  color: #fff;
+  text-align: center;
+}
+
+.portrait-lock-card {
+  max-width: 20rem;
+  padding: 1.5rem;
+  border: 3px solid #ffc30b;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.portrait-lock-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+  animation: portrait-lock-wiggle 1.6s ease-in-out infinite;
+}
+
+.portrait-lock-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffc30b;
+}
+
+.portrait-lock-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+@keyframes portrait-lock-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-90deg);
+  }
+  75% {
+    transform: rotate(0deg);
+  }
+}
+
+@media (orientation: landscape) and (pointer: coarse) {
+  html,
+  body {
+    overflow: hidden;
+  }
+}

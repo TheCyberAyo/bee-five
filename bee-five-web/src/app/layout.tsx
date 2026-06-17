@@ -4,6 +4,7 @@ import "./globals.css";
 import "../index.css";
 import "../App.css";
 import { AuthProvider } from "../contexts/AuthContext";
+import PortraitLock from "../components/PortraitLock";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,6 +19,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bee Five - Connect Five Game",
   description: "A fun Connect Five game with bee-themed adventure mode and multiplayer features",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Bee Five",
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', type: 'image/x-icon' },
@@ -38,6 +45,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#FFC30B',
 };
 
 export default function RootLayout({
@@ -51,7 +60,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          {children}
+          <PortraitLock>
+            {children}
+          </PortraitLock>
         </AuthProvider>
       </body>
     </html>

@@ -1,0 +1,22 @@
+{
+  "name": "Bee Five",
+  "short_name": "Bee Five",
+  "description": "Connect Five game with adventure mode and multiplayer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFC30B",
+  "theme_color": "#FFC30B",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-public.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
