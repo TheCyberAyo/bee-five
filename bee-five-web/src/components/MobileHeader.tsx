@@ -13,6 +13,8 @@ interface MobileHeaderProps {
 
 export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  /** Bar height below safe-area; keep in sync with SimpleWelcome mobile top padding. */
+  const barHeightPx = 49; // 46px bar + 3px bottom border
 
   const menuItems: { id: GameMode; icon: string; label: string }[] = [
     { id: 'about-us', icon: 'ℹ️', label: 'About Us' },
@@ -45,6 +47,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
       top: 0,
       left: 0,
       right: 0,
+      paddingTop: 'env(safe-area-inset-top, 0px)',
       background: 'rgba(0, 0, 0, 0.95)',
       borderBottom: '3px solid #FFC30B',
       backdropFilter: 'blur(10px)',
@@ -56,8 +59,10 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0.75rem 1rem',
-        gap: '1rem'
+        padding: '0.35rem 0.75rem',
+        gap: '0.75rem',
+        minHeight: `${barHeightPx}px`,
+        boxSizing: 'border-box',
       }}>
         {/* Logo */}
         <div style={{
@@ -66,13 +71,13 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
           alignItems: 'center',
           justifyContent: 'flex-start'
         }}>
-          <div style={{ position: 'relative', width: '120px', height: '32px' }}>
+          <div style={{ position: 'relative', width: '100px', height: '26px' }}>
             <Image 
               src="/BEE-FIVE.png" 
               alt="BEE FIVE logo" 
               fill
               style={{ objectFit: 'contain' }}
-              sizes="120px"
+              sizes="100px"
               priority
             />
           </div>
@@ -86,14 +91,14 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
             border: '2px solid #FFC30B',
             borderRadius: '6px',
             color: '#FFC30B',
-            padding: '0.5rem',
+            padding: '0.35rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'all 0.3s ease',
-            minWidth: '40px',
-            minHeight: '40px'
+            minWidth: '34px',
+            minHeight: '34px'
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 195, 11, 0.2)';
@@ -113,7 +118,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
         <div style={{
           background: 'rgba(0, 0, 0, 0.98)',
           borderTop: '2px solid #FFC30B',
-          maxHeight: 'calc(100vh - 60px)',
+          maxHeight: `calc(100vh - ${barHeightPx}px - env(safe-area-inset-top, 0px))`,
           overflowY: 'auto',
           boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
           opacity: 1,
@@ -175,7 +180,7 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
           onClick={() => setIsDropdownOpen(false)}
           style={{
             position: 'fixed',
-            top: '60px',
+            top: `calc(${barHeightPx}px + env(safe-area-inset-top, 0px))`,
             left: 0,
             right: 0,
             bottom: 0,

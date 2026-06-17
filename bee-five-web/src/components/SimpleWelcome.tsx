@@ -381,7 +381,7 @@ export default function SimpleWelcome() {
       flexDirection: isMobile ? 'column' : 'row',
       justifyContent: 'center',
       alignItems: isMobile ? 'stretch' : 'center',
-      padding: isMobile ? '60px 0 8px 0' : 'clamp(1rem, 2vw, 2rem)',
+      padding: isMobile ? 'calc(49px + env(safe-area-inset-top, 0px)) 0 8px 0' : 'clamp(1rem, 2vw, 2rem)',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       position: 'relative',
       overflow: 'hidden',
