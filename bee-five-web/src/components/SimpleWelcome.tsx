@@ -12,7 +12,7 @@ import NewsUpdates from './NewsUpdates';
 import PrivacyPolicy from './PrivacyPolicy';
 import Settings from './Settings';
 import ContactUs from './ContactUs';
-import Profile from './Profile';
+import Dashboard from './Dashboard';
 import SidebarMenu from './SidebarMenu';
 import MobileHeader from './MobileHeader';
 import { useAuth } from '../contexts/AuthContext';
@@ -67,7 +67,7 @@ const homeMenuListStyle: React.CSSProperties = {
 };
 
 export default function SimpleWelcome() {
-  const [gameMode, setGameMode] = useState<'menu' | 'adventure-game' | 'local-multiplayer' | 'live-matches' | 'classic-game' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'profile' | 'contact-us'>('menu');
+  const [gameMode, setGameMode] = useState<'menu' | 'adventure-game' | 'local-multiplayer' | 'live-matches' | 'classic-game' | 'about-us' | 'how-to-play' | 'news-updates' | 'privacy-policy' | 'settings' | 'dashboard' | 'contact-us'>('menu');
   const [currentGame, setCurrentGame] = useState(1);
   const [highestUnlockedGame, setHighestUnlockedGame] = useState(1);
   const [gamesCompleted, setGamesCompleted] = useState<number[]>([]);
@@ -358,11 +358,11 @@ export default function SimpleWelcome() {
     );
   }
 
-  // Handle Profile page
-  if (gameMode === 'profile') {
+  // Handle Dashboard page (Dart DashboardPage parity)
+  if (gameMode === 'dashboard') {
     return (
       <>
-        <Profile onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
+        <Dashboard onBackToMenu={() => setGameMode('menu')} isMobile={isMobile} />
         {globalLobbyOverlays}
       </>
     );

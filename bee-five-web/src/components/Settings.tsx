@@ -22,9 +22,10 @@ export default function Settings({
   isMobile,
   onLeftSchoolLobby,
 }: SettingsProps) {
-  const { user, signIn } = useAuth();
+  const { user, signIn, signOut } = useAuth();
   const [volume, setVolume] = useState(soundManager.getVolume());
   const [isMuted, setIsMuted] = useState(soundManager.isSoundMuted());
+  const [signingOut, setSigningOut] = useState(false);
 
   // Password confirmation modal for account/danger actions
   const [confirmModal, setConfirmModal] = useState<'reset' | 'delete' | null>(null);
@@ -95,6 +96,16 @@ export default function Settings({
 
   const handleTestSound = () => {
     soundManager.playBuzzSound();
+  };
+
+  const handleSignOut = () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    soundManager.playClickSound();
+    signOut().catch(() => {});
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 100);
   };
 
   const handleLeaveSchoolLobby = async () => {
@@ -587,6 +598,35 @@ export default function Settings({
                   }}
                 >
                   🗑️ Delete account
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                  style={{
+                    padding: '1rem',
+                    backgroundColor: signingOut ? '#666' : '#f44336',
+                    color: '#fff',
+                    border: '2px solid #000',
+                    borderRadius: '12px',
+                    cursor: signingOut ? 'not-allowed' : 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '1rem',
+                    textAlign: 'center',
+                    transition: 'all 0.3s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isMobile && !signingOut) {
+                      e.currentTarget.style.backgroundColor = '#e53935';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!signingOut) {
+                      e.currentTarget.style.backgroundColor = '#f44336';
+                    }
+                  }}
+                >
+                  {signingOut ? 'Signing out…' : 'Sign Out'}
                 </button>
               </div>
             </div>
