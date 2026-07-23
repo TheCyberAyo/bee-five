@@ -5,6 +5,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../ads/multiplayer_ad_constants.dart';
+import '../ads/ad_log.dart';
 import '../head_to_head_series.dart';
 import '../screens/async_match_screen.dart';
 import '../services/async_game_service.dart';
@@ -96,6 +97,7 @@ class _AsyncMatchStatusScreenState extends State<AsyncMatchStatusScreen> {
           if (mounted) setState(() => _isBannerLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('async match status banner', error);
           ad.dispose();
           if (mounted) setState(() => _isBannerLoaded = false);
         },

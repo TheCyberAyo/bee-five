@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'ads/ad_unit_ids.dart';
+import 'ads/ad_log.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
 import 'xp_service.dart';
@@ -131,14 +133,17 @@ class _ModeSelectionScreenState extends State<_ModeSelectionScreen> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           if (mounted) setState(() => _isBannerAdLoaded = true);
         },
-        onAdFailedToLoad: (ad, error) => ad.dispose(),
+        onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('simple game menu banner', error);
+          ad.dispose();
+        },
       ),
     )..load();
   }
@@ -441,11 +446,14 @@ class _GameSessionState extends State<_GameSession> {
 
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      adUnitId: kInterstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) => _interstitialAd = ad,
-        onAdFailedToLoad: (_) => _interstitialAd = null,
+        onAdFailedToLoad: (error) {
+          logAdLoadFailure('simple game series interstitial', error);
+          _interstitialAd = null;
+        },
       ),
     );
   }
@@ -635,25 +643,31 @@ class _GameBoardState extends State<_GameBoard> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           if (mounted) setState(() => _isBannerAdLoaded = true);
         },
-        onAdFailedToLoad: (ad, error) => ad.dispose(),
+        onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('simple game menu banner', error);
+          ad.dispose();
+        },
       ),
     )..load();
   }
 
   void _loadSingleMatchInterstitial() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      adUnitId: kInterstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) => _singleMatchInterstitial = ad,
-        onAdFailedToLoad: (_) => _singleMatchInterstitial = null,
+        onAdFailedToLoad: (error) {
+          logAdLoadFailure('simple game single-match interstitial', error);
+          _singleMatchInterstitial = null;
+        },
       ),
     );
   }
@@ -1335,14 +1349,17 @@ class _SeriesScoreboardState extends State<_SeriesScoreboard> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           if (mounted) setState(() => _isBannerAdLoaded = true);
         },
-        onAdFailedToLoad: (ad, error) => ad.dispose(),
+        onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('simple game menu banner', error);
+          ad.dispose();
+        },
       ),
     )..load();
   }

@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'ads/ad_unit_ids.dart';
+import 'ads/ad_log.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
 import 'adventure_progress_service.dart' show scheduleProgressCloudSync;
@@ -145,7 +147,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -153,6 +155,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           if (mounted) setState(() => _isBannerAdLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('classic AI banner', error);
           ad.dispose();
         },
       ),
@@ -161,13 +164,14 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      adUnitId: kInterstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _interstitialAd = ad;
         },
         onAdFailedToLoad: (error) {
+          logAdLoadFailure('classic AI interstitial', error);
           _interstitialAd = null;
         },
       ),

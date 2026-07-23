@@ -928,15 +928,7 @@ export default function AdventureGame({
     return (
       <AdventureClassicAIGame
         key={`${currentGame}-${currentMatch}`}
-        onBackToMenu={handleExit}
-        onBackToMap={() => {
-          if (autoStart) {
-            handleGameComplete(false);
-            handleExit();
-          } else {
-            handleGameComplete(false);
-          }
-        }}
+        onBackToMenu={onBackToMenu}
         initialDifficulty={gameRules.aiDifficulty}
         initialTimer={gameRules.timeLimit}
         backgroundColor={gameRules.startingPlayer === 1 ? 'yellow' : 'black'}

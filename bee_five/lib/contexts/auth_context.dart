@@ -51,6 +51,39 @@ class AuthContext extends ChangeNotifier {
     return openSignUp;
   }
 
+  void _applySignedInSession(Session session) {
+    _session = session;
+    _user = session.user;
+    _isGuest = false;
+    _loading = false;
+    if (_user != null) {
+      _persistUsernameFromUserToPrefs(_user!);
+      unawaited(PushNotificationService.instance.registerIfNeeded());
+    }
+    notifyListeners();
+  }
+
+  /// After [signInWithPassword], iOS can briefly return no session while auth
+  /// finishes; poll until [currentSession] is available.
+  Future<void> _waitForSessionAfterSignIn({
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    if (supabaseClient == null || _session != null) return;
+
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final session = supabaseClient!.auth.currentSession;
+      if (session != null) {
+        _applySignedInSession(session);
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
+  }
+
+  /// True when a Supabase session is active (used after sign-in on iOS).
+  bool get isSignedIn => _user != null && _session != null;
+
   static void _persistUsernameFromUserToPrefs(User user) {
     final raw = user.userMetadata?['username'];
     if (raw == null) return;
@@ -149,10 +182,18 @@ class AuthContext extends ChangeNotifier {
       return AuthResponse(session: null, user: null);
     }
 
-    return supabaseClient!.auth.signInWithPassword(
+    final response = await supabaseClient!.auth.signInWithPassword(
       email: resolvedEmail,
       password: password,
     );
+
+    if (response.session != null) {
+      _applySignedInSession(response.session!);
+    } else {
+      await _waitForSessionAfterSignIn();
+    }
+
+    return response;
   }
 
   Future<void> signOut() async {

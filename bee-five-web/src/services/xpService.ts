@@ -13,14 +13,14 @@ const LAST_LOGIN_DATE_KEY = 'last_login_date';
 export const defaultXp = DEFAULT_USER_XP;
 export const xpClassicThreeWins = 2;
 export const xpHardPracticeWin = 1;
+export const xpAdventureMatchWin = 1;
+export const xpAdventureMilestoneLevelWin = 3;
 export const xpAdventureOneLoss = 1;
-export const xpAdventureTwoWins = 1;
-export const xpAdventureFirstLevelComplete = 1;
-export const xpAdventureMultipleOf10 = 5;
 export const xpSchoolLobbyMatchDelta = 1;
+export const xpRewardedAdWatch = 2;
 
 export const liveMatchesRequiresXpMessage =
-  'You need at least 1 XP to play Live Matches. Earn XP in Adventure or Classic mode.';
+  'You need at least 1 XP to play Live Matches. Earn XP in Adventure or Classic mode, or watch an ad for +2 XP in the mobile app.';
 
 export type XpResult = { newXp: number; delta: number };
 
@@ -68,22 +68,6 @@ function readAdventureProgressSnapshot(userId?: string | null): { current: numbe
   }
 
   return { current: 1, highest: 1 };
-}
-
-function effectiveAdventureFrontierLevel(ctx?: AdventureXpContext, userId?: string | null): number {
-  if (ctx) {
-    return Math.max(ctx.currentLevel, ctx.highestUnlocked);
-  }
-  const snap = readAdventureProgressSnapshot(userId);
-  return Math.max(snap.current, snap.highest);
-}
-
-function isAdventureFrontierLevel(
-  levelJustPlayedOrCompleted: number,
-  ctx?: AdventureXpContext,
-  userId?: string | null
-): boolean {
-  return levelJustPlayedOrCompleted === effectiveAdventureFrontierLevel(ctx, userId);
 }
 
 function currentUserId(): string | null {
@@ -201,54 +185,28 @@ export function onAdventureMatchLost(options?: {
   writeLocalXpAuxState(resolvedUserId, { adventureConsecutiveWins: 0 });
   triggerCloudSync();
 
-  const levelJustPlayed = options?.levelJustPlayed;
-  if (levelJustPlayed != null) {
-    const eligible = isAdventureFrontierLevel(
-      levelJustPlayed,
-      options?.adventureContext,
-      resolvedUserId
-    );
-    if (!eligible) {
-      return { newXp: getXp(), delta: 0 };
-    }
-  }
-
   const newXp = removeXp(xpAdventureOneLoss);
   return { newXp, delta: -xpAdventureOneLoss };
 }
 
 export function onAdventureGameWon(options?: {
   levelJustPlayed?: number;
+  levelClearingWin?: boolean;
   adventureContext?: AdventureXpContext;
   userId?: string | null;
 }): XpResult {
-  const resolvedUserId = options?.userId ?? currentUserId();
-  ensureAdventureFirstClearXpMigrated(options?.adventureContext, resolvedUserId);
-
+  ensureAdventureFirstClearXpMigrated(options?.adventureContext, options?.userId ?? currentUserId());
   const levelJustPlayed = options?.levelJustPlayed;
-  if (levelJustPlayed != null) {
-    const eligible = isAdventureFrontierLevel(
-      levelJustPlayed,
-      options?.adventureContext,
-      resolvedUserId
-    );
-    if (!eligible) {
-      return { newXp: getXp(), delta: 0 };
-    }
-  }
-
-  const aux = readLocalXpAuxState(resolvedUserId);
-  const wins = aux.adventureConsecutiveWins + 1;
-
-  if (wins >= 2) {
-    writeLocalXpAuxState(resolvedUserId, { adventureConsecutiveWins: 0 });
-    const newXp = addXp(xpAdventureTwoWins);
-    return { newXp, delta: xpAdventureTwoWins };
-  }
-
-  writeLocalXpAuxState(resolvedUserId, { adventureConsecutiveWins: wins });
-  triggerCloudSync();
-  return { newXp: getXp(), delta: 0 };
+  const levelClearingWin = options?.levelClearingWin ?? false;
+  const delta =
+    levelClearingWin &&
+    levelJustPlayed != null &&
+    levelJustPlayed > 0 &&
+    levelJustPlayed % 10 === 0
+      ? xpAdventureMilestoneLevelWin
+      : xpAdventureMatchWin;
+  const newXp = addXp(delta);
+  return { newXp, delta };
 }
 
 export function onAdventureLevelWon(
@@ -264,32 +222,15 @@ export function onAdventureLevelWon(
   const aux = readLocalXpAuxState(resolvedUserId);
   writeLocalXpAuxState(resolvedUserId, { adventureConsecutiveLosses: 0 });
 
-  let delta = 0;
   const levelKey = levelJustCompleted;
   if (!aux.adventureLevelsFirstClear.includes(levelKey)) {
     const nextList = [...aux.adventureLevelsFirstClear, levelKey].sort((a, b) => a - b);
     writeLocalXpAuxState(resolvedUserId, { adventureLevelsFirstClear: nextList });
-    addXp(xpAdventureFirstLevelComplete);
-    delta += xpAdventureFirstLevelComplete;
   } else {
     triggerCloudSync();
   }
 
-  const eligible = isAdventureFrontierLevel(
-    levelJustCompleted,
-    options?.adventureContext,
-    resolvedUserId
-  );
-  if (!eligible) {
-    return { newXp: getXp(), delta };
-  }
-
-  if (levelJustCompleted > 0 && levelJustCompleted % 10 === 0) {
-    addXp(xpAdventureMultipleOf10);
-    delta += xpAdventureMultipleOf10;
-  }
-
-  return { newXp: getXp(), delta };
+  return { newXp: getXp(), delta: 0 };
 }
 
 export function onClassicStreakWin(classicGamesWonAfterThisWin: number): XpResult {
@@ -303,6 +244,10 @@ export function onClassicStreakWin(classicGamesWonAfterThisWin: number): XpResul
 export function onHardPracticeWin(): XpResult {
   const newXp = addXp(xpHardPracticeWin);
   return { newXp, delta: xpHardPracticeWin };
+}
+
+export function onRewardedAdWatched(): number {
+  return addXp(xpRewardedAdWatch);
 }
 
 export function getDailyChallengeStatus(): { playedToday: boolean; won: boolean | null } {

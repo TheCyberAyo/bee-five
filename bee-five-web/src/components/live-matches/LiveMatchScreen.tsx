@@ -64,8 +64,15 @@ export default function LiveMatchScreen({
   const [endDialog, setEndDialog] = useState<EndDialog | null>(null);
   const [rematchChallenge, setRematchChallenge] = useState<Record<string, unknown> | null>(null);
   const [rematchHandled, setRematchHandled] = useState(false);
+  const [rematchSent, setRematchSent] = useState(false);
   const [resultXpRecorded, setResultXpRecorded] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const canOfferRematch =
+    !rematchHandled &&
+    !rematchSent &&
+    !rematchChallenge &&
+    !mgMultiplayerService.hasPendingChallengeTo(opponentId);
 
   const openingSeat =
     priorMatchCount != null ? onlineMatchFirstSeat(priorMatchCount) : 1;
@@ -276,12 +283,22 @@ export default function LiveMatchScreen({
   const sendMove = (event: Record<string, unknown>) =>
     mgMultiplayerService.sendGameEvent(myId, event);
 
+  const openRematch = useCallback(
+    (newMatchId: string) => {
+      if (!newMatchId || rematchHandled) return;
+      setRematchHandled(true);
+      onRematch?.(newMatchId, opponentId, opponentUsername);
+    },
+    [rematchHandled, onRematch, opponentId, opponentUsername],
+  );
+
   useEffect(() => {
-    if (!endDialog || rematchHandled || endDialog.kind === 'void') return;
+    if (!matchEnded || rematchHandled) return;
 
     const unsubs = [
       mgMultiplayerService.onChallenge((payload) => {
         if (payload.from_id?.toString() !== opponentId) return;
+        if (mgMultiplayerService.hasPendingChallengeTo(opponentId)) return;
         setRematchChallenge(payload);
       }),
       mgMultiplayerService.onChallengeResponse((payload) => {
@@ -289,37 +306,41 @@ export default function LiveMatchScreen({
         if (payload.accepted === true) {
           openRematch(payload.match_id?.toString() ?? '');
         } else {
+          setRematchSent(false);
           setStatusMessage(`${opponentUsername} declined the rematch`);
         }
       }),
       mgMultiplayerService.onMatchStart((payload) => {
         if (payload.opponent_id?.toString() !== opponentId) return;
+        if (payload.mutual === true) {
+          setStatusMessage('Both players requested a rematch — starting now…');
+        }
         openRematch(payload.match_id?.toString() ?? '');
       }),
     ];
 
     return () => unsubs.forEach((u) => u());
-  }, [endDialog, rematchHandled, opponentId, opponentUsername]);
-
-  const openRematch = (newMatchId: string) => {
-    if (!newMatchId || rematchHandled) return;
-    setRematchHandled(true);
-    onRematch?.(newMatchId, opponentId, opponentUsername);
-  };
+  }, [matchEnded, rematchHandled, opponentId, opponentUsername, openRematch]);
 
   const onRematchPressed = async () => {
-    if (!matchEnded || rematchHandled) return;
+    if (!matchEnded || !canOfferRematch) return;
+
+    const proposedMatchId = crypto.randomUUID();
+    mgMultiplayerService.stageOutgoingChallenge(opponentId, proposedMatchId);
+
     setEndDialog(null);
+    setRematchSent(true);
 
     ensureXpInitialized();
     const xp = getXp();
     if (!canPlayLiveMatches(xp)) {
+      mgMultiplayerService.cancelOutgoingChallenge(opponentId);
+      setRematchSent(false);
       setStatusMessage(liveMatchesRequiresXpMessage);
       return;
     }
 
-    const newMatchId = crypto.randomUUID();
-    mgMultiplayerService.stageOutgoingChallenge(opponentId, newMatchId);
+    const matchId = mgMultiplayerService.matchIdForOutgoingChallenge(opponentId, proposedMatchId);
     await mgMultiplayerService.setIdle(myId, myUsername, myElo, xp);
     await mgMultiplayerService.sendChallenge({
       fromId: myId,
@@ -327,10 +348,16 @@ export default function LiveMatchScreen({
       fromElo: myElo,
       fromBeeFiveXp: xp,
       toId: opponentId,
-      matchId: newMatchId,
+      matchId,
     });
     setStatusMessage(`Rematch sent to ${opponentUsername}…`);
   };
+
+  const rematchButtonLabel = rematchChallenge
+    ? 'Rematch offered'
+    : rematchSent
+      ? 'Rematch sent…'
+      : 'Rematch';
 
   const seatSubtitle = (seat: 1 | 2, colorLabel: string, isYou: boolean) => {
     const who = isYou ? `You · ${colorLabel}` : colorLabel;
@@ -380,8 +407,17 @@ export default function LiveMatchScreen({
             <h3 style={{ fontWeight: 800 }}>Draw</h3>
             <p>{mineStr != null ? `Match drawn. Your ELO change: ${mineStr}` : 'Match drawn.'}</p>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => void onRematchPressed()} style={primaryBlackButtonStyle}>
-                Rematch
+              <button
+                type="button"
+                disabled={!canOfferRematch}
+                onClick={() => void onRematchPressed()}
+                style={{
+                  ...primaryBlackButtonStyle,
+                  opacity: canOfferRematch ? 1 : 0.45,
+                  cursor: canOfferRematch ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {rematchButtonLabel}
               </button>
               <button type="button" onClick={onBackToLobby}>Back to School Lobby</button>
             </div>
@@ -416,8 +452,17 @@ export default function LiveMatchScreen({
             </p>
           )}
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => void onRematchPressed()} style={primaryBlackButtonStyle}>
-              Rematch
+            <button
+              type="button"
+              disabled={!canOfferRematch}
+              onClick={() => void onRematchPressed()}
+              style={{
+                ...primaryBlackButtonStyle,
+                opacity: canOfferRematch ? 1 : 0.45,
+                cursor: canOfferRematch ? 'pointer' : 'not-allowed',
+              }}
+            >
+              {rematchButtonLabel}
             </button>
             <button type="button" onClick={onBackToLobby}>Back to School Lobby</button>
           </div>

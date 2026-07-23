@@ -4,7 +4,6 @@
 // ============================================================
 
 import '../utils/player_rank.dart';
-import '../xp_service.dart' show defaultXp;
 
 enum PlayerStatus { idle, searching, inMatch }
 
@@ -16,7 +15,7 @@ class PlayerPresence {
   final String institution;
   /// ISO 3166-1 alpha-2 country code for flag emoji (empty if unknown).
   final String countryCode;
-  /// Bee Five XP from presence (local game XP); defaults if absent (legacy clients).
+  /// Bee Five XP from lobby presence (0 if absent).
   final int beeFiveXp;
   final PlayerStatus status;
 
@@ -63,12 +62,9 @@ class PlayerPresence {
     return int.tryParse(v.toString());
   }
 
-  /// Reported lobby XP; missing field → [defaultXp] so legacy clients stay challengeable.
+  /// Reported lobby XP; missing field → 0 so only players with XP are challengeable.
   static int _parseXp(dynamic v) {
-    if (v == null) return defaultXp;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? defaultXp;
+    return _parseInt(v) ?? 0;
   }
 
   Map<String, dynamic> toMap() => {

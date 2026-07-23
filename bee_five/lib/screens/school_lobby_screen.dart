@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../ads/multiplayer_ad_constants.dart';
+import '../ads/ad_log.dart';
 import '../models/player_presence.dart';
 import '../services/multiplayer_service.dart';
 import '../utils/country_data.dart';
@@ -290,6 +291,7 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
           if (mounted) setState(() => _isLobbyBannerLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('school lobby banner', error);
           ad.dispose();
           if (mounted) setState(() => _isLobbyBannerLoaded = false);
         },
@@ -339,6 +341,16 @@ class _SchoolLobbyScreenState extends State<SchoolLobbyScreen>
 
     await ensureXpInitialized();
     _myLobbyXp = await getXp();
+
+    if (!canPlayLiveMatches(_myLobbyXp)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(liveMatchesRequiresXpMessage)),
+        );
+        Navigator.of(context).pop();
+      }
+      return;
+    }
 
     await _resolveInstitutionAndSchools();
 

@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'ads/ad_unit_ids.dart';
+import 'ads/ad_log.dart';
 import 'adventure_game.dart';
 import 'contexts/auth_context.dart';
 import 'simple_game.dart' hide GameMode;
@@ -28,6 +30,7 @@ import 'supabase_client.dart';
 import 'utils/country_data.dart';
 import 'widgets/country_picker_sheet.dart';
 import 'widgets/join_school_dialog.dart';
+import 'widgets/adventure_board_preview.dart';
 import 'xp_service.dart';
 
 /// Contact email for Connect messages and privacy policy (Connect UI hides this).
@@ -102,96 +105,6 @@ class _AsyncInboxItem {
   }
 }
 
-// Adventure stages for map background
-class AdventureStage {
-  final String name;
-  final int games;
-  final String emoji;
-  final Color color;
-  final String description;
-
-  AdventureStage({
-    required this.name,
-    required this.games,
-    required this.emoji,
-    required this.color,
-    required this.description,
-  });
-}
-
-final List<AdventureStage> adventureStages = [
-  AdventureStage(
-    name: "The Whispering Egg",
-    games: 1,
-    emoji: '🥚',
-    color: const Color(0xFFFFE4B5),
-    description: "The prophecy of a hero is laid within a golden cell.",
-  ),
-  AdventureStage(
-    name: "Larva of Legends",
-    games: 201,
-    emoji: '🐛',
-    color: const Color(0xFF98FB98),
-    description: "A tiny creature begins its fabled journey of growth.",
-  ),
-  AdventureStage(
-    name: "Chamber of Royal Nectar",
-    games: 401,
-    emoji: '🍬',
-    color: const Color(0xFFFFD700),
-    description: "A mystical hall where power and destiny are forged.",
-  ),
-  AdventureStage(
-    name: "Silken Cocoon of Secrets",
-    games: 601,
-    emoji: '🕸️',
-    color: const Color(0xFFDDA0DD),
-    description: "Spinning a magical shell to transform.",
-  ),
-  AdventureStage(
-    name: "Dreams of the Pupa Realm",
-    games: 801,
-    emoji: '🦋',
-    color: const Color(0xFF87CEEB),
-    description: "Visions of wings and future battles stir inside.",
-  ),
-  AdventureStage(
-    name: "Wings of Dawn",
-    games: 1001,
-    emoji: '🌅',
-    color: const Color(0xFFFFA500),
-    description: "Breaking free and taking the first heroic flight.",
-  ),
-  AdventureStage(
-    name: "Hive of Trials",
-    games: 1201,
-    emoji: '🏠',
-    color: const Color(0xFF90EE90),
-    description: "Training in ancient duties and learning hidden arts.",
-  ),
-  AdventureStage(
-    name: "Trails of Golden Pollen",
-    games: 1401,
-    emoji: '🌻',
-    color: const Color(0xFFFFC30B),
-    description: "Quests across wildflower kingdoms to gather treasure.",
-  ),
-  AdventureStage(
-    name: "Sentinel of the Hiveheart",
-    games: 1601,
-    emoji: '🛡️',
-    color: const Color(0xFFB0C4DE),
-    description: "Standing guard against dark invaders.",
-  ),
-  AdventureStage(
-    name: "Crown of the Queen-Bee",
-    games: 1801,
-    emoji: '👑',
-    color: const Color(0xFFFF69B4),
-    description: "Ascend the throne, lead the swarm, or begin a new dynasty.",
-  ),
-];
-
 const int totalGames = 2000;
 const Color primaryYellow = Color(0xFFFFC30B);
 
@@ -216,222 +129,6 @@ class _WordLimitInputFormatter extends TextInputFormatter {
   }
 }
 
-/// Returns path for a flat-top hexagon centered at 0,0 with given radius.
-Path hexagonPath(double radius) {
-  const int sides = 6;
-  final path = Path();
-  for (int i = 0; i < sides; i++) {
-    final angle = (math.pi / 3) * i - math.pi / 6;
-    final x = radius * math.cos(angle);
-    final y = radius * math.sin(angle);
-    if (i == 0) {
-      path.moveTo(x, y);
-    } else {
-      path.lineTo(x, y);
-    }
-  }
-  path.close();
-  return path;
-}
-
-/// Golden winding path painter: draws a thick path through level positions.
-class WindingPathPainter extends CustomPainter {
-  final Size screenSize;
-  final List<Offset> pathPoints;
-  final double pathWidth;
-
-  WindingPathPainter({
-    required this.screenSize,
-    required this.pathPoints,
-    this.pathWidth = 28,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (pathPoints.length < 2) return;
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    paint.color = const Color(0xFF6b5010);
-    paint.strokeWidth = pathWidth + 6;
-    canvas.drawPath(_pathFromPoints(), paint);
-    paint.color = const Color(0xFFa08020);
-    paint.strokeWidth = pathWidth;
-    canvas.drawPath(_pathFromPoints(), paint);
-    paint.color = const Color(0xFFE6AC00);
-    paint.strokeWidth = 3;
-    canvas.drawPath(_pathFromPoints(), paint);
-  }
-
-  Path _pathFromPoints() {
-    final path = Path()..moveTo(pathPoints.first.dx, pathPoints.first.dy);
-    for (int i = 1; i < pathPoints.length; i++) {
-      path.lineTo(pathPoints[i].dx, pathPoints[i].dy);
-    }
-    return path;
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-/// Single level marker hexagon.
-/// Color rules:
-///   green  = isPassed (already beaten) — clickable to replay
-///   orange = isCurrent (bee sits here) — clickable
-///   red    = everything else (locked or not yet reached) — locked ones are non-tappable
-class HexagonLevelMarker extends StatelessWidget {
-  final int levelNumber;
-  final bool isCurrent;
-  final bool isLocked;
-  final bool isPassed;
-  final VoidCallback? onTap;
-  final double size;
-
-  const HexagonLevelMarker({
-    super.key,
-    required this.levelNumber,
-    this.isCurrent = false,
-    this.isLocked = false,
-    this.isPassed = false,
-    this.onTap,
-    this.size = 36,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final Color fillColor;
-    if (isPassed && !isCurrent) {
-      fillColor = const Color(0xFF4CAF50); // green — already passed
-    } else if (isCurrent) {
-      fillColor = const Color(0xFFFF9800); // orange — current level
-    } else {
-      fillColor = const Color(0xFFE53935); // red — locked or not yet reached
-    }
-
-    return IgnorePointer(
-      ignoring: isLocked,
-      child: GestureDetector(
-        onTap: isLocked ? null : onTap,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CustomPaint(
-              size: Size(size * 1.15, size * 1.15),
-              painter: _HexagonShapePainter(
-                fillColor: fillColor,
-                borderColor: isCurrent ? Colors.black : Colors.white,
-                borderWidth: isCurrent ? 3 : 2,
-              ),
-            ),
-            Positioned.fill(
-              child: Center(
-                child: Text(
-                  '$levelNumber',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    shadows: [Shadow(color: Colors.black45, offset: Offset(1, 1), blurRadius: 1)],
-                  ),
-                ),
-              ),
-            ),
-            if (isCurrent && !isLocked)
-              Positioned(
-                top: -20,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Text('🐝', style: TextStyle(fontSize: size * 0.55)),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HexagonShapePainter extends CustomPainter {
-  final Color fillColor;
-  final Color borderColor;
-  final double borderWidth;
-
-  _HexagonShapePainter({
-    required this.fillColor,
-    required this.borderColor,
-    required this.borderWidth,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide / 2 - 2;
-    final path = hexagonPath(radius).shift(center);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = fillColor
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = borderColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = borderWidth,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _VolcanoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width * 0.5, 0)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = const Color(0xFF4a4a4a)
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.black26
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(size.width * 0.5, size.height * 0.15),
-        width: size.width * 0.5,
-        height: size.height * 0.15,
-      ),
-      Paint()..color = const Color(0xFFE74C3C),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(size.width * 0.5, size.height * 0.12),
-        width: size.width * 0.3,
-        height: size.height * 0.08,
-      ),
-      Paint()..color = const Color(0xFFF5B041),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -440,6 +137,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin, WidgetsBindingObserver {
+  /// Top inset for status bar / safe area. Board and menu stay at [_boardTop].
+  static const double _headerTopOffset = 50.0;
+  static const double _headerHeight = 64.0;
+  static const double _titleBandHeight = 92.0;
+  static const double _boardTop = 151.0;
+
   GameMode gameMode = GameMode.menu;
   bool showDifficultyModal = false;
   bool showTimerModal = false;
@@ -464,8 +167,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   // and skip their setState — preventing them from overwriting a reset.
   int _progressGeneration = 0;
 
-  double mapScrollY = 0;
-  final ScrollController mapScrollController = ScrollController();
   final TextEditingController _talkToUsController = TextEditingController();
   final GlobalKey _connectTalkToUsKey = GlobalKey();
   final FocusNode _connectTalkToUsFocus = FocusNode();
@@ -577,9 +278,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         highestUnlockedGame = localHighest;
         currentGame = localHighest;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scrollMapToCurrentLevel();
-      });
     }
 
     // Step 2: sync with Supabase / service and take the max so neither source
@@ -597,10 +295,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     });
 
     await _saveHighest(resolvedHighest);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scrollMapToCurrentLevel();
-    });
   }
 
   @override
@@ -619,9 +313,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       if (mounted) {
         setState(() => soundEnabled = BackgroundSound.instance.soundEnabled);
       }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scheduleScrollToCurrentLevel();
     });
     _connectTalkToUsFocus.addListener(_onConnectTalkToUsFocusChange);
 
@@ -1224,18 +915,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     final username = _globalLobby.username;
     if (userId == null || username == null) return;
 
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => MatchScreen(
-          matchId: matchId,
-          myId: userId,
-          myUsername: username,
-          myElo: _globalLobby.elo,
-          opponentId: opponentId,
-          opponentUsername: opponentUsername,
-          lobbyBeeFiveXp: _globalLobby.lobbyBeeFiveXp,
-          restoreSearchingWhenLeaving: false,
-        ),
+    openLiveMatch(
+      context,
+      MatchScreen(
+        matchId: matchId,
+        myId: userId,
+        myUsername: username,
+        myElo: _globalLobby.elo,
+        opponentId: opponentId,
+        opponentUsername: opponentUsername,
+        lobbyBeeFiveXp: _globalLobby.lobbyBeeFiveXp,
+        restoreSearchingWhenLeaving: false,
       ),
     ).then((_) {
       if (!mounted) return;
@@ -1254,7 +944,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     bee1Controller.dispose();
     bee2Controller.dispose();
     bee3Controller.dispose();
-    mapScrollController.dispose();
     _rewardedAd?.dispose();
     _practiceBannerAd?.dispose();
     _homeBannerAd?.dispose();
@@ -1267,7 +956,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
 
   void _loadPracticeBannerAd() {
     _practiceBannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -1275,6 +964,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           if (mounted) setState(() => _isPracticeBannerAdLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('home practice banner', error);
           ad.dispose();
           if (mounted) setState(() => _isPracticeBannerAdLoaded = false);
         },
@@ -1284,13 +974,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
 
   void _loadPracticeInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      adUnitId: kInterstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _practiceInterstitialAd = ad;
         },
         onAdFailedToLoad: (error) {
+          logAdLoadFailure('home practice interstitial', error);
           _practiceInterstitialAd = null;
         },
       ),
@@ -1299,7 +990,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
 
   void _loadHomeBannerAd() {
     _homeBannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -1307,6 +998,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           if (mounted) setState(() => _isHomeBannerAdLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('home menu banner', error);
           ad.dispose();
           if (mounted) setState(() => _isHomeBannerAdLoaded = false);
         },
@@ -1389,207 +1081,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     }
   }
 
-  Map<String, double> getGamePosition(int gameNumber, Size screenSize) {
-    final isMobile = screenSize.width <= 768;
-    final gameIndex = gameNumber - 1;
-    final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing;
-    final y = totalHeight - (gameIndex * spacing);
-
-    final gamesPerSide = 4;
-    final sideIndex = (gameIndex / gamesPerSide).floor();
-    final positionInSide = gameIndex % gamesPerSide;
-
-    double x;
-    if (isMobile) {
-      if (sideIndex % 2 == 0) {
-        if (positionInSide == 0) {
-          x = 15;
-        } else if (positionInSide == 1) {
-          x = 25;
-        } else if (positionInSide == 2) {
-          x = 35;
-        } else {
-          x = 45;
-        }
-      } else {
-        if (positionInSide == 0) {
-          x = 55;
-        } else if (positionInSide == 1) {
-          x = 65;
-        } else if (positionInSide == 2) {
-          x = 55;
-        } else {
-          x = 45;
-        }
-      }
-    } else {
-      if (sideIndex % 2 == 0) {
-        if (positionInSide < 2) {
-          x = 8 + (positionInSide * 12);
-        } else {
-          x = 28 + ((positionInSide - 2) * 12);
-        }
-      } else {
-        if (positionInSide < 2) {
-          x = 72 + (positionInSide * 12);
-        } else {
-          x = 52 + ((positionInSide - 2) * 12);
-        }
-      }
-    }
-
-    return {
-      'left': math.max(5.0, math.min(95.0, x)),
-      'top': y,
-    };
-  }
-
-  List<Widget> _buildMapImagery(Size screenSize, double totalHeight) {
-    const imageSize = 144.0;
-    const imageSizeSmall = 72.0;
-    const sideOffset = 28.0;
-    final positions = <Widget>[];
-
-    for (var level = 1; level <= totalGames; level += 10) {
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSize / 2).clamp(4.0, totalHeight - imageSize - 4);
-      final left = (pathX - imageSize - sideOffset).clamp(4.0, screenSize.width - imageSize - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/pollen.png',
-            width: imageSize,
-            height: imageSize,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-
-    for (var level = 5; level <= totalGames; level += 10) {
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSize / 2).clamp(4.0, totalHeight - imageSize - 4);
-      final left = (pathX + sideOffset).clamp(4.0, screenSize.width - imageSize - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/honeycomb.png',
-            width: imageSize,
-            height: imageSize,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-
-    for (var level = 16; level <= totalGames; level += 16) {
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSizeSmall / 2).clamp(4.0, totalHeight - imageSizeSmall - 4);
-      final left = (pathX + sideOffset).clamp(4.0, screenSize.width - imageSizeSmall - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/honey.png',
-            width: imageSizeSmall,
-            height: imageSizeSmall,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-
-    for (var level = 13; level <= totalGames; level += 13) {
-      if (level % 16 == 0) continue;
-      final pos = getGamePosition(level, screenSize);
-      final pathX = screenSize.width * (pos['left']! / 100);
-      final top = (pos['top']! - imageSizeSmall / 2).clamp(4.0, totalHeight - imageSizeSmall - 4);
-      final left = (pathX - imageSizeSmall - sideOffset).clamp(4.0, screenSize.width - imageSizeSmall - 4);
-      positions.add(
-        Positioned(
-          left: left,
-          top: top,
-          child: Image.asset(
-            'assets/mapImagery/nectar.png',
-            width: imageSizeSmall,
-            height: imageSizeSmall,
-            fit: BoxFit.contain,
-            errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      );
-    }
-    return positions;
-  }
-
-  Map<String, int> getVisibleGameRange(Size screenSize) {
-    final isMobile = screenSize.width <= 768;
-    final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing;
-    final viewportHeight = math.max(100.0, (screenSize.height - 324) * 0.9);
-    final buffer = viewportHeight * 2;
-    final startY = math.max(0.0, mapScrollY - buffer);
-    final endY = mapScrollY + viewportHeight + buffer;
-    final startGame = math.max(1, ((totalHeight - endY) / spacing).floor() + 1);
-    final endGame = math.min(totalGames, ((totalHeight - startY) / spacing).floor() + 1);
-    return {
-      'startGame': math.max(1, startGame - 20),
-      'endGame': math.min(totalGames, endGame + 20),
-    };
-  }
-
-  void _scrollMapToCurrentLevel() {
-    if (!mounted || !mapScrollController.hasClients) return;
-
-    final screenSize = MediaQuery.sizeOf(context);
-    final isMobile = screenSize.width <= 768;
-    final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing;
-
-    final levelY = totalHeight - (currentGame - 1) * spacing;
-    final viewportHeight = mapScrollController.position.viewportDimension;
-
-    double targetOffset = levelY - (viewportHeight / 2);
-    targetOffset = targetOffset.clamp(0.0, mapScrollController.position.maxScrollExtent);
-
-    mapScrollController.jumpTo(targetOffset);
-  }
-
-  void _scheduleScrollToCurrentLevel() {
-    void attemptScroll(int attempt) {
-      if (!mounted) return;
-      if (mapScrollController.hasClients) {
-        _scrollMapToCurrentLevel();
-      } else if (attempt < 5) {
-        Future.delayed(Duration(milliseconds: 100 * attempt), () {
-          attemptScroll(attempt + 1);
-        });
-      }
-    }
-    attemptScroll(1);
-  }
-
   (double, double) _mapVerticalMargins(Size screenSize) {
-    const topOfSpace = 151.0;
-    const bottomOfSpaceFromBottom = 155.0;
-    final availableHeight = screenSize.height - topOfSpace - bottomOfSpaceFromBottom;
-    final mapHeight = (screenSize.height - 324) * 0.9;
-    final totalMargin = math.max(0.0, availableHeight - mapHeight);
-    final marginTop = totalMargin * 0.25;
-    final marginBottom = totalMargin * 0.75;
-    return (marginTop, marginBottom);
+    return (0.0, 0.0);
   }
 
   Widget buildMapBackground(Size screenSize) {
@@ -1598,19 +1091,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     }
 
     final isMobile = screenSize.width <= 768;
-    final spacing = isMobile ? 60.0 : 80.0;
-    final totalHeight = totalGames * spacing;
-    final visibleRange = getVisibleGameRange(screenSize);
     final (mapMarginTop, mapMarginBottom) = _mapVerticalMargins(screenSize);
 
     return Stack(
       children: [
         Positioned(
-          top: 0,
+          top: _headerTopOffset,
           left: 0,
           right: 0,
           child: Container(
-            height: 74,
+            height: _headerHeight,
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.5),
               boxShadow: [
@@ -1622,9 +1112,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
               ],
             ),
             padding: EdgeInsets.only(
-              top: 10,
-              left: isMobile ? 12 : 16,
-              right: isMobile ? 12 : 16,
+              top: 4,
+              left: isMobile ? 8 : 10,
+              right: isMobile ? 8 : 10,
               bottom: 0,
             ),
             child: Stack(
@@ -1692,10 +1182,68 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         ),
 
         Positioned(
-          top: 74,
+          top: _boardTop + mapMarginTop,
           left: 0,
           right: 0,
-          height: 92,
+          bottom: 155 + mapMarginBottom,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: primaryYellow,
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxBoard = homeBoardMaxWidth(isMobile);
+                    final boardSize = math.min(
+                      constraints.maxWidth,
+                      math.min(constraints.maxHeight, maxBoard),
+                    );
+                    return Opacity(
+                      opacity: 0.82,
+                      child: Center(
+                        child: AdventureBoardPreview(
+                          gameNumber: currentGame,
+                          isMobile: isMobile,
+                          size: boardSize,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Positioned(
+                  right: -120,
+                  bottom: -150,
+                  child: SizedBox(
+                    width: 300,
+                    height: 480,
+                    child: ClipRect(
+                      clipBehavior: Clip.hardEdge,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Image.asset(
+                          'assets/mapImagery/beefivemascot.png',
+                          width: 600,
+                          height: 480,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Above board layer so the title stays visible after the header offset.
+        Positioned(
+          top: _headerTopOffset + _headerHeight,
+          left: 0,
+          right: 0,
+          height: _titleBandHeight,
           child: Container(
             color: primaryYellow,
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1721,324 +1269,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       fontWeight: FontWeight.w600,
                     ),
                     children: const [
-                      TextSpan(text: 'Outthink', style: TextStyle(color: Colors.orange)),
+                      TextSpan(text: 'Outthink', style: TextStyle(color: Color(0xFFC62828))),
                       TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
-                      TextSpan(text: 'Connect 5', style: TextStyle(color: Colors.red)),
+                      TextSpan(text: 'Connect 5', style: TextStyle(color: Color(0xFFC2410C))),
                       TextSpan(text: ' ● ', style: TextStyle(color: Colors.black87)),
-                      TextSpan(text: 'Win', style: TextStyle(color: Colors.green)),
+                      TextSpan(text: 'Win', style: TextStyle(color: Color(0xFF4CAF50))),
                     ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        Positioned(
-          top: 151 + mapMarginTop,
-          left: 0,
-          right: 0,
-          bottom: 155 + mapMarginBottom,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFe8d48b),
-                  Color(0xFFc9b85c),
-                  Color(0xFFa89840),
-                  Color(0xFF8b7a2e),
-                ],
-              ),
-              border: Border.all(
-                color: Colors.black,
-                width: 3,
-              ),
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification is ScrollUpdateNotification) {
-                      setState(() => mapScrollY = mapScrollController.offset);
-                    }
-                    if (notification is ScrollEndNotification || notification is ScrollUpdateNotification) {
-                      final pos = mapScrollController.position;
-                      if (pos.hasContentDimensions && pos.viewportDimension > 0) {
-                        final screenSize = MediaQuery.sizeOf(context);
-                        final isMobile = screenSize.width <= 768;
-                        final spacing = isMobile ? 60.0 : 80.0;
-                        final totalHeight = totalGames * spacing;
-                        final minOffset = _minMapScrollOffset(screenSize, totalHeight, spacing, pos.viewportDimension).clamp(0.0, pos.maxScrollExtent);
-                        if (pos.pixels < minOffset) {
-                          mapScrollController.jumpTo(minOffset);
-                        }
-                      }
-                    }
-                    return false;
-                  },
-                  child: SingleChildScrollView(
-                    controller: mapScrollController,
-                    child: SizedBox(
-                      height: totalHeight,
-                      width: screenSize.width,
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: -80,
-                            top: totalHeight * 0.6,
-                            child: Container(
-                              width: 280,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.rectangle,
-                                borderRadius: BorderRadius.circular(100),
-                                gradient: const LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Color(0xFFa89840), Color(0xFFc9b85c)],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            right: -60,
-                            top: totalHeight * 0.65,
-                            child: Container(
-                              width: 220,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(80),
-                                gradient: const LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Color(0xFF8b7a2e), Color(0xFFb8982e)],
-                                ),
-                              ),
-                            ),
-                          ),
-                          CustomPaint(
-                            size: Size(screenSize.width, totalHeight),
-                            painter: WindingPathPainter(
-                              screenSize: screenSize,
-                              pathPoints: List.generate(
-                                visibleRange['endGame']! - visibleRange['startGame']! + 1,
-                                (i) {
-                                  final g = visibleRange['startGame']! + i;
-                                  final pos = getGamePosition(g, screenSize);
-                                  return Offset(
-                                    screenSize.width * (pos['left']! / 100),
-                                    pos['top']!,
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: 0,
-                            top: totalHeight * 0.72,
-                            child: Container(
-                              width: screenSize.width,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [Color(0xFF5DADE2), Color(0xFF3498DB)],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: screenSize.width * 0.35,
-                            top: totalHeight * 0.71,
-                            child: Container(
-                              width: screenSize.width * 0.3,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF8B4513),
-                                borderRadius: BorderRadius.circular(4),
-                                boxShadow: const [
-                                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: List.generate(5, (_) => Container(width: 2, height: 10, color: const Color(0xFF5D4037))),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            right: screenSize.width * 0.05,
-                            top: totalHeight * 0.78,
-                            child: CustomPaint(
-                              size: const Size(50, 70),
-                              painter: _VolcanoPainter(),
-                            ),
-                          ),
-                          ..._buildMapImagery(screenSize, totalHeight),
-                          Positioned(
-                            right: screenSize.width * 0.08,
-                            top: totalHeight * 0.08,
-                            child: Image.asset(
-                              'assets/homeImagery/home.png',
-                              width: 36,
-                              height: 36,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                            ),
-                          ),
-                          ...List.generate(40, (i) {
-                            final gameIndex = visibleRange['startGame']! + (i * 2);
-                            if (gameIndex > visibleRange['endGame']!) return null;
-                            final position = getGamePosition(gameIndex, screenSize);
-                            final pathX = screenSize.width * (position['left']! / 100);
-                            final leftX = pathX - 42 - (i % 3) * 8;
-                            if (leftX < -20) return null;
-                            const leftFlowerPaths = [
-                              'assets/mapImagery/borage.png',
-                              'assets/mapImagery/clover.png',
-                              'assets/mapImagery/echinacea.png',
-                              'assets/mapImagery/lavender.png',
-                              'assets/mapImagery/sunflower.png',
-                            ];
-                            const flowerSize = 60.0;
-                            return Positioned(
-                              left: leftX,
-                              top: position['top']! - 12 + (i % 5) * 4,
-                              child: Image.asset(
-                                leftFlowerPaths[i % leftFlowerPaths.length],
-                                width: flowerSize,
-                                height: flowerSize,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                              ),
-                            );
-                          }).whereType<Widget>(),
-                          ...List.generate(40, (i) {
-                            final gameIndex = visibleRange['startGame']! + (i * 2);
-                            if (gameIndex > visibleRange['endGame']!) return null;
-                            final position = getGamePosition(gameIndex, screenSize);
-                            final pathX = screenSize.width * (position['left']! / 100);
-                            final rightX = pathX + 42 + (i % 3) * 8;
-                            if (rightX > screenSize.width - 10) return null;
-                            const rightFlowerPaths = [
-                              'assets/mapImagery/borage.png',
-                              'assets/mapImagery/clover.png',
-                              'assets/mapImagery/echinacea.png',
-                              'assets/mapImagery/lavender.png',
-                              'assets/mapImagery/sunflower.png',
-                            ];
-                            const flowerSize = 60.0;
-                            return Positioned(
-                              left: rightX,
-                              top: position['top']! - 18 - (i % 4) * 3,
-                              child: Image.asset(
-                                rightFlowerPaths[i % rightFlowerPaths.length],
-                                width: flowerSize,
-                                height: flowerSize,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                              ),
-                            );
-                          }).whereType<Widget>(),
-                          ...adventureStages.map((stage) {
-                            final position = getGamePosition(stage.games, screenSize);
-                            return Positioned(
-                              left: screenSize.width / 2 - 45,
-                              top: position['top']! - 36,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: stage.color,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.black, width: 2),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (stage.emoji == '🏠')
-                                      Image.asset(
-                                        'assets/homeImagery/home.png',
-                                        width: 18,
-                                        height: 18,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, _, _) => Text(stage.emoji, style: const TextStyle(fontSize: 18)),
-                                      )
-                                    else
-                                      Text(stage.emoji, style: const TextStyle(fontSize: 18)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'S${adventureStages.indexOf(stage) + 1}',
-                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                          ...List.generate(
-                            visibleRange['endGame']! - visibleRange['startGame']! + 1,
-                            (i) {
-                              final gameNumber = visibleRange['startGame']! + i;
-                              if (gameNumber < 1 || gameNumber > totalGames) return const SizedBox.shrink();
-                              final position = getGamePosition(gameNumber, screenSize);
-
-                              final isLocked = gameNumber > highestUnlockedGame;
-                              final isCurrent = gameNumber == currentGame;
-                              // isPassed = green: any unlocked level the player has already moved past.
-                              final isPassed = !isLocked && gameNumber < currentGame;
-
-                              const hexSize = 40.0;
-                              return Positioned(
-                                left: screenSize.width * position['left']! / 100 - hexSize / 2,
-                                top: position['top']! - hexSize / 2,
-                                child: HexagonLevelMarker(
-                                  levelNumber: gameNumber,
-                                  isCurrent: isCurrent,
-                                  isLocked: isLocked,
-                                  isPassed: isPassed,
-                                  size: hexSize,
-                                  onTap: () {
-                                    if (!isLocked) {
-                                      _tryStartAdventure(() {
-                                        setState(() {
-                                          currentGame = gameNumber;
-                                          gameMode = GameMode.adventureGame;
-                                        });
-                                      });
-                                    }
-                                  },
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: -80,
-                  bottom: -100,
-                  child: SizedBox(
-                    width: 200,
-                    height: 320,
-                    child: ClipRect(
-                      clipBehavior: Clip.hardEdge,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Image.asset(
-                          'assets/mapImagery/beefivemascot.png',
-                          width: 400,
-                          height: 320,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, Object error, StackTrace? stackTrace) => const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
                   ),
                 ),
               ],
@@ -2047,11 +1283,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         ),
       ],
     );
-  }
-
-  double _minMapScrollOffset(Size screenSize, double totalHeight, double spacing, double viewportHeight) {
-    final levelY = totalHeight - (currentGame - 1) * spacing;
-    return levelY.clamp(0.0, double.infinity);
   }
 
   Future<void> _tryStartAdventure(void Function() startAdventure) async {
@@ -2075,8 +1306,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             ),
             textAlign: TextAlign.center,
           ),
-          content: const Text(
-            'You have zero XPs, win Practice hard game, or win 3 games in a classic game to gain XPs.',
+          content: Text(
+            'You have zero XPs. Win a Hard Practice game (+1 XP), win 3 Classic games in a row (+2 XP), '
+            'or watch an ad for +$xpRewardedAdWatch XP.',
             style: TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
           ),
@@ -2084,6 +1316,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('OK'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showRewardedAd();
+              },
+              child: Text(
+                'Watch Ad (+$xpRewardedAdWatch XP)',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -2157,7 +1399,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   Widget _buildHeaderXpGem(bool isMobile) {
     final size = isMobile ? 28.0 : 32.0;
     return Padding(
-      padding: EdgeInsets.only(right: isMobile ? 8 : 12),
+      padding: EdgeInsets.only(right: isMobile ? 6 : 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2187,16 +1429,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       return const SizedBox.shrink();
     }
 
+    final isMobile = screenSize.width <= 768;
     final (mapMarginTop, mapMarginBottom) = _mapVerticalMargins(screenSize);
-    final mapTop = 151.0 + mapMarginTop;
+    final mapTop = _boardTop + mapMarginTop;
     final mapBottom = 155.0 + mapMarginBottom;
-    const menuGreen = Color(0xFF43A047);
-    const tourRed = Color(0xFFC62828);
+    const menuGreenOverlay = Color(0x4D43A047); // rgba(67, 160, 71, 0.3) — web menu parity
+    const menuYellowOverlay = Color(0x4DFFC30B); // primaryYellow at 30%
+    const menuRedOverlay = Color(0x4DC62828); // tour red at 30%
+    final menuGap = isMobile ? 8.0 : 10.0;
+    final menuPadding = isMobile ? 6.0 : 12.0;
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Flyout menu clipped to the same bounds as the scrollable map frame
+        // Menu overlay clipped to the board preview frame
         Positioned(
           top: mapTop,
           left: 0,
@@ -2212,46 +1458,47 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                   left: 6,
                   right: 6,
                   bottom: 6,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                  child: Stack(
                     children: [
-                      Flexible(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: SingleChildScrollView(
+                      Center(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.symmetric(horizontal: menuPadding),
+                          child: IntrinsicWidth(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 _sideMenuButton(
                                   label: 'Live Matches',
-                                  color: menuGreen,
-                                  textColor: Colors.white,
-                                  borderColor: Colors.black,
+                                  color: menuGreenOverlay,
+                                  textColor: Colors.black,
+                                  borderColor: primaryYellow,
+                                  isMobile: isMobile,
                                   onPressed: _openSchoolLobby,
                                 ),
-                                const SizedBox(height: 10),
+                                SizedBox(height: menuGap),
                                 _sideMenuButton(
                                   label: 'Local Challenge',
                                   iconImagePath:
                                       'assets/homeImagery/play-with-friend.png',
-                                  color: menuGreen,
-                                  textColor: Colors.white,
-                                  borderColor: Colors.black,
+                                  color: menuGreenOverlay,
+                                  textColor: Colors.black,
+                                  borderColor: primaryYellow,
+                                  isMobile: isMobile,
                                   onPressed: () {
                                     setState(
                                         () => gameMode = GameMode.localMultiplayer);
                                   },
                                 ),
-                                const SizedBox(height: 10),
+                                SizedBox(height: menuGap),
                                 _sideMenuButton(
                                   label: 'Classic Mode',
                                   iconImagePath:
                                       'assets/homeImagery/classic-mode.png',
-                                  color: menuGreen,
-                                  textColor: Colors.white,
-                                  borderColor: Colors.black,
+                                  color: menuGreenOverlay,
+                                  textColor: Colors.black,
+                                  borderColor: primaryYellow,
+                                  isMobile: isMobile,
                                   onPressed: () {
                                     setState(() {
                                       isClassicStreakMode = true;
@@ -2261,26 +1508,28 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                                     });
                                   },
                                 ),
-                                const SizedBox(height: 10),
+                                SizedBox(height: menuGap),
                                 _sideMenuButton(
                                   label: _dailyChallengePlayedToday
                                       ? 'Daily Challenge — ${_dailyChallengeWon == true ? 'Won' : 'Lost'}'
                                       : 'Daily Challenge',
                                   iconImagePath:
                                       'assets/homeImagery/daily_challenge_icon.png',
-                                  color: primaryYellow,
+                                  color: menuYellowOverlay,
                                   textColor: Colors.black,
                                   borderColor: Colors.black,
+                                  isMobile: isMobile,
                                   onPressed: _onDailyChallengePressed,
                                 ),
-                                const SizedBox(height: 10),
+                                SizedBox(height: menuGap),
                                 _sideMenuButton(
                                   label: 'Bee Five Tour',
                                   iconImagePath:
                                       'assets/homeImagery/tour_icon.png',
-                                  color: tourRed,
+                                  color: menuRedOverlay,
                                   textColor: Colors.white,
                                   borderColor: Colors.black,
+                                  isMobile: isMobile,
                                   onPressed: _showBeeFiveTourModal,
                                 ),
                               ],
@@ -2288,8 +1537,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      _watchAdsAnimatedCircleButton(),
                     ],
                   ),
                 ),
@@ -2302,54 +1549,64 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           bottom: 155,
           left: 0,
           right: 0,
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  _tryStartAdventure(() => setState(() => gameMode = GameMode.adventureGame));
-                },
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    _tryStartAdventure(() => setState(() => gameMode = GameMode.adventureGame));
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
                       ),
-                      BoxShadow(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        blurRadius: 0,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('▶', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Level $currentGame',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
                         ),
-                      ),
-                    ],
+                        BoxShadow(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          blurRadius: 0,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('▶', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Level $currentGame',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: _watchAdsAnimatedCircleButton(),
+                ),
+              ),
+            ],
           ),
         ),
 
@@ -2511,45 +1768,65 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     required Color color,
     Color textColor = Colors.black,
     Color borderColor = Colors.black,
+    bool isMobile = true,
     required VoidCallback onPressed,
   }) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: borderColor, width: 2),
-        ),
-        minimumSize: const Size(100, 48),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (iconImagePath != null)
-            Image.asset(
-              iconImagePath,
-              width: 24,
-              height: 24,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const SizedBox(width: 24, height: 24),
-            )
-          else if (icon != null)
-            Text(icon, style: const TextStyle(fontSize: 22)),
-          if (iconImagePath != null || icon != null) const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
+    return Material(
+      color: Colors.transparent,
+      elevation: 0,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(isMobile ? 14 : 20),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(isMobile ? 14 : 20),
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 15,
+                offset: const Offset(0, 4),
               ),
-              overflow: TextOverflow.ellipsis,
-            ),
+            ],
           ),
-        ],
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 16 : 20,
+            vertical: isMobile ? 12 : 16,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              if (iconImagePath != null)
+                Image.asset(
+                  iconImagePath,
+                  width: isMobile ? 22 : 28,
+                  height: isMobile ? 22 : 28,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => SizedBox(
+                    width: isMobile ? 22 : 28,
+                    height: isMobile ? 22 : 28,
+                  ),
+                )
+              else if (icon != null)
+                Text(icon, style: TextStyle(fontSize: isMobile ? 20 : 24)),
+              if (iconImagePath != null || icon != null) SizedBox(width: isMobile ? 8 : 10),
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: isMobile ? 15 : 19,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2988,9 +2265,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           'Live Matches',
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
         ),
-        content: const Text(
+        content: Text(
           liveMatchesRequiresXpMessage,
-          style: TextStyle(fontSize: 16, color: Colors.black87),
+          style: const TextStyle(fontSize: 16, color: Colors.black87),
         ),
         actions: [
           TextButton(
@@ -2998,6 +2275,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             child: const Text(
               'OK',
               style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showRewardedAd();
+            },
+            child: Text(
+              'Watch Ad (+$xpRewardedAdWatch XP)',
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -3169,19 +2456,29 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             ),
           ],
         ),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Text(
             'How to gain XPs in Bee Five:\n\n'
-            '• Practice: Win a game on Hard difficulty → +1 XP.\n\n'
-            '• Classic Mode: Win 3 games in a row in one 10‑minute session → +2 XP.\n\n'
-            '• Adventure: Win 2 consecutive levels → +1 XP; lose a level → −1 XP. '
-            'Complete a level that is a multiple of 10 (10, 20, 30…) → +5 XP bonus.\n\n'
-            '• Watch ads: Watch a short ad → +2 XP (tap “Watch Ads to Gain XPs” on the map).',
-            style: TextStyle(fontSize: 16, color: Colors.black87),
+            '• Practice: Win a game on Hard difficulty → +$xpHardPracticeWin XP.\n\n'
+            '• Classic Mode: Win 3 games in a row in one 10‑minute session → +$xpClassicThreeWins XP.\n\n'
+            '• Adventure: Win a match → +$xpAdventureMatchWin XP; lose → −$xpAdventureOneLoss XP. '
+            'Clear levels 10, 20, 30… → +$xpAdventureMilestoneLevelWin XP.\n\n'
+            '• Watch ads: Watch a short ad → +$xpRewardedAdWatch XP (map button or below).',
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.center,
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showRewardedAd();
+            },
+            child: Text(
+              'Watch Ad (+$xpRewardedAdWatch XP)',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
@@ -3662,10 +2959,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                           // ── Step 2: close the dialog ──
                           if (!dialogContext.mounted) return;
                           Navigator.pop(dialogContext);
-                          // ── Step 3: scroll map to level 1 immediately ──
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) _scheduleScrollToCurrentLevel();
-                          });
                           // ── Step 4: await prefs and Supabase writes ──
                           // These must complete so the reset survives app restart.
                           // We await them AFTER setState so the UI is already showing
@@ -3781,13 +3074,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
 
   void _loadRewardedAd() {
     RewardedAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/2005976804',
+      adUnitId: kRewardedAdUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
           _rewardedAd = ad;
         },
         onAdFailedToLoad: (error) {
+          logAdLoadFailure('home rewarded', error);
           _rewardedAd = null;
         },
       ),
@@ -3818,13 +3112,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     );
     _rewardedAd!.show(
       onUserEarnedReward: (ad, reward) async {
-        await addXp(2);
+        await onRewardedAdWatched();
         final newXp = await getXp();
         if (mounted) {
           setState(() => _headerXp = newXp);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('+2 XP earned! Well done!'),
+            SnackBar(
+              content: Text('+$xpRewardedAdWatch XP earned! Well done!'),
               backgroundColor: Colors.green,
             ),
           );
@@ -3865,7 +3159,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
             gameMode = GameMode.menu;
             isClassicStreakMode = false;
           });
-          _scheduleScrollToCurrentLevel();
           getXp().then((xp) {
             if (mounted) {
               setState(() => _headerXp = xp);
@@ -3883,7 +3176,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       return SimpleGame(
         onBackToMenu: () {
           setState(() => gameMode = GameMode.menu);
-          _scheduleScrollToCurrentLevel();
         },
         backgroundColor: 'yellow',
       );
@@ -3918,13 +3210,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
               gamesCompleted = List.from(progress.gamesCompleted);
             });
             _saveHighest(syncedHighest);
-          });
+          }).catchError((_) {});
 
           getXp().then((xp) {
             if (mounted) setState(() => _headerXp = xp);
-          });
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _scheduleScrollToCurrentLevel();
           });
         },
         initialGame: currentGame,
@@ -3935,7 +3224,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       return DailyChallengeGame(
         onBackToMenu: () {
           setState(() => gameMode = GameMode.menu);
-          _scheduleScrollToCurrentLevel();
           getXp().then((xp) {
             if (mounted) {
               setState(() => _headerXp = xp);
@@ -3958,7 +3246,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
         auth: context.read<AuthContext>(),
         onBack: () {
           setState(() => gameMode = GameMode.menu);
-          _scheduleScrollToCurrentLevel();
         },
       );
     }
@@ -4088,7 +3375,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); }),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/buy_icon.png', label: 'Gain XPs', onTap: _showGainXPsModal),
                     _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', onTap: () => setState(() => gameMode = GameMode.connect)),
@@ -4290,7 +3577,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); _scheduleScrollToCurrentLevel(); }),
+                    _bottomNavItem(iconImagePath: 'assets/homeImagery/home.png', label: 'Home', onTap: () { setState(() => gameMode = GameMode.menu); }),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/buy_icon.png', label: 'Gain XPs', onTap: _showGainXPsModal),
                     _bottomNavItem(icon: '📋', label: 'Practice', onTap: _showDifficultyModal),
                     _bottomNavItem(iconImagePath: 'assets/homeImagery/connect.png', label: 'Connect', active: true, onTap: () {}),

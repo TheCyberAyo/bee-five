@@ -1,14 +1,16 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import 'firebase_bootstrap.dart';
 import 'supabase_client.dart';
 import 'contexts/auth_context.dart';
 import 'auth/auth_gate.dart';
+import 'ads/ad_unit_ids.dart';
 import 'background_sound.dart';
 
 /// Hides scrollbars app-wide (no vertical striped bar on scrollable content).
@@ -22,7 +24,7 @@ class _NoScrollbarScrollBehavior extends ScrollBehavior {
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await initFirebase();
 }
 
 Future<void> main() async {
@@ -36,15 +38,20 @@ Future<void> main() async {
   // Initialize Supabase
   await initSupabase();
 
-  try {
-    await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  } catch (_) {
-    // Tests/CI without google-services; push registration is skipped elsewhere.
-  }
+  await initFirebase(backgroundHandler: _firebaseMessagingBackgroundHandler);
 
-  // Initialize AdMob
-  await MobileAds.instance.initialize();
+  // Initialize AdMob (requires GADApplicationIdentifier in ios/Runner/Info.plist).
+  try {
+    final initStatus = await MobileAds.instance.initialize();
+    if (kDebugMode) {
+      debugPrint('[AdMob] initialized: ${initStatus.adapterStatuses}');
+      logActiveAdUnitIds();
+    }
+  } catch (e, st) {
+    if (kDebugMode) {
+      debugPrint('[AdMob] initialize failed: $e\n$st');
+    }
+  }
 
   // Lock to portrait only
   await SystemChrome.setPreferredOrientations([

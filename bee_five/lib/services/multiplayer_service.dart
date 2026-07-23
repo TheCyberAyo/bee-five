@@ -139,6 +139,13 @@ Map<String, dynamic> _unwrapChallengeResponsePayload(Map<String, dynamic> raw) {
       Map<String, dynamic>.from(raw);
 }
 
+int _parseChallengeXp(dynamic v) {
+  if (v == null) return 0;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse(v.toString()) ?? 0;
+}
+
 Map<String, dynamic> _unwrapGameEventPayload(Map<String, dynamic> raw) {
   return _findMapInTree(raw, (m) {
         final pid = m['player_id'] ?? m['playerId'];
@@ -246,6 +253,25 @@ class MultiplayerService {
     _pendingOutgoingChallenges[opponentId] = resolved;
   }
 
+  /// Clears a staged rematch/challenge when the player cancels or cannot send.
+  void cancelOutgoingChallenge(String opponentId) {
+    _clearPendingChallengeTo(opponentId);
+  }
+
+  void _emitMatchStart({
+    required String matchId,
+    required String opponentId,
+    required String opponentUsername,
+    bool mutual = false,
+  }) {
+    _matchStartController.add({
+      'match_id': matchId,
+      'opponent_id': opponentId,
+      'opponent_username': opponentUsername,
+      if (mutual) 'mutual': true,
+    });
+  }
+
   /// Prefer the shared room id when accepting someone you also challenged.
   String matchIdForChallengeAccept({
     required String opponentId,
@@ -297,6 +323,11 @@ class MultiplayerService {
     String? institutionName,
     String? countryCode,
   }) async {
+    if (!canPlayLiveMatches(beeFiveXp)) {
+      await leaveLobby();
+      return;
+    }
+
     // Clean up any existing channel first
     await leaveLobby();
 
@@ -423,6 +454,9 @@ class MultiplayerService {
     final fromId = data['from_id']?.toString() ?? '';
     if (fromId.isEmpty) return;
 
+    final fromXp = _parseChallengeXp(data['from_xp']);
+    if (!canPlayLiveMatches(fromXp)) return;
+
     final theirMatchId = data['match_id']?.toString() ?? '';
     final myPendingMatchId = _pendingOutgoingChallenges[fromId];
     if (myPendingMatchId != null &&
@@ -451,6 +485,15 @@ class MultiplayerService {
             responderUsername: username,
           );
         }());
+      } else {
+        // Both clicked rematch at once — higher user id joins the shared room
+        // immediately; the lower id peer auto-accepts this challenge.
+        _emitMatchStart(
+          matchId: canonical,
+          opponentId: fromId,
+          opponentUsername: data['from_username']?.toString() ?? 'Player',
+          mutual: true,
+        );
       }
       return;
     }
@@ -472,11 +515,12 @@ class MultiplayerService {
       responderId: responderId,
       responderUsername: responderUsername,
     );
-    _matchStartController.add({
-      'match_id': matchId,
-      'opponent_id': challengerId,
-      'opponent_username': challengerUsername,
-    });
+    _emitMatchStart(
+      matchId: matchId,
+      opponentId: challengerId,
+      opponentUsername: challengerUsername,
+      mutual: true,
+    );
   }
 
   /// Join the universal lobby using the signed-in user's [mg_profiles] row.
@@ -515,6 +559,10 @@ class MultiplayerService {
 
       await ensureXpInitialized();
       final beeFiveXp = await getXp();
+      if (!canPlayLiveMatches(beeFiveXp)) {
+        await leaveLobby();
+        return false;
+      }
 
       await joinLobby(
         schoolId: schoolId,
@@ -679,7 +727,15 @@ class MultiplayerService {
     required String responderId,
     required String responderUsername,
   }) async {
-    final resolvedMatchId = accepted
+    var acceptedResolved = accepted;
+    if (acceptedResolved) {
+      await ensureXpInitialized();
+      if (!canPlayLiveMatches(await getXp())) {
+        acceptedResolved = false;
+      }
+    }
+
+    final resolvedMatchId = acceptedResolved
         ? matchIdForChallengeAccept(
             opponentId: challengerId,
             theirMatchId: matchId,
@@ -693,7 +749,7 @@ class MultiplayerService {
       payload: {
         'match_id': resolvedMatchId,
         'challenger_id': challengerId,
-        'accepted': accepted,
+        'accepted': acceptedResolved,
         'responder_id': responderId,
         'responder_username': responderUsername,
       },

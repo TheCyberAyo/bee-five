@@ -129,6 +129,13 @@ export function parseEloChange(value: unknown): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
+export function parseChallengeXp(value: unknown): number {
+  if (value == null) return 0;
+  if (typeof value === 'number' && !Number.isNaN(value)) return Math.max(0, Math.trunc(value));
+  const n = parseInt(String(value), 10);
+  return Number.isNaN(n) ? 0 : Math.max(0, n);
+}
+
 function unwrapChallengePayload(raw: Record<string, unknown>): Record<string, unknown> {
   return (
     findMapInTree(raw, (m) => 'to_id' in m && 'from_id' in m) ?? raw
@@ -676,6 +683,24 @@ class MgMultiplayerService {
     this.pendingOutgoingChallenges.set(opponentId, resolved);
   }
 
+  cancelOutgoingChallenge(opponentId: string): void {
+    this.pendingOutgoingChallenges.delete(opponentId);
+  }
+
+  private emitMatchStart(
+    matchId: string,
+    opponentId: string,
+    opponentUsername: string,
+    mutual = false,
+  ): void {
+    this.matchStartEmitter.emit({
+      match_id: matchId,
+      opponent_id: opponentId,
+      opponent_username: opponentUsername,
+      ...(mutual ? { mutual: true } : {}),
+    });
+  }
+
   matchIdForChallengeAccept(opponentId: string, theirMatchId: string): string {
     const mine = this.pendingOutgoingChallenges.get(opponentId);
     if (!mine) return theirMatchId;
@@ -764,6 +789,11 @@ class MgMultiplayerService {
     const run = async () => {
       if (!supabase) return;
 
+      if (!canPlayLiveMatches(beeFiveXp)) {
+        await this.leaveLobby();
+        return;
+      }
+
       const accessToken = await this.ensureRealtimeAuth();
       if (!accessToken) {
         console.error('joinLobby: no auth session — Realtime presence requires sign-in');
@@ -779,6 +809,10 @@ class MgMultiplayerService {
         this.lobbyInstitutionName = inst.length > 0 ? displayInstitutionName(inst) : this.lobbyInstitutionName;
         this.lobbyCountryCode = cc && cc.length > 0 ? cc : this.lobbyCountryCode;
         if (!this.activeMatchId) this.matchScreenCount = 0;
+        if (!canPlayLiveMatches(beeFiveXp)) {
+          await this.leaveLobby();
+          return;
+        }
         await this.refreshLobbyTrack();
         return;
       }
@@ -881,6 +915,9 @@ class MgMultiplayerService {
     const fromId = data.from_id?.toString() ?? '';
     if (!fromId) return;
 
+    const fromXp = parseChallengeXp(data.from_xp);
+    if (!canPlayLiveMatches(fromXp)) return;
+
     const theirMatchId = data.match_id?.toString() ?? '';
     const myPendingMatchId = this.pendingOutgoingChallenges.get(fromId);
     if (myPendingMatchId && theirMatchId) {
@@ -907,12 +944,20 @@ class MgMultiplayerService {
             responderId: userId,
             responderUsername: username,
           });
-          this.matchStartEmitter.emit({
-            match_id: canonical,
-            opponent_id: fromId,
-            opponent_username: data.from_username?.toString() ?? 'Player',
-          });
+          this.emitMatchStart(
+            canonical,
+            fromId,
+            data.from_username?.toString() ?? 'Player',
+            true,
+          );
         })();
+      } else {
+        this.emitMatchStart(
+          canonical,
+          fromId,
+          data.from_username?.toString() ?? 'Player',
+          true,
+        );
       }
       return;
     }
@@ -1004,8 +1049,16 @@ class MgMultiplayerService {
     const identity = this.lobbyIdentity;
     if (!identity) return;
 
+    ensureXpInitialized();
+    const xp = getXp();
+    if (!canPlayLiveMatches(xp)) {
+      await this.leaveLobby();
+      return;
+    }
+
     if (this.isLobbyChannelReady(this.lobbyChannel)) {
       await this.ensureRealtimeAuth();
+      this.lobbyIdentity = { ...identity, beeFiveXp: xp };
       await this.refreshLobbyTrack();
       return;
     }
@@ -1051,6 +1104,10 @@ class MgMultiplayerService {
 
       ensureXpInitialized();
       const beeFiveXp = getXp();
+      if (!canPlayLiveMatches(beeFiveXp)) {
+        await this.leaveLobby();
+        return false;
+      }
 
       await this.joinLobby({
         schoolId,
@@ -1135,7 +1192,15 @@ class MgMultiplayerService {
     responderId: string;
     responderUsername: string;
   }): Promise<void> {
-    const resolvedMatchId = accepted
+    let acceptedResolved = accepted;
+    if (acceptedResolved) {
+      ensureXpInitialized();
+      if (!canPlayLiveMatches(getXp())) {
+        acceptedResolved = false;
+      }
+    }
+
+    const resolvedMatchId = acceptedResolved
       ? this.matchIdForChallengeAccept(challengerId, matchId)
       : matchId;
 
@@ -1147,7 +1212,7 @@ class MgMultiplayerService {
       payload: {
         match_id: resolvedMatchId,
         challenger_id: challengerId,
-        accepted,
+        accepted: acceptedResolved,
         responder_id: responderId,
         responder_username: responderUsername,
       },

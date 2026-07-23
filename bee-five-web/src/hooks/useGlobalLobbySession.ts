@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { mgMultiplayerService, userIdsEqual, isChallengeAccepted } from '../services/mgMultiplayerService';
+import { mgMultiplayerService, userIdsEqual, isChallengeAccepted, parseChallengeXp } from '../services/mgMultiplayerService';
 import {
   canPlayLiveMatches,
   ensureXpInitialized,
@@ -62,6 +62,8 @@ export function useGlobalLobbySession({
 
     if (manageLobbyPresence) {
       void (async () => {
+        ensureXpInitialized();
+        if (!canPlayLiveMatches(getXp())) return;
         const joined = await mgMultiplayerService.joinLobbyFromCurrentProfile();
         if (cancelled || !joined) return;
         const identity = mgMultiplayerService.lobbyIdentitySnapshot;
@@ -89,6 +91,7 @@ export function useGlobalLobbySession({
         if (!routeChallenges || !mgMultiplayerService.shouldRouteLobbyChallenges) return;
         const id = identityRef.current;
         if (!id || !userIdsEqual(payload.to_id, id.userId)) return;
+        if (!canPlayLiveMatches(parseChallengeXp(payload.from_xp))) return;
         setIncomingChallenge(payload);
       }),
       mgMultiplayerService.onChallengeResponse((payload) => {
@@ -139,6 +142,10 @@ export function useGlobalLobbySession({
     };
     ensureXpInitialized();
     const xp = getXp();
+    if (!canPlayLiveMatches(xp)) {
+      await mgMultiplayerService.leaveLobby();
+      return;
+    }
     await mgMultiplayerService.setIdle(identity.userId, identity.username, identity.elo, xp);
   }, []);
 

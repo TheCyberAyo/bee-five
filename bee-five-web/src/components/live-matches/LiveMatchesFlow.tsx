@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { mgMultiplayerService, type JoinSchoolOutcome, userIdsEqual, isChallengeAccepted } from '../../services/mgMultiplayerService';
+import { mgMultiplayerService, type JoinSchoolOutcome, userIdsEqual, isChallengeAccepted, parseChallengeXp } from '../../services/mgMultiplayerService';
 import {
   canPlayLiveMatches,
   ensureXpInitialized,
@@ -185,6 +185,7 @@ export default function LiveMatchesFlow({
     const unsubs = [
       mgMultiplayerService.onChallenge((payload) => {
         if (!userIdsEqual(payload.to_id, profile.userId)) return;
+        if (!canPlayLiveMatches(parseChallengeXp(payload.from_xp))) return;
         setIncomingChallenge(payload);
       }),
       mgMultiplayerService.onChallengeResponse((payload) => {
@@ -216,6 +217,14 @@ export default function LiveMatchesFlow({
 
   const onJoinedSchool = (outcome: JoinSchoolOutcome) => {
     if (!outcome.isSuccess || !outcome.schoolId || !outcome.userId || !outcome.username) return;
+    ensureXpInitialized();
+    const xp = getXp();
+    setLobbyXp(xp);
+    if (!canPlayLiveMatches(xp)) {
+      setXpGate(true);
+      setProfile(null);
+      return;
+    }
     setProfile({
       schoolId: outcome.schoolId,
       userId: outcome.userId,
@@ -346,9 +355,14 @@ export default function LiveMatchesFlow({
         <ChallengeDialog
           fromUsername={incomingChallenge.from_username?.toString() ?? 'Player'}
           fromElo={parseInt(String(incomingChallenge.from_elo ?? profile.elo), 10) || profile.elo}
-          acceptBlockedReason={
-            canPlayLiveMatches(getXp()) ? null : liveMatchesRequiresXpMessage
-          }
+          acceptBlockedReason={(() => {
+            if (!canPlayLiveMatches(getXp())) return liveMatchesRequiresXpMessage;
+            const challengerName = incomingChallenge.from_username?.toString() ?? 'Player';
+            if (!canPlayLiveMatches(parseChallengeXp(incomingChallenge.from_xp))) {
+              return `${challengerName} needs at least 1 XP to play Live Matches.`;
+            }
+            return null;
+          })()}
           onAccept={async () => {
             const challengerId = incomingChallenge.from_id?.toString() ?? '';
             const theirMatchId = incomingChallenge.match_id?.toString() ?? '';

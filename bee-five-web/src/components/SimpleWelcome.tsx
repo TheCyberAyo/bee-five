@@ -26,7 +26,29 @@ import { getXp, onAppOpen } from '../services/xpService';
 const HOME_ICONS = {
   localChallenge: '/homeImagery/play-with-friend.png',
   classicMode: '/homeImagery/classic-mode.png',
+  mascot: '/mapImagery/beefivemascot.png',
 } as const;
+
+const homeMascotWrapStyle: React.CSSProperties = {
+  position: 'absolute',
+  right: -120,
+  bottom: -150,
+  width: 300,
+  height: 480,
+  overflow: 'hidden',
+  pointerEvents: 'none',
+  zIndex: 1,
+};
+
+const homeMascotImageStyle: React.CSSProperties = {
+  position: 'absolute',
+  right: 0,
+  top: 0,
+  width: 600,
+  height: 480,
+  objectFit: 'cover',
+  objectPosition: 'right center',
+};
 
 const modeIconStyle: React.CSSProperties = {
   width: '1.75rem',
@@ -472,8 +494,13 @@ export default function SimpleWelcome() {
             minHeight: 0,
             width: '100%',
             background: 'transparent',
+            overflow: 'hidden',
           }}
         >
+          <div aria-hidden style={homeMascotWrapStyle}>
+            <img src={HOME_ICONS.mascot} alt="" style={homeMascotImageStyle} />
+          </div>
+
           {progressLoaded ? (
             <AdventureBoardPreview
               gameNumber={currentGame}
@@ -651,7 +678,8 @@ export default function SimpleWelcome() {
           }}>
             <h2 style={{ margin: '0 0 16px', fontSize: '24px', color: '#000' }}>No XP</h2>
             <p style={{ margin: '0 0 24px', fontSize: '16px', color: 'rgba(0,0,0,0.87)' }}>
-              You have zero XPs. Win Practice hard game, or win 3 games in Classic mode to gain XPs.
+              You have zero XPs. Win a Hard Practice game (+1 XP), win 3 Classic games in a row (+2 XP),
+              or watch an ad for +2 XP in the Bee Five mobile app.
             </p>
             <button
               type="button"

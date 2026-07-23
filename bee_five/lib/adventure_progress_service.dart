@@ -34,8 +34,10 @@ Timer? _syncProgressDebounce;
 /// Debounced merge + upload after prefs change (XP, classic streak, etc.).
 void scheduleProgressCloudSync() {
   _syncProgressDebounce?.cancel();
-  _syncProgressDebounce = Timer(const Duration(milliseconds: 900), () {
-    syncAdventureProgress();
+  _syncProgressDebounce = Timer(const Duration(milliseconds: 900), () async {
+    try {
+      await syncAdventureProgress(preferLocalDashboardStats: true);
+    } catch (_) {}
   });
 }
 
@@ -179,12 +181,21 @@ Future<void> _upsertRemoteAdventureProgress({
     ..._xpAuxToRemoteMap(auxOut),
   };
   try {
-    await supabaseClient!.from('adventure_progress').upsert(fullPayload);
+    await supabaseClient!.from('adventure_progress').upsert(
+      fullPayload,
+      onConflict: 'user_id',
+    );
   } catch (_) {
     try {
-      await supabaseClient!.from('adventure_progress').upsert(statsPayload);
+      await supabaseClient!.from('adventure_progress').upsert(
+        statsPayload,
+        onConflict: 'user_id',
+      );
     } catch (_) {
-      await supabaseClient!.from('adventure_progress').upsert(legacyPayload);
+      await supabaseClient!.from('adventure_progress').upsert(
+        legacyPayload,
+        onConflict: 'user_id',
+      );
     }
   }
 }
@@ -308,7 +319,9 @@ List<int> _mergeFirstClearLevels(List<int> local, List<int> remote) {
       dailyChallengeWon: local.dailyChallengeWon,
     );
   }
-  if ((local.dailyChallengeDate ?? '') >= (remote.dailyChallengeDate ?? '')) {
+  final localDate = local.dailyChallengeDate!;
+  final remoteDate = remote.dailyChallengeDate!;
+  if (localDate.compareTo(remoteDate) >= 0) {
     return (
       dailyChallengeDate: local.dailyChallengeDate,
       dailyChallengeWon: local.dailyChallengeWon,
@@ -344,8 +357,12 @@ XpAuxState _mergeXpAuxState(XpAuxState local, XpAuxState remote) {
 ///
 /// - **Highest unlocked** only ever increases (unless explicitly reset).
 /// - **Current level** can be any level the player chooses to replay.
-/// - **XP / streak / classic best** use the higher of local vs remote so nothing is lost across devices.
-Future<AdventureProgressData> syncAdventureProgress() async {
+/// - **XP** on full merge uses the higher of local vs remote (wins propagate across devices).
+///   Debounced uploads after local XP changes prefer local so losses are not undone.
+/// - **Streak / classic best** use the higher of local vs remote.
+Future<AdventureProgressData> syncAdventureProgress({
+  bool preferLocalDashboardStats = false,
+}) async {
   final prefs = await SharedPreferences.getInstance();
   final resetPending = prefs.getBool(_prefAdventureResetPending) ?? false;
   final localXp = prefs.getInt(_prefUserXpKey) ?? _defaultUserXp;
@@ -449,7 +466,9 @@ Future<AdventureProgressData> syncAdventureProgress() async {
     await setLocalAdventureHighestUnlockedLevel(mergedHighest);
   }
 
-  final mergedXp = _mergeMaxStat(localXp, remote.userXp);
+  final mergedXp = preferLocalDashboardStats
+      ? localXp
+      : _mergeMaxStat(localXp, remote.userXp);
   final mergedStreak = _mergeMaxStat(localStreak, remote.loginStreak);
   final mergedClassic = _mergeMaxStat(localClassic, remote.classicBestStreak);
   final mergedXpAux = _mergeXpAuxState(localXpAux, remote.xpAux ?? const XpAuxState());

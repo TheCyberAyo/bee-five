@@ -88,7 +88,11 @@ class _SignInPageState extends State<SignInPage> {
 
       if (!mounted) return;
 
-      if (response.session != null || response.user != null) {
+      final signedIn = widget.auth.isSignedIn ||
+          response.session != null ||
+          response.user != null;
+
+      if (signedIn) {
         try {
           await syncAdventureProgress();
         } catch (_) {}

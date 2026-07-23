@@ -371,7 +371,7 @@ export function scheduleProgressCloudSync(userId: string | null = progressSyncUs
     clearTimeout(syncProgressDebounce);
   }
   syncProgressDebounce = setTimeout(() => {
-    void syncAdventureProgress(userId);
+    void syncAdventureProgress(userId, { preferLocalDashboardStats: true });
   }, 900);
 }
 
@@ -521,7 +521,11 @@ function toAdventureProgress(userId: string, synced: SyncedAdventureProgress): A
  * Merge local and remote adventure progress + dashboard stats (XP, streaks).
  * Mirrors `bee_five/lib/adventure_progress_service.dart`.
  */
-export async function syncAdventureProgress(userId: string): Promise<SyncedAdventureProgress | null> {
+export async function syncAdventureProgress(
+  userId: string,
+  options?: { preferLocalDashboardStats?: boolean }
+): Promise<SyncedAdventureProgress | null> {
+  const preferLocalDashboardStats = options?.preferLocalDashboardStats ?? false;
   if (!userId) return null;
 
   const localProgress = await loadLocalProgress(userId);
@@ -608,7 +612,9 @@ export async function syncAdventureProgress(userId: string): Promise<SyncedAdven
   const hasMeaningfulLocalState = localCurrent !== 1 || localHighest !== 1;
   const mergedCurrent = clampLevel(hasMeaningfulLocalState ? localCurrent : remote.current_game);
 
-  const mergedXp = mergeMaxStat(localStats.userXp, remote.user_xp);
+  const mergedXp = preferLocalDashboardStats
+    ? localStats.userXp
+    : mergeMaxStat(localStats.userXp, remote.user_xp);
   const mergedStreak = mergeMaxStat(localStats.loginStreak, remote.login_streak);
   const mergedClassic = mergeMaxStat(localStats.classicBestStreak, remote.classic_best_streak);
   const mergedXpAux = mergeXpAuxState(localXpAux, remote.xp_aux ?? emptyXpAuxState());

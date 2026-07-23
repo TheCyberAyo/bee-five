@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../ads/multiplayer_ad_constants.dart';
+import '../ads/ad_log.dart';
 import '../head_to_head_series.dart';
 import '../services/multiplayer_service.dart';
 import '../xp_service.dart';
@@ -19,6 +20,31 @@ import '../simple_game.dart' show primaryYellow;
 import '../theme/bee_five_multiplayer_theme.dart';
 import '../widgets/challenge_dialog.dart';
 import '../widgets/online_bee_five_board.dart';
+
+/// Route name for live matches — used to collapse stacked rematch screens.
+const String kLiveMatchRouteName = '/live-match';
+
+MaterialPageRoute<void> liveMatchRoute(MatchScreen screen) {
+  return MaterialPageRoute<void>(
+    settings: const RouteSettings(name: kLiveMatchRouteName),
+    builder: (_) => screen,
+  );
+}
+
+/// Opens a live match, clearing any prior match screens from the navigator.
+Future<void> openLiveMatch(BuildContext context, MatchScreen screen) {
+  return Navigator.of(context).pushAndRemoveUntil<void>(
+    liveMatchRoute(screen),
+    (route) => route.settings.name != kLiveMatchRouteName,
+  );
+}
+
+/// Pops every live match route (e.g. leaving after a rematch chain).
+void popAllLiveMatchRoutes(BuildContext context) {
+  Navigator.of(context).popUntil(
+    (route) => route.settings.name != kLiveMatchRouteName,
+  );
+}
 
 class MatchScreen extends StatefulWidget {
   final String matchId;
@@ -66,6 +92,8 @@ class _MatchScreenState extends State<MatchScreen> {
   bool _waitingDrawConfirm = false;
   bool _rematchHandled = false;
   bool _showingRematchDialog = false;
+  bool _rematchSent = false;
+  bool _opponentRematchOffered = false;
 
   /// No moves played — skip interstitial / “completed match” counter on exit.
   bool _voidNoMovesEnd = false;
@@ -89,6 +117,12 @@ class _MatchScreenState extends State<MatchScreen> {
 
   int get _openingSeat =>
       onlineMatchFirstSeat(_priorMatchCount ?? 0);
+
+  bool get _canOfferRematch =>
+      !_rematchHandled &&
+      !_rematchSent &&
+      !_opponentRematchOffered &&
+      !_service.hasPendingChallengeTo(widget.opponentId);
 
   @override
   void initState() {
@@ -153,6 +187,7 @@ class _MatchScreenState extends State<MatchScreen> {
           if (mounted) setState(() => _isMatchBannerLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('match banner', error);
           ad.dispose();
           if (mounted) setState(() => _isMatchBannerLoaded = false);
         },
@@ -173,6 +208,7 @@ class _MatchScreenState extends State<MatchScreen> {
           }
         },
         onAdFailedToLoad: (error) {
+          logAdLoadFailure('match interstitial', error);
           if (mounted) {
             setState(() => _multiplayerInterstitial = null);
           }
@@ -240,7 +276,9 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Future<void> _onBackToSchoolLobbyFromEndDialog() async {
     _cancelRematchListeners();
-    Navigator.pop(context);
+    if (ModalRoute.of(context)?.isCurrent == false) {
+      Navigator.pop(context);
+    }
     final skipCompletedMatchCount = _voidNoMovesEnd;
     if (!skipCompletedMatchCount) {
       await _incrementMatchCountAndMaybeShowInterstitial();
@@ -249,7 +287,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (!mounted) {
       return;
     }
-    Navigator.pop(context);
+    popAllLiveMatchRoutes(context);
   }
 
   void _cancelRematchListeners() {
@@ -276,7 +314,12 @@ class _MatchScreenState extends State<MatchScreen> {
     if (payload['from_id']?.toString() != widget.opponentId) {
       return;
     }
+    // Mutual rematch clicks are merged in [MultiplayerService]; only one offer UI.
+    if (_rematchSent || _service.hasPendingChallengeTo(widget.opponentId)) {
+      return;
+    }
 
+    setState(() => _opponentRematchOffered = true);
     _showingRematchDialog = true;
     await showDialog<void>(
       context: context,
@@ -303,6 +346,9 @@ class _MatchScreenState extends State<MatchScreen> {
         },
         onDecline: () async {
           Navigator.pop(dialogCtx);
+          if (mounted) {
+            setState(() => _opponentRematchOffered = false);
+          }
           await _service.respondToChallenge(
             matchId: payload['match_id']?.toString() ?? '',
             challengerId: widget.opponentId,
@@ -329,6 +375,9 @@ class _MatchScreenState extends State<MatchScreen> {
       return;
     }
 
+    if (mounted) {
+      setState(() => _rematchSent = false);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${widget.opponentUsername} declined the rematch'),
@@ -343,6 +392,15 @@ class _MatchScreenState extends State<MatchScreen> {
     if (payload['opponent_id']?.toString() != widget.opponentId) {
       return;
     }
+
+    if (payload['mutual'] == true && _rematchSent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Both players requested a rematch — starting now…'),
+        ),
+      );
+    }
+
     _openRematch(payload['match_id']?.toString() ?? '');
   }
 
@@ -353,33 +411,40 @@ class _MatchScreenState extends State<MatchScreen> {
     _rematchHandled = true;
     _cancelRematchListeners();
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => MatchScreen(
-          matchId: matchId,
-          myId: widget.myId,
-          myUsername: widget.myUsername,
-          myElo: widget.myElo,
-          opponentId: widget.opponentId,
-          opponentUsername: widget.opponentUsername,
-          lobbyBeeFiveXp: widget.lobbyBeeFiveXp,
-          restoreSearchingWhenLeaving: widget.restoreSearchingWhenLeaving,
-        ),
+    openLiveMatch(
+      context,
+      MatchScreen(
+        matchId: matchId,
+        myId: widget.myId,
+        myUsername: widget.myUsername,
+        myElo: widget.myElo,
+        opponentId: widget.opponentId,
+        opponentUsername: widget.opponentUsername,
+        lobbyBeeFiveXp: widget.lobbyBeeFiveXp,
+        restoreSearchingWhenLeaving: widget.restoreSearchingWhenLeaving,
       ),
     );
   }
 
-  Future<void> _onRematchPressed() async {
-    if (!_matchEnded || _rematchHandled) {
+  Future<void> _onRematchPressed([VoidCallback? refreshDialog]) async {
+    if (!_matchEnded || !_canOfferRematch) {
       return;
     }
 
+    // Stage synchronously first so a simultaneous opponent click merges to one room.
+    final proposedMatchId = _uuid.v4();
+    _service.stageOutgoingChallenge(widget.opponentId, proposedMatchId);
+
+    setState(() => _rematchSent = true);
+    refreshDialog?.call();
     Navigator.of(context, rootNavigator: true).pop();
 
     await ensureXpInitialized();
     final xp = await getXp();
     if (!canPlayLiveMatches(xp)) {
+      _service.cancelOutgoingChallenge(widget.opponentId);
       if (mounted) {
+        setState(() => _rematchSent = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text(liveMatchesRequiresXpMessage)),
         );
@@ -387,9 +452,10 @@ class _MatchScreenState extends State<MatchScreen> {
       return;
     }
 
-    final matchId = _uuid.v4();
-    // Stage before async lobby work so simultaneous rematch clicks share one room.
-    _service.stageOutgoingChallenge(widget.opponentId, matchId);
+    final matchId = _service.matchIdForOutgoingChallenge(
+      widget.opponentId,
+      proposedMatchId,
+    );
 
     await _service.setIdle(
       userId: widget.myId,
@@ -418,12 +484,25 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
-  List<Widget> _matchEndDialogActions() {
+  List<Widget> _matchEndDialogActions([StateSetter? setDialogState]) {
+    void refreshDialog() {
+      if (mounted) setState(() {});
+      setDialogState?.call(() {});
+    }
+
+    final canRematch = _canOfferRematch;
     return [
       ElevatedButton(
-        onPressed: () => unawaited(_onRematchPressed()),
+        onPressed:
+            canRematch ? () => unawaited(_onRematchPressed(refreshDialog)) : null,
         style: BeeFiveMultiplayerTheme.primaryBlackButton,
-        child: const Text('Rematch'),
+        child: Text(
+          _opponentRematchOffered
+              ? 'Rematch offered'
+              : _rematchSent
+                  ? 'Rematch sent…'
+                  : 'Rematch',
+        ),
       ),
       TextButton(
         onPressed: () {
@@ -671,21 +750,23 @@ class _MatchScreenState extends State<MatchScreen> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => BeeFiveMultiplayerTheme.yellowDialog(
-        title: const Text(
-          'Draw',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) => BeeFiveMultiplayerTheme.yellowDialog(
+          title: const Text(
+            'Draw',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
           ),
+          content: Text(
+            mineStr != null
+                ? 'Match drawn. Your ELO change: $mineStr'
+                : 'Match drawn.',
+            style: const TextStyle(color: Colors.black87, fontSize: 16),
+          ),
+          actions: _matchEndDialogActions(setDialogState),
         ),
-        content: Text(
-          mineStr != null
-              ? 'Match drawn. Your ELO change: $mineStr'
-              : 'Match drawn.',
-          style: const TextStyle(color: Colors.black87, fontSize: 16),
-        ),
-        actions: _matchEndDialogActions(),
       ),
     );
   }
@@ -716,47 +797,49 @@ class _MatchScreenState extends State<MatchScreen> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => BeeFiveMultiplayerTheme.yellowDialog(
-        title: Text(
-          iWon ? 'You won!' : 'You lost',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) => BeeFiveMultiplayerTheme.yellowDialog(
+          title: Text(
+            iWon ? 'You won!' : 'You lost',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              iWon
-                  ? 'You beat ${widget.opponentUsername}!'
-                  : '${widget.opponentUsername} beat you.',
-              style: const TextStyle(color: Colors.black87, fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              iWon ? '+1 XP' : '-1 XP',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: iWon ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
-              ),
-            ),
-            if (eloChange != null) ...[
-              const SizedBox(height: 12),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Text(
-                iWon ? '+$eloChange ELO' : '$eloChange ELO',
+                iWon
+                    ? 'You beat ${widget.opponentUsername}!'
+                    : '${widget.opponentUsername} beat you.',
+                style: const TextStyle(color: Colors.black87, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                iWon ? '+1 XP' : '-1 XP',
                 style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                   color: iWon ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
                 ),
               ),
+              if (eloChange != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  iWon ? '+$eloChange ELO' : '$eloChange ELO',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: iWon ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
+          actions: _matchEndDialogActions(setDialogState),
         ),
-        actions: _matchEndDialogActions(),
       ),
     );
   }
@@ -768,7 +851,7 @@ class _MatchScreenState extends State<MatchScreen> {
     _matchOverSub.cancel();
     _matchBannerAd?.dispose();
     _multiplayerInterstitial?.dispose();
-    // Rematch uses pushReplacement: the new MatchScreen joins first; only tear
+    // Rematch clears prior match routes via pushAndRemoveUntil; only tear down
     // down the channel if this route still owns it.
     if (_service.isActiveMatch(widget.matchId)) {
       unawaited(_service.leaveMatch(onlyIfMatchId: widget.matchId));
@@ -800,9 +883,15 @@ class _MatchScreenState extends State<MatchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: BeeFiveMultiplayerTheme.scaffoldBackground,
-      appBar: AppBar(
+    return PopScope(
+      canPop: !_matchEnded || _showingRematchDialog,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !_matchEnded) return;
+        unawaited(_onBackToSchoolLobbyFromEndDialog());
+      },
+      child: Scaffold(
+        backgroundColor: BeeFiveMultiplayerTheme.scaffoldBackground,
+        appBar: AppBar(
         backgroundColor: primaryYellow,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -856,6 +945,19 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
             ),
+          if (_matchEnded && _rematchSent && !_rematchHandled)
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                'Rematch sent — waiting for ${widget.opponentUsername}…',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.black.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
           const Divider(height: 1, color: Colors.black26),
           Expanded(
             child: _priorMatchCount == null
@@ -878,6 +980,7 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
           _buildMatchBannerAd(),
         ],
+      ),
       ),
     );
   }

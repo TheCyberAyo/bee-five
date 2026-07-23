@@ -22,7 +22,6 @@ interface AdventureClassicAIGameProps {
   onNextGame?: () => void;
   showCountdown?: boolean;
   gameNumber?: number;
-  onBackToMap?: () => void;
   onGameWin?: (won: boolean) => void;
   currentMatch?: number;
   playerWins?: number;
@@ -84,7 +83,6 @@ export default function AdventureClassicAIGame({
   onNextGame,
   showCountdown = false,
   gameNumber = 1,
-  onBackToMap,
   onGameWin,
   currentMatch,
   playerWins,
@@ -148,14 +146,6 @@ export default function AdventureClassicAIGame({
       soundManager.playClickSound();
     }
   }, [onBackToMenu]);
-
-  const handleMapExit = useCallback(() => {
-    if (onBackToMap) {
-      onBackToMap();
-    } else {
-      handleExit();
-    }
-  }, [onBackToMap, handleExit]);
 
   // Sync countdown state with prop changes (especially when component remounts for new match)
   useEffect(() => {
@@ -227,8 +217,13 @@ export default function AdventureClassicAIGame({
     gameActiveRef.current = false;
     setLastXpDelta(0);
 
+    const winsAfterThis = (playerWins ?? 0) + 1;
+    const levelClearingWin =
+      _requiredWins === undefined ? true : winsAfterThis >= _requiredWins;
+
     const xpOptions = {
       levelJustPlayed: gameNumber,
+      levelClearingWin,
       adventureContext: adventureXpContext,
       userId: sessionUserId,
     };
@@ -279,6 +274,8 @@ export default function AdventureClassicAIGame({
     gameNumber,
     adventureXpContext,
     sessionUserId,
+    playerWins,
+    _requiredWins,
   ]);
 
   // AI move logic
@@ -543,8 +540,20 @@ export default function AdventureClassicAIGame({
           />
           <span>Home</span>
         </button>
-        <button type="button" onClick={handleMapExit} style={footerButtonStyle}>
-          <span>🗺️ Map</span>
+        <button
+          type="button"
+          onClick={() => {
+            soundManager.playClickSound();
+            handlePlayAgain();
+          }}
+          style={footerButtonStyle}
+        >
+          <img
+            src="/homeImagery/restart_icon.png"
+            alt=""
+            style={{ width: 20, height: 20, objectFit: 'contain' }}
+          />
+          <span>Rematch</span>
         </button>
       </div>
 

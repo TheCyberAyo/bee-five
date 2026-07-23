@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+import '../firebase_bootstrap.dart';
 import 'async_game_service.dart';
 import 'local_notification_service.dart';
 
@@ -12,11 +13,13 @@ class PushNotificationService {
   PushNotificationService._();
   static final PushNotificationService instance = PushNotificationService._();
 
-  final _messaging = FirebaseMessaging.instance;
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<RemoteMessage>? _foregroundMessageSub;
   StreamSubscription<RemoteMessage>? _openedAppSub;
   bool _registeredForUser = false;
+
+  FirebaseMessaging? get _messaging =>
+      isFirebaseReady ? FirebaseMessaging.instance : null;
 
   static String get _platform {
     if (kIsWeb) return 'web';
@@ -27,22 +30,25 @@ class PushNotificationService {
 
   /// Call when a signed-in user session is available.
   Future<void> registerIfNeeded() async {
-    if (kIsWeb) return;
+    if (kIsWeb || !isFirebaseReady) return;
+
+    final messaging = _messaging;
+    if (messaging == null) return;
 
     await LocalNotificationService.instance.init();
 
-    await _messaging.requestPermission(
+    await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    final token = await _messaging.getToken();
+    final token = await messaging.getToken();
     if (token != null) {
       await _saveToken(token);
     }
 
-    _tokenRefreshSub ??= _messaging.onTokenRefresh.listen(_saveToken);
+    _tokenRefreshSub ??= messaging.onTokenRefresh.listen(_saveToken);
     _foregroundMessageSub ??=
         FirebaseMessaging.onMessage.listen(_showForegroundNotification);
     _openedAppSub ??=

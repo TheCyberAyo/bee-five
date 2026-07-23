@@ -1,5 +1,4 @@
 import { eloRankTitle } from '../utils/playerRank';
-import { defaultXp } from '../services/xpService';
 
 export type PlayerStatus = 'idle' | 'searching' | 'in_match';
 
@@ -23,7 +22,7 @@ function parseIntField(v: unknown, fallback?: number): number | undefined {
 }
 
 function parseXp(v: unknown): number {
-  return parseIntField(v, defaultXp) ?? defaultXp;
+  return parseIntField(v, 0) ?? 0;
 }
 
 export function parsePlayerStatus(raw: unknown): PlayerStatus {

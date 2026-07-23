@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'ads/ad_unit_ids.dart';
+import 'ads/ad_log.dart';
 import 'adventure_game_rules.dart';
 import 'adventure_game_logic.dart' as logic;
 import 'background_sound.dart';
 import 'adventure_progress_service.dart';
 import 'xp_service.dart';
 import 'bee_facts.dart';
+import 'theme/adventure_theme.dart';
 
 /// Hides scrollbar completely (no vertical bar on the side).
 class _NoScrollbarBehavior extends ScrollBehavior {
@@ -17,12 +20,11 @@ class _NoScrollbarBehavior extends ScrollBehavior {
   }
 }
 
-const Color primaryYellow = Color(0xFFFFC30B);
+const Color primaryYellow = beeFivePrimaryYellow;
 const Color _turnAnnouncementOrange = Color(0xFFFF9800);
-const Color classicBoardGridColor = Color(0xFF87CEEB);
-const Color countdownBoardGridColor = Color(0xFFE53935);
-const Color classicBoardBackground = Color(0xFF424242);
 const int boardSize = 10;
+/// Web GameCanvas draws pieces with radius cellSize / 3 (diameter 2/3 of cell).
+const double _adventurePieceDiameterFactor = 2 / 3;
 
 class AdventureGame extends StatefulWidget {
   // CHANGE 1: onBackToMenu now carries the current level back to the home page.
@@ -70,6 +72,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
 
   int timeLeft = 15;
   Timer? timer;
+  Timer? _countdownSequenceTimer;
 
   int humanMoveCount = 0;
   int player1MoveCount = 0;
@@ -88,7 +91,32 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
   InterstitialAd? _interstitialAd;
+  RewardedAd? _skipLevelRewardedAd;
   int _actionCount = 0;
+  int _consecutiveLevelLosses = 0;
+  int _consecutiveGameWins = 0;
+  bool _isWaitingForNextMatch = false;
+  int _matchCountdownTimer = 0;
+  bool _showMatchWinnerAnnouncement = false;
+  String _matchWinnerMessage = '';
+  bool _showWowAnnouncement = false;
+  bool _showHayiJongaAnnouncement = false;
+  bool _showUnstoppableAnnouncement = false;
+  String _unstoppableFlowerAsset = _unstoppableFlowerAssets.first;
+  String? _lastAnnouncedMatchKey;
+
+  static const List<String> _unstoppableFlowerAssets = [
+    'assets/mapImagery/sunflower.png',
+    'assets/mapImagery/lavender.png',
+    'assets/mapImagery/echinacea.png',
+    'assets/mapImagery/borage.png',
+    'assets/mapImagery/clover.png',
+  ];
+
+  String _unstoppableFlowerForWin(int consecutiveWins) {
+    return _unstoppableFlowerAssets[
+        (consecutiveWins - 3) % _unstoppableFlowerAssets.length];
+  }
 
   @override
   void initState() {
@@ -100,13 +128,17 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
+    getAdventureConsecutiveLosses().then((losses) {
+      if (mounted) setState(() => _consecutiveLevelLosses = losses);
+    });
     _loadBannerAd();
     _loadInterstitialAd();
+    _loadSkipLevelRewardedAd();
   }
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-6740638137327567/1435131168',
+      adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -114,6 +146,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
           if (mounted) setState(() => _isBannerAdLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
+          logAdLoadFailure('adventure banner', error);
           ad.dispose();
         },
       ),
@@ -122,17 +155,221 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
 
   void _loadInterstitialAd() {
     InterstitialAd.load(
-      adUnitId: 'ca-app-pub-6740638137327567/9168616109',
+      adUnitId: kInterstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _interstitialAd = ad;
         },
         onAdFailedToLoad: (error) {
+          logAdLoadFailure('adventure interstitial', error);
           _interstitialAd = null;
         },
       ),
     );
+  }
+
+  void _loadSkipLevelRewardedAd() {
+    RewardedAd.load(
+      adUnitId: kRewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) => _skipLevelRewardedAd = ad,
+        onAdFailedToLoad: (error) {
+          logAdLoadFailure('adventure skip rewarded', error);
+          _skipLevelRewardedAd = null;
+        },
+      ),
+    );
+  }
+
+  void _beginMatchCountdown() {
+    setState(() {
+      _isWaitingForNextMatch = true;
+      _matchCountdownTimer = 3;
+    });
+    _startMatchCountdown();
+  }
+
+  void _scheduleCelebrationThen(
+    void Function() applyShow,
+    void Function() applyHide,
+    VoidCallback onComplete,
+  ) {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(applyShow);
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        setState(applyHide);
+        onComplete();
+      });
+    });
+  }
+
+  void _resetWinCelebrationStreak() {
+    _consecutiveGameWins = 0;
+    _lastAnnouncedMatchKey = null;
+  }
+
+  bool _scheduleWinCelebrationIfEligible(VoidCallback onComplete) {
+    if (winner == 1 && _consecutiveGameWins >= 3) {
+      _scheduleCelebrationThen(
+        () {
+          _unstoppableFlowerAsset =
+              _unstoppableFlowerForWin(_consecutiveGameWins);
+          _showUnstoppableAnnouncement = true;
+          gameStatus = 'Unstoppable 🐝';
+        },
+        () => _showUnstoppableAnnouncement = false,
+        onComplete,
+      );
+      return true;
+    }
+
+    if (winner == 1 && _consecutiveGameWins == 2) {
+      _scheduleCelebrationThen(
+        () {
+          _showHayiJongaAnnouncement = true;
+          gameStatus = 'Hayi Jonga 🔥🔥';
+        },
+        () => _showHayiJongaAnnouncement = false,
+        onComplete,
+      );
+      return true;
+    }
+
+    if (winner == 1 && _consecutiveGameWins == 1) {
+      _scheduleCelebrationThen(
+        () {
+          _showWowAnnouncement = true;
+          gameStatus = 'Wow!';
+        },
+        () => _showWowAnnouncement = false,
+        onComplete,
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  void _scheduleMidMatchContinuation() {
+    final matchKey = '$currentGame-$currentMatch';
+    if (_lastAnnouncedMatchKey == matchKey) return;
+    _lastAnnouncedMatchKey = matchKey;
+
+    if (_scheduleWinCelebrationIfEligible(_beginMatchCountdown)) return;
+
+    final message = winner == 1
+        ? 'You Won Match $currentMatch/$totalGames! 🎉'
+        : 'AI won Match $currentMatch/$totalGames! 😔';
+    setState(() {
+      _showMatchWinnerAnnouncement = true;
+      _matchWinnerMessage = message;
+      gameStatus = message;
+    });
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => _showMatchWinnerAnnouncement = false);
+      _beginMatchCountdown();
+    });
+  }
+
+  bool _isLevelWin() {
+    if (winner != 1) return false;
+    if (!(gameRules?.isMatchGame ?? false)) return true;
+    return playerWins >= requiredWins;
+  }
+
+  bool get _canOfferSkipLevelAd =>
+      _consecutiveLevelLosses >= adventureLossesBeforeSkipAdOffer;
+
+  void _watchAdToSkipLevel() {
+    final ad = _skipLevelRewardedAd;
+    if (ad == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ad not ready yet, please try again in a moment.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      _loadSkipLevelRewardedAd();
+      return;
+    }
+
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _skipLevelRewardedAd = null;
+        _loadSkipLevelRewardedAd();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        logAdFailure('adventure skip rewarded show', error);
+        ad.dispose();
+        _skipLevelRewardedAd = null;
+        _loadSkipLevelRewardedAd();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not show the ad. Please try again.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      },
+    );
+
+    ad.show(
+      onUserEarnedReward: (_, reward) {
+        if (mounted) _showSkipLevelCountdown();
+      },
+    );
+  }
+
+  void _showSkipLevelCountdown() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (dialogContext) {
+        return _AdSkipCountdownDialog(
+          seconds: 30,
+          onComplete: () {
+            Navigator.of(dialogContext).pop();
+            _skipToNextLevelViaAd();
+          },
+        );
+      },
+    );
+  }
+
+  void _skipToNextLevelViaAd() {
+    resetAdventureConsecutiveLosses();
+    final nextLevel = currentGame + 1;
+
+    Future.microtask(() async {
+      try {
+        await saveAdventureLevel(nextLevel);
+      } catch (_) {}
+    });
+
+    setState(() {
+      _consecutiveLevelLosses = 0;
+      currentGame = nextLevel;
+      currentMatch = 1;
+      playerWins = 0;
+      aiWins = 0;
+      isMatchComplete = false;
+      _isWaitingForNextMatch = false;
+      _matchCountdownTimer = 0;
+      _showMatchWinnerAnnouncement = false;
+      _showWowAnnouncement = false;
+      _showHayiJongaAnnouncement = false;
+      _showUnstoppableAnnouncement = false;
+      _lastAnnouncedMatchKey = null;
+    });
+    _initializeGame();
   }
 
   void _onActionPressed({required bool isContinue}) {
@@ -175,8 +412,10 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
     WidgetsBinding.instance.removeObserver(this);
     _persistProgressBestEffort();
     timer?.cancel();
+    _countdownSequenceTimer?.cancel();
     _bannerAd?.dispose();
     _interstitialAd?.dispose();
+    _skipLevelRewardedAd?.dispose();
     super.dispose();
   }
 
@@ -186,6 +425,10 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _persistProgressBestEffort();
+    } else if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        setState(_resetWinCelebrationStreak);
+      }
     }
   }
 
@@ -217,8 +460,6 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
     currentPlayer = gameRules!.startingPlayer;
     gameStarted = false;
     gameInitialized = false;
-    showStartCountdown = true;
-    startCountdown = 3;
     timeLeft = gameRules!.timeLimit;
     
     humanMoveCount = 0;
@@ -239,14 +480,40 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
       gameStatus = currentPlayer == 1 ? 'Your turn' : 'AI thinking...';
     }
 
-    _currentBeeFact = getBeeFactForGame(currentGame);
+    if (currentMatch == 1) {
+      _lastAnnouncedMatchKey = null;
+    }
 
-    if (_currentBeeFact != null) {
+    _currentBeeFact = getBeeFactForGame(currentGame);
+    final shouldShowStartCountdown =
+        !gameRules!.isMatchGame || currentMatch == 1;
+
+    if (_currentBeeFact != null && currentMatch == 1) {
       showStartCountdown = false;
       _showBeeFactScreen = true;
     } else {
       _showBeeFactScreen = false;
-      _startCountdown();
+      if (shouldShowStartCountdown) {
+        showStartCountdown = true;
+        startCountdown = 3;
+        _startCountdown();
+      } else {
+        showStartCountdown = false;
+        startCountdown = 0;
+        _beginGameAfterCountdown();
+      }
+    }
+  }
+
+  void _beginGameAfterCountdown() {
+    showStartCountdown = false;
+    gameStarted = true;
+    gameInitialized = true;
+    _startTimer();
+    if (currentPlayer == 2) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) _makeAIMove();
+      });
     }
   }
 
@@ -260,28 +527,44 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   }
 
   void _startCountdown() {
-    if (startCountdown > 0) {
-      Future.delayed(const Duration(seconds: 1), () {
-        if (!mounted) return;
-        if (!showStartCountdown) return;
-        setState(() {
-          startCountdown--;
-          if (startCountdown > 0) {
-            _startCountdown();
-          } else {
-            showStartCountdown = false;
-            gameStarted = true;
-            gameInitialized = true;
-            _startTimer();
-            if (currentPlayer == 2) {
-              Future.delayed(const Duration(milliseconds: 500), () {
-                _makeAIMove();
-              });
-            }
-          }
-        });
+    _countdownSequenceTimer?.cancel();
+    startCountdown = 3;
+    showStartCountdown = true;
+
+    Future<void> run() async {
+      for (var i = 3; i >= 1; i--) {
+        if (!mounted || !showStartCountdown) return;
+        setState(() => startCountdown = i);
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      if (!mounted || !showStartCountdown) return;
+      setState(() => startCountdown = 0);
+      if (!mounted || !showStartCountdown) return;
+      setState(_beginGameAfterCountdown);
+    }
+
+    run();
+  }
+
+  void _startMatchCountdown() {
+    _countdownSequenceTimer?.cancel();
+
+    Future<void> run() async {
+      for (var i = 3; i >= 1; i--) {
+        if (!mounted || !_isWaitingForNextMatch) return;
+        setState(() => _matchCountdownTimer = i);
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      if (!mounted || !_isWaitingForNextMatch) return;
+      setState(() {
+        _isWaitingForNextMatch = false;
+        _matchCountdownTimer = 0;
+        currentMatch++;
+        _initializeGame();
       });
     }
+
+    run();
   }
 
   void _startTimer() {
@@ -989,7 +1272,11 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
     if (winner == 1) {
       playerWins++;
       gameStatus = 'You Won!';
-      onAdventureGameWon(levelJustPlayed: currentGame).then((result) {
+      _consecutiveGameWins++;
+      onAdventureGameWon(
+        levelJustPlayed: currentGame,
+        levelClearingWin: _isLevelWin(),
+      ).then((result) {
         if (mounted) {
           setState(() {
             _headerXp = result.$1;
@@ -1000,6 +1287,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
     } else if (winner == 2) {
       aiWins++;
       gameStatus = 'Hive Lost!';
+      _resetWinCelebrationStreak();
       onAdventureMatchLost(levelJustPlayed: currentGame).then((result) {
         if (mounted) {
           setState(() {
@@ -1019,22 +1307,21 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
         isMatchComplete = true;
         gameStatus = 'Hive Lost! You: $playerWins, AI: $aiWins';
       } else if (currentMatch < totalGames) {
-        gameStatus = 'Match $currentMatch complete. Starting match ${currentMatch + 1}...';
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            setState(() {
-              currentMatch++;
-              _initializeGame();
-            });
-          }
-        });
+        _scheduleMidMatchContinuation();
         return;
       }
     }
 
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      if (!mounted) return;
+      if (!_isLevelWin()) {
+        final losses = await recordAdventureLevelFailure(currentGame);
+        if (mounted) setState(() => _consecutiveLevelLosses = losses);
+      }
       if (mounted) {
-        _showGameOverPopup();
+        if (!_scheduleWinCelebrationIfEligible(_showGameOverPopup)) {
+          _showGameOverPopup();
+        }
       }
     });
   }
@@ -1161,6 +1448,34 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
                         ),
                       ),
                     ] else ...[
+                      if (_canOfferSkipLevelAd) ...[
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(dialogContext).pop();
+                            _watchAdToSkipLevel();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF7B1FA2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 16,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            'Watch Ad to Skip (30s)',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       ElevatedButton(
                         onPressed: () {
                           Navigator.of(dialogContext).pop();
@@ -1224,11 +1539,23 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   }
   
   void _resetGame() {
+    _countdownSequenceTimer?.cancel();
     setState(() {
       currentMatch = 1;
       playerWins = 0;
       aiWins = 0;
       isMatchComplete = false;
+      _isWaitingForNextMatch = false;
+      _matchCountdownTimer = 0;
+      _showMatchWinnerAnnouncement = false;
+      _showWowAnnouncement = false;
+      _showHayiJongaAnnouncement = false;
+      _showUnstoppableAnnouncement = false;
+      _lastAnnouncedMatchKey = null;
+      _lastXpDelta = 0;
+    });
+    getXp().then((xp) {
+      if (mounted) setState(() => _headerXp = xp);
     });
     _initializeGame();
   }
@@ -1259,12 +1586,20 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
       playerWins = 0;
       aiWins = 0;
       isMatchComplete = false;
+      _consecutiveLevelLosses = 0;
+      _isWaitingForNextMatch = false;
+      _matchCountdownTimer = 0;
+      _showMatchWinnerAnnouncement = false;
+      _showWowAnnouncement = false;
+      _showHayiJongaAnnouncement = false;
+      _showUnstoppableAnnouncement = false;
+      _lastAnnouncedMatchKey = null;
     });
 
     _initializeGame();
   }
 
-  // CHANGE 4: _backToMenu is fully synchronous — no async, no await, never freezes.
+  // CHANGE 4: _backToMenu is fully synchronous
   // It passes currentGame directly to the home page via the callback.
   // saveAdventureLevel fires in the background after navigation has already happened.
   void _backToMenu() {
@@ -1283,7 +1618,11 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
       (screenSize.width - 46) / boardSize,
       (screenSize.height - 300) / boardSize,
     );
-    final boardGridColor = showStartCountdown ? countdownBoardGridColor : classicBoardGridColor;
+    final theme = getThemeForGame(currentGame);
+    final boardGridColor = adventureBoardGridColor(
+      theme: theme,
+      consecutiveGameWins: _consecutiveGameWins,
+    );
 
     // CHANGE 5: showExitDialog calls _backToMenu directly — same synchronous pattern
     void showExitDialog() {
@@ -1311,7 +1650,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
     }
 
     return Scaffold(
-      backgroundColor: classicBoardBackground,
+      backgroundColor: primaryYellow,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         toolbarHeight: 56,
@@ -1367,10 +1706,10 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
                   fit: BoxFit.scaleDown,
                   child: Text(
                     'Level $currentGame',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.green,
+                      color: theme.textColor,
                     ),
                   ),
                 ),
@@ -1467,7 +1806,9 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
                     ),
                   ),
                 )
-              : Column(
+              : Stack(
+            children: [
+            Column(
             children: [
             Container(
               width: double.infinity,
@@ -1478,54 +1819,55 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
               ),
               child: Column(
                 children: [
-                  if (showStartCountdown)
-                    Text(
-                      'Starting in $startCountdown...',
-                      style: const TextStyle(
-                        color: primaryYellow,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  else ...[
-                    Text(
-                      gameStatus,
-                      style: TextStyle(
-                        color: (gameStatus == 'Your turn' ||
-                                gameStatus == 'AI thinking...')
-                            ? _turnAnnouncementOrange
-                            : (winner == 1 &&
-                                    (gameStatus == 'You Won!' ||
-                                        gameStatus.startsWith('Match won')))
-                                ? Colors.green
-                                : primaryYellow,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                  Text(
+                    gameStatus,
+                    style: TextStyle(
+                      color: (gameStatus == 'Your turn' ||
+                              gameStatus == 'AI thinking...')
+                          ? _turnAnnouncementOrange
+                          : (winner == 1 &&
+                                  (gameStatus == 'You Won!' ||
+                                      gameStatus.startsWith('Match won')))
+                              ? Colors.green
+                              : primaryYellow,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (gameRules != null && gameRules!.timeLimit > 0 && gameStarted)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Time: ${timeLeft}s',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
-                    if (gameRules != null && gameRules!.timeLimit > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Time: ${timeLeft}s',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
+                  if (gameRules != null && gameRules!.isMatchGame)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Match $currentMatch of $totalGames | You: $playerWins | AI: $aiWins',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
                         ),
                       ),
-                    if (gameRules != null && gameRules!.isMatchGame)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Match $currentMatch of $totalGames | You: $playerWins | AI: $aiWins',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
+                    ),
+                  if (_isWaitingForNextMatch && _matchCountdownTimer > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Next game in $_matchCountdownTimer...',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                  ],
+                    ),
                 ],
               ),
             ),
@@ -1544,7 +1886,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
                               decoration: BoxDecoration(
                                 color: boardGridColor,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.black, width: 3),
+                                border: Border.all(color: theme.borderColor, width: 3),
                               ),
                               child: Column(
                                 children: List.generate(boardSize, (row) {
@@ -1567,11 +1909,13 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
                                           height: cellSize,
                                           decoration: BoxDecoration(
                                             color: isWinning
-                                                ? (winner == 1 ? Colors.black : primaryYellow)
+                                                ? (winner == 1
+                                                    ? primaryYellow
+                                                    : theme.player1Color)
                                                 : isBlocked
-                                                    ? Colors.grey.shade400
+                                                    ? theme.accentColor
                                                     : isMudZone
-                                                        ? Colors.brown.shade200
+                                                        ? adventureMudColor
                                                         : boardGridColor,
                                             border: Border.all(
                                               color: isBlindMudZone
@@ -1583,26 +1927,33 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
                                           child: Center(
                                             child: cellValue == 1
                                                 ? Container(
-                                                    width: cellSize * 0.8,
-                                                    height: cellSize * 0.8,
-                                                    decoration: const BoxDecoration(
-                                                      color: primaryYellow,
+                                                    width: cellSize * _adventurePieceDiameterFactor,
+                                                    height: cellSize * _adventurePieceDiameterFactor,
+                                                    decoration: BoxDecoration(
+                                                      color: theme.player1Color,
                                                       shape: BoxShape.circle,
                                                     ),
                                                   )
                                                 : cellValue == 2
                                                     ? Container(
-                                                        width: cellSize * 0.8,
-                                                        height: cellSize * 0.8,
-                                                        decoration: const BoxDecoration(
-                                                          color: Colors.black,
+                                                        width: cellSize * _adventurePieceDiameterFactor,
+                                                        height: cellSize * _adventurePieceDiameterFactor,
+                                                        decoration: BoxDecoration(
+                                                          color: primaryYellow,
                                                           shape: BoxShape.circle,
                                                         ),
                                                       )
                                                     : isBlocked
-                                                        ? const Icon(Icons.block, size: 16, color: Colors.grey)
+                                                        ? Text(
+                                                            '✕',
+                                                            style: TextStyle(
+                                                              fontSize: cellSize * 0.45,
+                                                              color: theme.player1Color,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          )
                                                         : isMudZone
-                                                            ? const Text('🌊', style: TextStyle(fontSize: 12))
+                                                            ? Text('🟤', style: TextStyle(fontSize: cellSize * 0.35))
                                                             : null,
                                           ),
                                         ),
@@ -1733,7 +2084,592 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
             ),
           ],
         ),
+            if (showStartCountdown && !_isWaitingForNextMatch)
+              _AdventureCountdownOverlay(
+                text: startCountdown > 0 ? '$startCountdown' : 'GO!',
+              ),
+            if (_showWowAnnouncement)
+              const _WowHoneyJarAnnouncement(),
+            if (_showHayiJongaAnnouncement)
+              const _HayiJongaAnnouncement(),
+            if (_showUnstoppableAnnouncement)
+              _UnstoppableAnnouncement(flowerAsset: _unstoppableFlowerAsset),
+            if (_showMatchWinnerAnnouncement)
+              _MatchWinnerAnnouncement(message: _matchWinnerMessage),
+            if (_isWaitingForNextMatch &&
+                _matchCountdownTimer > 0 &&
+                !showStartCountdown)
+              _AdventureCountdownOverlay(text: '$_matchCountdownTimer'),
+          ],
+        ),
       ),
+      ),
+    );
+  }
+}
+
+class _AdventureCountdownOverlay extends StatelessWidget {
+  final String text;
+
+  const _AdventureCountdownOverlay({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.8),
+        child: Center(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 120,
+              fontWeight: FontWeight.bold,
+              color: primaryYellow,
+              shadows: [
+                Shadow(
+                  offset: Offset(4, 4),
+                  blurRadius: 8,
+                  color: Colors.black,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WowHoneyJarAnnouncement extends StatelessWidget {
+  const _WowHoneyJarAnnouncement();
+
+  static const Color _jarGold = Color(0xFFFFD700);
+  static const Color _jarGoldDeep = Color(0xFFDAA520);
+  static const Color _jarLid = Color(0xFFB8860B);
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.8),
+        child: Center(
+          child: Container(
+            width: 210,
+            padding: const EdgeInsets.fromLTRB(24, 14, 24, 28),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_jarGold, _jarGoldDeep],
+              ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.black, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 118,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: _jarLid,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.black, width: 2),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Image.asset(
+                  'assets/mapImagery/honey.png',
+                  height: 72,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) =>
+                      const Text('🍯', style: TextStyle(fontSize: 56)),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Wow!',
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HayiJongaAnnouncement extends StatelessWidget {
+  const _HayiJongaAnnouncement();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.8),
+        child: Center(
+          child: Container(
+            width: 280,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.black, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(
+                width: 264,
+                height: 196,
+                child: Stack(
+                  children: [
+                    CustomPaint(
+                      size: const Size(264, 196),
+                      painter: const _HayiJongaBeePainter(),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.0),
+                              Colors.black.withValues(alpha: 0.45),
+                            ],
+                          ),
+                        ),
+                        child: const Text(
+                          'Hayi Jonga 🔥🔥',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                offset: Offset(2, 2),
+                                blurRadius: 4,
+                                color: Colors.black,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HayiJongaBeePainter extends CustomPainter {
+  const _HayiJongaBeePainter();
+
+  static const Color _beeYellow = primaryYellow;
+  static const Color _beeAmber = Color(0xFFE6A800);
+  static const Color _wingFill = Color(0xCCFFFFFF);
+  static const Color _wingEdge = Color(0x99000000);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final background = Rect.fromLTWH(0, 0, size.width, size.height);
+    canvas.drawRect(
+      background,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFF3B0), _beeYellow, _beeAmber],
+        ).createShader(background),
+    );
+
+    final center = Offset(size.width * 0.5, size.height * 0.46);
+    final bodyWidth = size.width * 0.34;
+    final bodyHeight = size.height * 0.42;
+
+    _drawWing(
+      canvas,
+      center: Offset(center.dx - bodyWidth * 0.42, center.dy - bodyHeight * 0.18),
+      width: bodyWidth * 0.72,
+      height: bodyHeight * 0.62,
+      rotation: -0.35,
+    );
+    _drawWing(
+      canvas,
+      center: Offset(center.dx + bodyWidth * 0.42, center.dy - bodyHeight * 0.18),
+      width: bodyWidth * 0.72,
+      height: bodyHeight * 0.62,
+      rotation: 0.35,
+    );
+
+    final bodyRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: center.translate(0, bodyHeight * 0.08),
+        width: bodyWidth,
+        height: bodyHeight,
+      ),
+      Radius.circular(bodyWidth * 0.42),
+    );
+    canvas.drawRRect(bodyRect, Paint()..color = _beeYellow);
+    canvas.drawRRect(
+      bodyRect,
+      Paint()
+        ..color = Colors.black
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+
+    final stripePaint = Paint()..color = Colors.black;
+    final stripeTop = center.dy - bodyHeight * 0.02;
+    for (var i = 0; i < 3; i++) {
+      final stripeY = stripeTop + (i * bodyHeight * 0.18);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(center.dx, stripeY),
+            width: bodyWidth * 0.88,
+            height: bodyHeight * 0.11,
+          ),
+          Radius.circular(bodyHeight * 0.05),
+        ),
+        stripePaint,
+      );
+    }
+
+    final headCenter = Offset(center.dx, center.dy - bodyHeight * 0.52);
+    final headRadius = bodyWidth * 0.28;
+    canvas.drawCircle(headCenter, headRadius, Paint()..color = _beeYellow);
+    canvas.drawCircle(
+      headCenter,
+      headRadius,
+      Paint()
+        ..color = Colors.black
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+
+    final eyeOffset = headRadius * 0.38;
+    final eyeRadius = headRadius * 0.18;
+    for (final dx in [-eyeOffset, eyeOffset]) {
+      canvas.drawCircle(
+        headCenter.translate(dx, -headRadius * 0.08),
+        eyeRadius,
+        Paint()..color = Colors.white,
+      );
+      canvas.drawCircle(
+        headCenter.translate(dx, -headRadius * 0.08),
+        eyeRadius,
+        Paint()
+          ..color = Colors.black
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      canvas.drawCircle(
+        headCenter.translate(dx + eyeRadius * 0.25, -headRadius * 0.02),
+        eyeRadius * 0.45,
+        Paint()..color = Colors.black,
+      );
+    }
+
+    final smilePath = Path();
+    smilePath.moveTo(headCenter.dx - headRadius * 0.28, headCenter.dy + headRadius * 0.18);
+    smilePath.quadraticBezierTo(
+      headCenter.dx,
+      headCenter.dy + headRadius * 0.42,
+      headCenter.dx + headRadius * 0.28,
+      headCenter.dy + headRadius * 0.18,
+    );
+    canvas.drawPath(
+      smilePath,
+      Paint()
+        ..color = Colors.black
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round,
+    );
+
+    for (final dx in [-headRadius * 0.35, headRadius * 0.35]) {
+      final antennaBase = headCenter.translate(dx, -headRadius * 0.75);
+      final antennaTip = antennaBase.translate(dx * 0.45, -headRadius * 0.55);
+      canvas.drawLine(
+        antennaBase,
+        antennaTip,
+        Paint()
+          ..color = Colors.black
+          ..strokeWidth = 2.5
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawCircle(antennaTip, 4, Paint()..color = Colors.black);
+    }
+
+    final stingerPath = Path()
+      ..moveTo(center.dx, center.dy + bodyHeight * 0.48)
+      ..lineTo(center.dx - bodyWidth * 0.08, center.dy + bodyHeight * 0.62)
+      ..lineTo(center.dx + bodyWidth * 0.08, center.dy + bodyHeight * 0.62)
+      ..close();
+    canvas.drawPath(stingerPath, Paint()..color = Colors.black);
+  }
+
+  void _drawWing(
+    Canvas canvas, {
+    required Offset center,
+    required double width,
+    required double height,
+    required double rotation,
+  }) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(rotation);
+    final wingRect = Rect.fromCenter(
+      center: Offset.zero,
+      width: width,
+      height: height,
+    );
+    canvas.drawOval(wingRect, Paint()..color = _wingFill);
+    canvas.drawOval(
+      wingRect,
+      Paint()
+        ..color = _wingEdge
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(-width * 0.12, -height * 0.05),
+        width: width * 0.35,
+        height: height * 0.55,
+      ),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _UnstoppableAnnouncement extends StatelessWidget {
+  final String flowerAsset;
+
+  const _UnstoppableAnnouncement({required this.flowerAsset});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.8),
+        child: Center(
+          child: Container(
+            width: 280,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.black, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(
+                width: 264,
+                height: 196,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Image.asset(
+                      flowerAsset,
+                      width: 264,
+                      height: 196,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        width: 264,
+                        height: 196,
+                        color: const Color(0xFFFFE082),
+                        alignment: Alignment.center,
+                        child: const Text('🌸', style: TextStyle(fontSize: 72)),
+                      ),
+                    ),
+                    Container(
+                      width: 264,
+                      height: 196,
+                      color: Colors.black.withValues(alpha: 0.2),
+                    ),
+                    const Text(
+                      'Unstoppable 🐝',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(2, 2),
+                            blurRadius: 6,
+                            color: Colors.black,
+                          ),
+                          Shadow(
+                            offset: Offset(-1, -1),
+                            blurRadius: 4,
+                            color: Colors.black54,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchWinnerAnnouncement extends StatelessWidget {
+  final String message;
+
+  const _MatchWinnerAnnouncement({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.8),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 30),
+            decoration: BoxDecoration(
+              color: primaryYellow,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.black, width: 4),
+            ),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdSkipCountdownDialog extends StatefulWidget {
+  final int seconds;
+  final VoidCallback onComplete;
+
+  const _AdSkipCountdownDialog({
+    required this.seconds,
+    required this.onComplete,
+  });
+
+  @override
+  State<_AdSkipCountdownDialog> createState() => _AdSkipCountdownDialogState();
+}
+
+class _AdSkipCountdownDialogState extends State<_AdSkipCountdownDialog> {
+  late int _remaining;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.seconds;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_remaining <= 1) {
+        timer.cancel();
+        widget.onComplete();
+        return;
+      }
+      setState(() => _remaining -= 1);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: primaryYellow,
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: const Color(0xFF6c757d), width: 5),
+        ),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Thanks for watching!',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Next level unlocks in $_remaining seconds…',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
