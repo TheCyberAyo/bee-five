@@ -1,13 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/app-ads.txt",
-        destination: "/app-ads.txt",
-      },
-    ];
-  },
-};
+const nextConfig = {};
 
 module.exports = nextConfig;
