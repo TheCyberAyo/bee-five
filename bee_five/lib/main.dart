@@ -10,6 +10,7 @@ import 'firebase_bootstrap.dart';
 import 'supabase_client.dart';
 import 'contexts/auth_context.dart';
 import 'auth/auth_gate.dart';
+import 'ads/ad_consent.dart';
 import 'ads/ad_unit_ids.dart';
 import 'background_sound.dart';
 
@@ -40,24 +41,12 @@ Future<void> main() async {
 
   await initFirebase(backgroundHandler: _firebaseMessagingBackgroundHandler);
 
-  // Initialize AdMob (requires GADApplicationIdentifier in ios/Runner/Info.plist).
-  try {
-    final initStatus = await MobileAds.instance.initialize();
-    if (kDebugMode) {
-      debugPrint('[AdMob] initialized: ${initStatus.adapterStatuses}');
-      logActiveAdUnitIds();
-    }
-  } catch (e, st) {
-    if (kDebugMode) {
-      debugPrint('[AdMob] initialize failed: $e\n$st');
-    }
-  }
-
   // Lock to portrait only
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
 
+  // AdMob init waits for UMP consent (needs a presented UI) in [MyApp].
   runApp(const MyApp());
 }
 
@@ -69,10 +58,35 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late final Future<void> _adsReady;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _adsReady = _bootstrapAds();
+  }
+
+  /// UMP consent (and iOS IDFA message when configured in AdMob), then Mobile Ads.
+  Future<void> _bootstrapAds() async {
+    try {
+      final canRequestAds = await gatherAdsConsent();
+      if (!canRequestAds) {
+        if (kDebugMode) {
+          debugPrint('[AdMob] skipping initialize — cannot request ads yet');
+        }
+        return;
+      }
+      final initStatus = await MobileAds.instance.initialize();
+      if (kDebugMode) {
+        debugPrint('[AdMob] initialized: ${initStatus.adapterStatuses}');
+        logActiveAdUnitIds();
+      }
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[AdMob] bootstrap failed: $e\n$st');
+      }
+    }
   }
 
   @override
@@ -101,17 +115,37 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AuthContext(),
-      child: MaterialApp(
-        title: 'Bee Five',
-        debugShowCheckedModeBanner: false,
-        scrollBehavior: _NoScrollbarScrollBehavior(),
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFFC30B)),
-          useMaterial3: true,
-        ),
-        home: Consumer<AuthContext>(
-          builder: (context, auth, _) => AuthGate(auth: auth),
-        ),
+      child: FutureBuilder<void>(
+        future: _adsReady,
+        builder: (context, snapshot) {
+          // Short splash while consent / SDK init finishes so screens don't
+          // load ads before MobileAds.initialize().
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const MaterialApp(
+              debugShowCheckedModeBanner: false,
+              home: Scaffold(
+                backgroundColor: Color(0xFFFFC30B),
+                body: Center(
+                  child: CircularProgressIndicator(color: Colors.black87),
+                ),
+              ),
+            );
+          }
+
+          return MaterialApp(
+            title: 'Bee Five',
+            debugShowCheckedModeBanner: false,
+            scrollBehavior: _NoScrollbarScrollBehavior(),
+            theme: ThemeData(
+              colorScheme:
+                  ColorScheme.fromSeed(seedColor: const Color(0xFFFFC30B)),
+              useMaterial3: true,
+            ),
+            home: Consumer<AuthContext>(
+              builder: (context, auth, _) => AuthGate(auth: auth),
+            ),
+          );
+        },
       ),
     );
   }

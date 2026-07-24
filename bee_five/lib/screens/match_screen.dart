@@ -31,19 +31,27 @@ MaterialPageRoute<void> liveMatchRoute(MatchScreen screen) {
   );
 }
 
-/// Opens a live match, clearing any prior match screens from the navigator.
+/// True for routes that should stay under a live match (typically home/lobby).
+///
+/// End-result / rematch dialogs are [PopupRoute]s sitting on top of a match.
+/// Predicates that only check [kLiveMatchRouteName] stop at those dialogs and
+/// leave the finished match underneath — so exit walks back through old games.
+bool _isLiveMatchStackBase(Route<dynamic> route) {
+  if (route is PopupRoute) return false;
+  return route.settings.name != kLiveMatchRouteName;
+}
+
+/// Opens a live match, clearing prior match screens and any dialogs on them.
 Future<void> openLiveMatch(BuildContext context, MatchScreen screen) {
   return Navigator.of(context).pushAndRemoveUntil<void>(
     liveMatchRoute(screen),
-    (route) => route.settings.name != kLiveMatchRouteName,
+    _isLiveMatchStackBase,
   );
 }
 
-/// Pops every live match route (e.g. leaving after a rematch chain).
+/// Pops every live match route and overlay above them (rematch chains).
 void popAllLiveMatchRoutes(BuildContext context) {
-  Navigator.of(context).popUntil(
-    (route) => route.settings.name != kLiveMatchRouteName,
-  );
+  Navigator.of(context).popUntil(_isLiveMatchStackBase);
 }
 
 class MatchScreen extends StatefulWidget {
@@ -276,8 +284,12 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Future<void> _onBackToSchoolLobbyFromEndDialog() async {
     _cancelRematchListeners();
-    if (ModalRoute.of(context)?.isCurrent == false) {
-      Navigator.pop(context);
+    // Drop result/rematch dialogs before the interstitial / lobby return so
+    // popUntil cannot stop on an overlay and leave finished matches stacked.
+    if (mounted) {
+      Navigator.of(context).popUntil(
+        (route) => route is! PopupRoute,
+      );
     }
     final skipCompletedMatchCount = _voidNoMovesEnd;
     if (!skipCompletedMatchCount) {
@@ -410,6 +422,13 @@ class _MatchScreenState extends State<MatchScreen> {
     }
     _rematchHandled = true;
     _cancelRematchListeners();
+
+    // Result / rematch dialogs must not remain as the "base" under pushAndRemoveUntil.
+    Navigator.of(context).popUntil((route) => route is! PopupRoute);
+
+    if (!mounted) {
+      return;
+    }
 
     openLiveMatch(
       context,

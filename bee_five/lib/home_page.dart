@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'ads/ad_consent.dart';
 import 'ads/ad_unit_ids.dart';
 import 'ads/ad_log.dart';
 import 'adventure_game.dart';
@@ -2772,6 +2773,56 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
                       },
                     ),
                   ],
+                  FutureBuilder<bool>(
+                    future: isAdsPrivacyOptionsRequired(),
+                    builder: (context, snapshot) {
+                      if (snapshot.data != true) {
+                        return const SizedBox.shrink();
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 20),
+                          const Divider(color: Colors.black54, height: 1),
+                          const SizedBox(height: 16),
+                          OutlinedButton(
+                            onPressed: () async {
+                              final error = await showAdsPrivacyOptions();
+                              if (!context.mounted) return;
+                              if (error != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Could not open privacy options: ${error.message}',
+                                    ),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
+                                );
+                              }
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.black87,
+                              side: const BorderSide(
+                                color: Colors.black54,
+                                width: 2,
+                              ),
+                              minimumSize: const Size(double.infinity, 44),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text(
+                              'Privacy options',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                   const SizedBox(height: 24),
                   const Divider(color: Colors.black54, height: 1),
                   const SizedBox(height: 16),
