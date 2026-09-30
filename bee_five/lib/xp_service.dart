@@ -1,6 +1,7 @@
+import 'xp_ledger.dart';
 import 'dart:math' as math;
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'account_preferences.dart';
 
 import 'adventure_progress_service.dart' show scheduleProgressCloudSync;
 
@@ -38,42 +39,34 @@ const int xpRewardedAdWatch = 2;
 const String _prefLastLoginDate = 'last_login_date';
 const String _prefDailyChallengeDate = 'daily_challenge_date';
 const String _prefDailyChallengeWon = 'daily_challenge_won';
-const String _prefAdventureConsecutiveLosses = 'adventure_consecutive_losses';
 const String _prefAdventureConsecutiveWins = 'adventure_consecutive_wins';
-const String _prefAdventureHighestUnlockedLevel = 'adventure_highest_unlocked_level';
+const String _prefAdventureHighestUnlockedLevel =
+    'adventure_highest_unlocked_level';
 const String _prefAdventureCurrentLevel = 'adventure_current_level';
-const String _prefAdventureLevelsFirstClearXp = 'adventure_levels_first_clear_xp';
-const String _prefAdventureFirstClearXpMigrated = 'adventure_first_clear_xp_migrated';
-
-/// Top of adventure progression: max of selected level and highest unlocked (prefs can lag).
-Future<int> _effectiveAdventureFrontierLevel() async {
-  final prefs = await SharedPreferences.getInstance();
-  final current = prefs.getInt(_prefAdventureCurrentLevel) ?? 1;
-  final highest = prefs.getInt(_prefAdventureHighestUnlockedLevel) ?? current;
-  return math.max(current, highest);
-}
-
-Future<bool> _isAdventureFrontierLevel(int levelJustPlayedOrCompleted) async {
-  final frontier = await _effectiveAdventureFrontierLevel();
-  // Win/loss XP at the "top" level the player is on (current or highest, whichever is greater).
-  return levelJustPlayedOrCompleted == frontier;
-}
+const String _prefAdventureLevelsFirstClearXp =
+    'adventure_levels_first_clear_xp';
+const String _prefAdventureFirstClearXpMigrated =
+    'adventure_first_clear_xp_migrated';
 
 /// One-time: treat all levels strictly below the current top as already rewarded for first-clear
 /// (+1) so existing saves do not mass-award XP on upgrade.
-Future<void> _ensureAdventureFirstClearXpMigrated() async {
-  final prefs = await SharedPreferences.getInstance();
+Future<void> _ensureAdventureFirstClearXpMigrated(
+  AccountPreferences prefs,
+) async {
   if (prefs.getBool(_prefAdventureFirstClearXpMigrated) == true) return;
 
   final current = prefs.getInt(_prefAdventureCurrentLevel) ?? 1;
   final highest = prefs.getInt(_prefAdventureHighestUnlockedLevel) ?? current;
   final top = math.max(current, highest);
 
-  final existing = prefs.getStringList(_prefAdventureLevelsFirstClearXp)?.toSet() ?? <String>{};
+  final existing =
+      prefs.getStringList(_prefAdventureLevelsFirstClearXp)?.toSet() ??
+      <String>{};
   for (int i = 1; i < top; i++) {
     existing.add(i.toString());
   }
-  final list = existing.toList()..sort((a, b) => int.parse(a).compareTo(int.parse(b)));
+  final list = existing.toList()
+    ..sort((a, b) => int.parse(a).compareTo(int.parse(b)));
   await prefs.setStringList(_prefAdventureLevelsFirstClearXp, list);
   await prefs.setBool(_prefAdventureFirstClearXpMigrated, true);
   scheduleProgressCloudSync();
@@ -81,7 +74,7 @@ Future<void> _ensureAdventureFirstClearXpMigrated() async {
 
 /// Ensures XP is initialized to [defaultXp] if never set.
 Future<void> ensureXpInitialized() async {
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await AccountPreferences.getInstance();
   if (prefs.getInt(_prefUserXp) == null) {
     await prefs.setInt(_prefUserXp, defaultXp);
   }
@@ -89,11 +82,12 @@ Future<void> ensureXpInitialized() async {
 
 /// Call when app is opened (e.g. home page init). Updates login streak only.
 Future<void> onAppOpen() async {
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await AccountPreferences.getInstance();
   await ensureXpInitialized();
 
   final now = DateTime.now();
-  final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  final today =
+      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   final last = prefs.getString(_prefLastLoginDate);
 
   if (last == today) return;
@@ -123,64 +117,50 @@ Future<void> onAppOpen() async {
 
 /// Returns current XP (never null after [ensureXpInitialized]).
 Future<int> getXp() async {
-  final prefs = await SharedPreferences.getInstance();
-  await ensureXpInitialized();
-  return prefs.getInt(_prefUserXp) ?? defaultXp;
+  final prefs = await AccountPreferences.getInstance();
+  return (await readXpLedger(prefs)).xp;
 }
 
-/// Adds [delta] XP (clamped so total is non-negative).
-Future<int> addXp(int delta) async {
-  if (delta <= 0) return await getXp();
-  final prefs = await SharedPreferences.getInstance();
-  final current = prefs.getInt(_prefUserXp) ?? defaultXp;
-  final next = current + delta;
-  await prefs.setInt(_prefUserXp, next);
-  scheduleProgressCloudSync();
-  return next;
-}
-
-/// Removes [delta] XP (clamped so total is non-negative).
-Future<int> removeXp(int delta) async {
-  if (delta <= 0) return await getXp();
-  final prefs = await SharedPreferences.getInstance();
-  final current = prefs.getInt(_prefUserXp) ?? defaultXp;
-  final next = (current - delta).clamp(0, 0x7FFFFFFF);
-  await prefs.setInt(_prefUserXp, next);
+Future<int> _award(String reason, {AccountPreferences? account}) async {
+  final prefs = account ?? await AccountPreferences.getInstance();
+  final next = await recordXpEvent(prefs, reason);
   scheduleProgressCloudSync();
   return next;
 }
 
 /// Consecutive frontier-level failures without clearing the level (persisted for skip-ad offer).
 Future<int> getAdventureConsecutiveLosses() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getInt(_prefAdventureConsecutiveLosses) ?? 0;
+  final prefs = await AccountPreferences.getInstance();
+  return (await readXpLedger(prefs)).losses;
 }
 
 Future<void> resetAdventureConsecutiveLosses() async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setInt(_prefAdventureConsecutiveLosses, 0);
+  final prefs = await AccountPreferences.getInstance();
+  await recordXpEvent(prefs, 'adventure_reset');
   scheduleProgressCloudSync();
 }
 
 /// Call when the player fails a frontier adventure level (loss popup). Returns the new streak.
 Future<int> recordAdventureLevelFailure(int levelJustFailed) async {
-  if (!await _isAdventureFrontierLevel(levelJustFailed)) {
-    return getAdventureConsecutiveLosses();
+  final prefs = await AccountPreferences.getInstance();
+  final current = prefs.getInt(_prefAdventureCurrentLevel) ?? 1;
+  final highest = prefs.getInt(_prefAdventureHighestUnlockedLevel) ?? current;
+  if (levelJustFailed != math.max(current, highest)) {
+    return (await readXpLedger(prefs)).losses;
   }
-  final prefs = await SharedPreferences.getInstance();
-  final next = (prefs.getInt(_prefAdventureConsecutiveLosses) ?? 0) + 1;
-  await prefs.setInt(_prefAdventureConsecutiveLosses, next);
+  await recordXpEvent(prefs, 'adventure_failure');
+  final next = (await readXpLedger(prefs)).losses;
   scheduleProgressCloudSync();
   return next;
 }
 
 /// Adventure: call when player loses a game. Returns (new XP, delta). Applies -1 XP per loss.
 Future<(int, int)> onAdventureMatchLost({int? levelJustPlayed}) async {
-  await _ensureAdventureFirstClearXpMigrated();
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await AccountPreferences.getInstance();
+  await _ensureAdventureFirstClearXpMigrated(prefs);
   await prefs.setInt(_prefAdventureConsecutiveWins, 0);
 
-  final newXp = await removeXp(xpAdventureOneLoss);
+  final newXp = await _award('adventure_loss', account: prefs);
   return (newXp, -xpAdventureOneLoss);
 }
 
@@ -190,25 +170,33 @@ Future<(int, int)> onAdventureGameWon({
   int? levelJustPlayed,
   bool levelClearingWin = false,
 }) async {
-  await _ensureAdventureFirstClearXpMigrated();
-  final delta = levelClearingWin &&
+  final account = await AccountPreferences.getInstance();
+  await _ensureAdventureFirstClearXpMigrated(account);
+  final delta =
+      levelClearingWin &&
           levelJustPlayed != null &&
           levelJustPlayed > 0 &&
           levelJustPlayed % 10 == 0
       ? xpAdventureMilestoneLevelWin
       : xpAdventureMatchWin;
-  final newXp = await addXp(delta);
+  final newXp = await _award(
+    delta == xpAdventureMilestoneLevelWin
+        ? 'adventure_milestone'
+        : 'adventure_win',
+    account: account,
+  );
   return (newXp, delta);
 }
 
 /// Adventure: call when player wins the level (before advancing). Resets consecutive losses
 /// and records first-clear tracking. Match wins already award XP via [onAdventureGameWon].
 Future<(int, int)> onAdventureLevelWon(int levelJustCompleted) async {
-  await _ensureAdventureFirstClearXpMigrated();
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setInt(_prefAdventureConsecutiveLosses, 0);
+  final prefs = await AccountPreferences.getInstance();
+  await _ensureAdventureFirstClearXpMigrated(prefs);
+  await recordXpEvent(prefs, 'adventure_reset');
 
-  final clearedList = prefs.getStringList(_prefAdventureLevelsFirstClearXp) ?? [];
+  final clearedList =
+      prefs.getStringList(_prefAdventureLevelsFirstClearXp) ?? [];
   final levelKey = levelJustCompleted.toString();
   if (!clearedList.contains(levelKey)) {
     final nextList = [...clearedList, levelKey]
@@ -216,14 +204,15 @@ Future<(int, int)> onAdventureLevelWon(int levelJustCompleted) async {
     await prefs.setStringList(_prefAdventureLevelsFirstClearXp, nextList);
   }
   scheduleProgressCloudSync();
-  final xp = await getXp();
+  final xp = (await readXpLedger(prefs)).xp;
   return (xp, 0);
 }
 
 /// Classic: call when human wins in classic streak mode. Returns (new XP, delta). +2 if 3rd consecutive win.
 Future<(int, int)> onClassicStreakWin(int classicGamesWonAfterThisWin) async {
-  if (classicGamesWonAfterThisWin >= 3 && classicGamesWonAfterThisWin % 3 == 0) {
-    final newXp = await addXp(xpClassicThreeWins);
+  if (classicGamesWonAfterThisWin >= 3 &&
+      classicGamesWonAfterThisWin % 3 == 0) {
+    final newXp = await _award('classic_three_wins');
     return (newXp, xpClassicThreeWins);
   }
   final xp = await getXp();
@@ -232,21 +221,17 @@ Future<(int, int)> onClassicStreakWin(int classicGamesWonAfterThisWin) async {
 
 /// Practice: call when human wins a hard practice game. Returns (new XP, delta). +1 XP.
 Future<(int, int)> onHardPracticeWin() async {
-  final newXp = await addXp(xpHardPracticeWin);
+  final newXp = await _award('hard_practice_win');
   return (newXp, xpHardPracticeWin);
-}
-
-/// Rewarded ad on home / Gain XP — returns new XP total after [xpRewardedAdWatch].
-Future<int> onRewardedAdWatched() async {
-  return addXp(xpRewardedAdWatch);
 }
 
 /// Daily challenge: returns whether the user played today and if so whether they won.
 /// (playedToday, wonOrNull). wonOrNull is null if not played today.
 Future<(bool playedToday, bool? won)> getDailyChallengeStatus() async {
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await AccountPreferences.getInstance();
   final now = DateTime.now();
-  final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  final today =
+      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   final lastDate = prefs.getString(_prefDailyChallengeDate);
   if (lastDate != today) return (false, null);
   final won = prefs.getBool(_prefDailyChallengeWon);
@@ -255,22 +240,14 @@ Future<(bool playedToday, bool? won)> getDailyChallengeStatus() async {
 
 /// Daily challenge: call when the user finishes today's challenge. Records result only.
 Future<int> setDailyChallengeResult(bool won) async {
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await AccountPreferences.getInstance();
   final now = DateTime.now();
-  final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  final today =
+      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   await prefs.setString(_prefDailyChallengeDate, today);
   await prefs.setBool(_prefDailyChallengeWon, won);
   scheduleProgressCloudSync();
   return await getXp();
-}
-
-/// Win or loss in a school lobby match (+1 / −1 XP).
-Future<void> recordSchoolLobbyMatchOutcome(bool won) async {
-  if (won) {
-    await addXp(xpSchoolLobbyMatchDelta);
-  } else {
-    await removeXp(xpSchoolLobbyMatchDelta);
-  }
 }
 
 /// Returns today's challenge game index (0-based). Same for all users on the same calendar day.

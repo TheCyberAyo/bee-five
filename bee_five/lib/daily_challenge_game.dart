@@ -1,3 +1,4 @@
+import 'services/game_analytics.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
@@ -98,6 +99,7 @@ class DailyChallengeGame extends StatefulWidget {
 }
 
 class _DailyChallengeGameState extends State<DailyChallengeGame> {
+  final _telemetry = MatchTelemetry();
   late DailyChallengeConfig config;
   late List<List<int>> board;
   int currentPlayer = 1;
@@ -117,6 +119,8 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
   @override
   void initState() {
     super.initState();
+    GameAnalytics.instance.selectMode('daily_challenge');
+    GameAnalytics.instance.event('rules_viewed', {'game_mode': 'daily_challenge'});
     final index = getTodaysChallengeGameIndex().clamp(0, dailyChallengeConfigs.length - 1);
     config = dailyChallengeConfigs[index];
     timeLeft = config.totalSeconds;
@@ -132,6 +136,9 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
   }
 
   void _onRulesContinue() {
+    if (!_showRulesOverlay) return;
+    GameAnalytics.instance.event('rules_continue', {'game_mode': 'daily_challenge'});
+    _telemetry.start('daily_challenge');
     setState(() => _showRulesOverlay = false);
     if (config.totalSeconds > 0) {
       _startMainTimer();
@@ -153,6 +160,7 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
 
   @override
   void dispose() {
+    _telemetry.quit();
     timer?.cancel();
     moveTimer?.cancel();
     super.dispose();
@@ -212,6 +220,7 @@ class _DailyChallengeGameState extends State<DailyChallengeGame> {
   }
 
   void _scheduleWinModal() {
+    _telemetry.complete(winner == 1 ? 'win' : winner == 2 ? 'loss' : 'draw');
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
       setState(() => showWinModal = true);

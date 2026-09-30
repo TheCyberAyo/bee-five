@@ -1,3 +1,5 @@
+import '../account_preferences.dart';
+import '../xp_ledger.dart';
 // ============================================================
 // FILE: lib/services/multiplayer_service.dart
 // PURPOSE: Handles ALL realtime logic — presence, challenges,
@@ -146,30 +148,6 @@ int _parseChallengeXp(dynamic v) {
   return int.tryParse(v.toString()) ?? 0;
 }
 
-Map<String, dynamic> _unwrapGameEventPayload(Map<String, dynamic> raw) {
-  return _findMapInTree(raw, (m) {
-        final pid = m['player_id'] ?? m['playerId'];
-        if (pid == null) return false;
-        if (m['type']?.toString() == 'move') {
-          return m.containsKey('row') && m.containsKey('col');
-        }
-        return true;
-      }) ??
-      Map<String, dynamic>.from(raw);
-}
-
-Map<String, dynamic> _unwrapMatchOverPayload(Map<String, dynamic> raw) {
-  return _findMapInTree(
-        raw,
-        (m) =>
-            m.containsKey('winner_id') ||
-            m['is_draw'] == true ||
-            m.containsKey('winnerChange') ||
-            m.containsKey('player1Change'),
-      ) ??
-      Map<String, dynamic>.from(raw);
-}
-
 class MultiplayerService {
   static const String _defaultLobbyJoinCode = '00BEE00';
 
@@ -189,7 +167,9 @@ class MultiplayerService {
   String? _matchOpponentId;
   String? _activeMatchId;
 
-  static const Duration _opponentDisconnectGrace = Duration(seconds: 12);
+  static const Duration _opponentDisconnectGrace = Duration(seconds: 60);
+  Timer? _verifiedHeartbeat;
+  int? activeMatchPriorCount;
 
   String? _lobbyInstitutionName;
   String? _lobbyCountryCode;
@@ -796,30 +776,22 @@ class MultiplayerService {
   }) async {
     await leaveMatch();
 
+    await syncXpLedger(await AccountPreferences.forUser(userId));
+    final joined = await _client.rpc('mg_join_verified_live', params: {
+      'p_match_id': matchId, 'p_opponent': opponentId,
+    });
+    activeMatchPriorCount = joined['prior_match_count'] as int;
     _activeMatchId = matchId;
     _matchOpponentId = opponentId;
+    _verifiedHeartbeat = Timer.periodic(const Duration(seconds: 3), (_) {
+      _client.rpc('mg_live_heartbeat', params: {'p_match_id': matchId}).then((_) {}, onError: (Object _) {});
+      unawaited(_refreshVerifiedMatch(matchId));
+    });
     _matchChannel = _client.channel('match:$matchId');
 
-    // ── Listen for game events from opponent ─────────────
-    _matchChannel!.onBroadcast(
-      event: 'game_event',
-      callback: (payload) {
-        final data = _unwrapGameEventPayload(payload);
-        final sender =
-            (data['player_id'] ?? data['playerId'])?.toString();
-        if (sender != null && sender != userId) {
-          _gameEventController.add(data);
-        }
-      },
-    );
-
-    // ── Listen for match over ────────────────────────────
-    _matchChannel!.onBroadcast(
-      event: 'match_over',
-      callback: (payload) {
-        _matchOverController.add(_unwrapMatchOverPayload(payload));
-      },
-    );
+    // Realtime messages only prompt a read of server-accepted moves/results.
+    _matchChannel!.onBroadcast(event: 'game_event', callback: (_) { unawaited(_refreshVerifiedMatch(matchId)); });
+    _matchChannel!.onBroadcast(event: 'match_over', callback: (_) { unawaited(_refreshVerifiedMatch(matchId)); });
 
     // ── Detect opponent disconnect (grace period avoids flaky-network double wins)
     void onOpponentPresenceMaybeReturned() {
@@ -867,12 +839,35 @@ class MultiplayerService {
     }
   }
 
+  bool _verifiedRefreshRunning = false;
+  Future<void> _refreshVerifiedMatch(String matchId) async {
+    if (_activeMatchId != matchId || _verifiedRefreshRunning) return;
+    _verifiedRefreshRunning = true;
+    try {
+      final data = await _client.from('mg_live_games').select('moves,status').eq('id', matchId).single();
+      if (_activeMatchId != matchId) return;
+      for (final move in data['moves'] as List) {
+        _gameEventController.add(Map<String, dynamic>.from(move as Map));
+      }
+      if (['completed','draw','void'].contains(data['status'])) {
+        final result = await _client.rpc('mg_confirm_match_result', params: {'p_match_id': matchId});
+        if (_activeMatchId == matchId) { _matchOverController.add({
+          ...Map<String, dynamic>.from(result as Map), 'is_draw': result['isDraw'], 'void_no_moves': result['voidNoMoves'],
+        }); }
+      }
+    } catch (_) { /* Poll again; no unverified result is applied. */ }
+    finally { _verifiedRefreshRunning = false; }
+  }
+
   /// Drops the realtime match channel. When [onlyIfMatchId] is set, no-ops if a
   /// newer rematch screen already joined a different room.
   Future<void> leaveMatch({String? onlyIfMatchId}) async {
     if (onlyIfMatchId != null && _activeMatchId != onlyIfMatchId) return;
 
     _cancelOpponentDisconnectTimer();
+    _verifiedHeartbeat?.cancel();
+    _verifiedHeartbeat = null;
+    activeMatchPriorCount = null;
     _matchOpponentId = null;
     _activeMatchId = null;
     if (_matchChannel != null) {
@@ -891,20 +886,21 @@ class MultiplayerService {
   Future<void> sendGameEvent(
       String playerId, Map<String, dynamic> eventData) async {
     final ch = _matchChannel;
-    if (ch == null) return;
+    if (ch == null || _activeMatchId == null) throw StateError('Match not connected');
+    final accepted = await _client.rpc('mg_record_live_move', params: {
+      'p_match_id': _activeMatchId, 'p_row': eventData['row'], 'p_col': eventData['col'],
+    });
     final payload = <String, dynamic>{
-      'player_id': playerId,
-      ...eventData,
+      ...eventData, 'player_id': playerId, 'seat': accepted['seat'],
     };
     // Prefer REST broadcast — reliably reaches other clients even if WS push
     // is buffered or the channel is still settling (common on emulators).
     try {
       await ch.httpSend(event: 'game_event', payload: payload);
     } catch (_) {
-      await ch.sendBroadcastMessage(
-        event: 'game_event',
-        payload: payload,
-      );
+      try {
+        await ch.sendBroadcastMessage(event: 'game_event', payload: payload);
+      } catch (_) { /* The move is already committed; retries use its cell. */ }
     }
   }
 
@@ -930,11 +926,15 @@ class MultiplayerService {
     String? winnerId,
     bool isDraw = false,
     bool voidNoMoves = false,
+    String? matchId,
+    String matchKind = 'live',
   }) async {
     // Commit on server first so the DB is authoritative, then notify clients.
     final response = await _client.functions.invoke(
       'submit-match',
       body: {
+        'match_id': matchId ?? _activeMatchId,
+        'match_kind': matchKind,
         'player1_id': player1Id,
         'player2_id': player2Id,
         if (!isDraw && winnerId != null) 'winner_id': winnerId,
@@ -945,12 +945,12 @@ class MultiplayerService {
 
     final data = Map<String, dynamic>.from(response.data as Map);
 
-    if (isDraw) {
+    if (data['isDraw'] == true) {
       await _sendMatchBroadcast(
         event: 'match_over',
         payload: <String, dynamic>{
           'is_draw': true,
-          if (voidNoMoves) 'void_no_moves': true,
+          if (data['voidNoMoves'] == true) 'void_no_moves': true,
           'player1Change': data['player1Change'],
           'player2Change': data['player2Change'],
         },
@@ -959,7 +959,7 @@ class MultiplayerService {
       await _sendMatchBroadcast(
         event: 'match_over',
         payload: <String, dynamic>{
-          'winner_id': winnerId,
+          'winner_id': data['winner_id'],
           'winnerChange': data['winnerChange'],
           'loserChange': data['loserChange'],
         },

@@ -2,7 +2,7 @@ name: bee_five
 description: "Bee Five game app."
 publish_to: 'none'
 
-version: 2.1.0+30
+version: 2.1.2+32
 
 environment:
   sdk: ^3.10.7
@@ -22,6 +22,8 @@ dependencies:
   flutter_local_notifications: ^19.0.0
   firebase_core: ^4.10.0
   firebase_messaging: ^16.3.0
+  firebase_analytics: ^12.6.0
+  gameanalytics_sdk: ^1.3.1
 
 dev_dependencies:
   flutter_test:

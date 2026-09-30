@@ -5,6 +5,7 @@ import "../index.css";
 import "../App.css";
 import { AuthProvider } from "../contexts/AuthContext";
 import PortraitLock from "../components/PortraitLock";
+import FirebaseAnalytics from "../components/FirebaseAnalytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -59,6 +60,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <FirebaseAnalytics />
         <AuthProvider>
           <PortraitLock>
             {children}

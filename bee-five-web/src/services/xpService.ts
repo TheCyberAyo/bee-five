@@ -1,3 +1,4 @@
+import { recordXpEvent, type XpReason } from './xpLedger';
 import {
   DEFAULT_USER_XP,
   getProgressSyncUserId,
@@ -119,7 +120,7 @@ export function onAppOpen(): void {
   ensureXpInitialized();
 
   const today = todayDateString();
-  const last = window.localStorage.getItem(LAST_LOGIN_DATE_KEY);
+  const last = window.localStorage.getItem(`${LAST_LOGIN_DATE_KEY}:${currentUserId() ?? 'guest'}`);
   if (last === today) return;
 
   const userId = currentUserId();
@@ -143,7 +144,7 @@ export function onAppOpen(): void {
   }
 
   writeLocalPlayerStats(userId, { loginStreak: streak });
-  window.localStorage.setItem(LAST_LOGIN_DATE_KEY, today);
+  window.localStorage.setItem(`${LAST_LOGIN_DATE_KEY}:${userId ?? 'guest'}`, today);
   triggerCloudSync();
 }
 
@@ -153,20 +154,8 @@ export function getXp(): number {
   return readLocalPlayerStats(currentUserId()).userXp;
 }
 
-export function addXp(delta: number): number {
-  if (delta <= 0) return getXp();
-  const userId = currentUserId();
-  const next = getXp() + delta;
-  writeLocalPlayerStats(userId, { userXp: next });
-  triggerCloudSync();
-  return next;
-}
-
-export function removeXp(delta: number): number {
-  if (delta <= 0) return getXp();
-  const userId = currentUserId();
-  const next = Math.max(0, getXp() - delta);
-  writeLocalPlayerStats(userId, { userXp: next });
+function award(reason: XpReason): number {
+  const next = recordXpEvent(currentUserId(), reason);
   triggerCloudSync();
   return next;
 }
@@ -185,7 +174,7 @@ export function onAdventureMatchLost(options?: {
   writeLocalXpAuxState(resolvedUserId, { adventureConsecutiveWins: 0 });
   triggerCloudSync();
 
-  const newXp = removeXp(xpAdventureOneLoss);
+  const newXp = award('adventure_loss');
   return { newXp, delta: -xpAdventureOneLoss };
 }
 
@@ -205,7 +194,7 @@ export function onAdventureGameWon(options?: {
     levelJustPlayed % 10 === 0
       ? xpAdventureMilestoneLevelWin
       : xpAdventureMatchWin;
-  const newXp = addXp(delta);
+  const newXp = award(delta === xpAdventureMilestoneLevelWin ? 'adventure_milestone' : 'adventure_win');
   return { newXp, delta };
 }
 
@@ -230,24 +219,21 @@ export function onAdventureLevelWon(
     triggerCloudSync();
   }
 
+  triggerCloudSync();
   return { newXp: getXp(), delta: 0 };
 }
 
 export function onClassicStreakWin(classicGamesWonAfterThisWin: number): XpResult {
   if (classicGamesWonAfterThisWin >= 3 && classicGamesWonAfterThisWin % 3 === 0) {
-    const newXp = addXp(xpClassicThreeWins);
+    const newXp = award('classic_three_wins');
     return { newXp, delta: xpClassicThreeWins };
   }
   return { newXp: getXp(), delta: 0 };
 }
 
 export function onHardPracticeWin(): XpResult {
-  const newXp = addXp(xpHardPracticeWin);
+  const newXp = award('hard_practice_win');
   return { newXp, delta: xpHardPracticeWin };
-}
-
-export function onRewardedAdWatched(): number {
-  return addXp(xpRewardedAdWatch);
 }
 
 export function getDailyChallengeStatus(): { playedToday: boolean; won: boolean | null } {
@@ -265,11 +251,6 @@ export function setDailyChallengeResult(won: boolean): number {
   });
   triggerCloudSync();
   return getXp();
-}
-
-export function recordSchoolLobbyMatchOutcome(won: boolean): void {
-  if (won) addXp(xpSchoolLobbyMatchDelta);
-  else removeXp(xpSchoolLobbyMatchDelta);
 }
 
 export function getTodaysChallengeGameIndex(): number {

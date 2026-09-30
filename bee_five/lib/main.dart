@@ -13,6 +13,7 @@ import 'auth/auth_gate.dart';
 import 'ads/ad_consent.dart';
 import 'ads/ad_unit_ids.dart';
 import 'background_sound.dart';
+import 'services/game_analytics.dart';
 
 /// Hides scrollbars app-wide (no vertical striped bar on scrollable content).
 class _NoScrollbarScrollBehavior extends ScrollBehavior {
@@ -40,6 +41,9 @@ Future<void> main() async {
   await initSupabase();
 
   await initFirebase(backgroundHandler: _firebaseMessagingBackgroundHandler);
+  await GameAnalytics.instance.initialize();
+  // Firebase records first_open, session_start and user_engagement itself.
+  GameAnalytics.instance.event('app_open');
 
   // Lock to portrait only
   await SystemChrome.setPreferredOrientations([

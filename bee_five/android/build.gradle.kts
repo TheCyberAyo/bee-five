@@ -2,6 +2,10 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("https://maven.gameanalytics.com/release")
+            content { includeGroup("com.gameanalytics.sdk") }
+        }
     }
 }
 

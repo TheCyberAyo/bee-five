@@ -18,6 +18,19 @@ class _JoinSchoolDialogState extends State<JoinSchoolDialog> {
   final _codeController = TextEditingController();
   String? _error;
   bool _loading = false;
+  bool _joiningDefault = false;
+
+  static const Color _yellow = Color(0xFFFFC30B);
+
+  ButtonStyle get _primaryButtonStyle => ElevatedButton.styleFrom(
+        backgroundColor: _yellow,
+        foregroundColor: Colors.black,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Colors.black, width: 2),
+        ),
+      );
 
   @override
   void dispose() {
@@ -34,6 +47,7 @@ class _JoinSchoolDialogState extends State<JoinSchoolDialog> {
 
     setState(() {
       _loading = true;
+      _joiningDefault = false;
       _error = null;
     });
 
@@ -48,6 +62,42 @@ class _JoinSchoolDialogState extends State<JoinSchoolDialog> {
     } else {
       setState(() => _error = outcome.errorMessage);
     }
+  }
+
+  Future<void> _joinDefaultLobby() async {
+    setState(() {
+      _loading = true;
+      _joiningDefault = true;
+      _error = null;
+    });
+    final outcome = await MultiplayerService().joinDefaultLobby();
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _joiningDefault = false;
+    });
+    if (outcome.isSuccess) {
+      Navigator.of(context).pop(outcome);
+    } else {
+      setState(() => _error = outcome.errorMessage);
+    }
+  }
+
+  Widget _buttonChild({required bool showSpinner, required String label}) {
+    if (showSpinner) {
+      return const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.black,
+        ),
+      );
+    }
+    return Text(
+      label,
+      style: const TextStyle(fontWeight: FontWeight.bold),
+    );
   }
 
   @override
@@ -98,61 +148,39 @@ class _JoinSchoolDialogState extends State<JoinSchoolDialog> {
           ),
         ],
       ),
+      actionsAlignment: MainAxisAlignment.center,
       actions: [
-        TextButton(
-          onPressed: _loading
-              ? null
-              : () async {
-                  setState(() {
-                    _loading = true;
-                    _error = null;
-                  });
-                  final outcome = await MultiplayerService().joinDefaultLobby();
-                  if (!context.mounted) return;
-                  setState(() => _loading = false);
-                  if (outcome.isSuccess) {
-                    Navigator.of(context).pop(outcome);
-                  } else {
-                    setState(() => _error = outcome.errorMessage);
-                  }
-                },
-          child: const Text(
-            'Use default lobby',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
         if (widget.allowSkip)
           TextButton(
-            onPressed: _loading ? null : () => Navigator.pop<JoinSchoolOutcome?>(context),
+            onPressed: _loading
+                ? null
+                : () => Navigator.pop<JoinSchoolOutcome?>(context),
             child: const Text(
               'Skip for now',
               style: TextStyle(color: Colors.grey),
             ),
           ),
-        ElevatedButton(
-          onPressed: _loading ? null : _submit,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFFC30B),
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Colors.black, width: 2),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton(
+              onPressed: _loading ? null : _joinDefaultLobby,
+              style: _primaryButtonStyle,
+              child: _buttonChild(
+                showSpinner: _loading && _joiningDefault,
+                label: 'Use default lobby',
+              ),
             ),
-          ),
-          child: _loading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.black,
-                  ),
-                )
-              : const Text(
-                  'Join school',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+            const SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: _loading ? null : _submit,
+              style: _primaryButtonStyle,
+              child: _buttonChild(
+                showSpinner: _loading && !_joiningDefault,
+                label: 'Join school',
+              ),
+            ),
+          ],
         ),
       ],
     );

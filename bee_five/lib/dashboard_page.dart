@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'account_preferences.dart';
 
 import 'adventure_progress_service.dart' show syncAdventureProgress;
 import 'contexts/auth_context.dart';
@@ -53,7 +53,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _loadStats() async {
     await ensureXpInitialized();
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await AccountPreferences.getInstance();
     final auth = widget.auth;
 
     String resolvedName;
@@ -83,7 +83,7 @@ class _DashboardPageState extends State<DashboardPage> {
         prefs.getInt(prefAdventureHighestLevel) ?? prefs.getInt(prefAdventureCurrentLevel) ?? 1;
     int resolvedClassicBestScore = prefs.getInt(prefClassicBestStreak) ?? 0;
     int resolvedLoginStreak = prefs.getInt(prefLoginStreak) ?? 0;
-    int resolvedXp = prefs.getInt(prefUserXp) ?? 0;
+    int resolvedXp = await getXp();
 
     // Refresh from merged local/remote progress so dashboard reflects resets
     // and progress changes consistently across devices.

@@ -5,6 +5,7 @@ import React, {
   useImperativeHandle,
   useMemo,
   useState,
+  useRef,
   forwardRef,
 } from 'react';
 import GameCanvas from '../GameCanvas';
@@ -83,17 +84,20 @@ const OnlineBeeFiveBoard = forwardRef<OnlineBeeFiveBoardHandle, OnlineBeeFiveBoa
     const p2Name = p2Id === myUserId ? myUsername : opponentUsername;
 
     const [board, setBoard] = useState<(0 | 1 | 2)[][]>(() => emptyBoard());
+    const boardRef = useRef(board);
     const [currentSeat, setCurrentSeat] = useState<1 | 2>(initialFirstSeat);
     const [winnerSeat, setWinnerSeat] = useState<0 | 1 | 2>(0);
     const [winningPieces, setWinningPieces] = useState<{ row: number; col: number }[]>([]);
     const [gameOver, setGameOver] = useState(false);
+    const sending = useRef(false);
+    const [moveError, setMoveError] = useState<string | null>(null);
 
     const hasPlacedPieces = useMemo(
       () => board.some((row) => row.some((cell) => cell !== 0)),
       [board],
     );
 
-    const seatName = (seat: 1 | 2) => (seat === 1 ? p1Name : p2Name);
+    const seatName = useCallback((seat: 1 | 2) => (seat === 1 ? p1Name : p2Name), [p1Name, p2Name]);
 
     const turnText = useMemo(() => {
       if (gameOver) {
@@ -102,15 +106,16 @@ const OnlineBeeFiveBoard = forwardRef<OnlineBeeFiveBoardHandle, OnlineBeeFiveBoa
       }
       const mover = seatName(currentSeat);
       return currentSeat === mySeat ? `Your turn · ${mover}` : `${mover}'s turn`;
-    }, [gameOver, winnerSeat, currentSeat, mySeat, p1Name, p2Name]);
+    }, [gameOver, winnerSeat, currentSeat, mySeat, seatName]);
 
     const applyMove = useCallback(
       (row: number, col: number, seat: 1 | 2, notifyParent: boolean) => {
-        if (board[row][col] !== 0) return;
+        if (boardRef.current[row][col] !== 0) return;
 
-        const nextBoard = board.map((r) => [...r]) as (0 | 1 | 2)[][];
+        const nextBoard = boardRef.current.map((r) => [...r]) as (0 | 1 | 2)[][];
         nextBoard[row][col] = seat;
 
+        boardRef.current = nextBoard;
         setBoard(nextBoard);
         setCurrentSeat(seat === 1 ? 2 : 1);
 
@@ -129,7 +134,7 @@ const OnlineBeeFiveBoard = forwardRef<OnlineBeeFiveBoardHandle, OnlineBeeFiveBoa
           onDraw();
         }
       },
-      [board, onDraw, onWin, p1Id, p2Id],
+      [onDraw, onWin, p1Id, p2Id],
     );
 
     const applyRemoteMove = useCallback(
@@ -154,10 +159,15 @@ const OnlineBeeFiveBoard = forwardRef<OnlineBeeFiveBoardHandle, OnlineBeeFiveBoa
     }));
 
     const handleCellClick = async (row: number, col: number) => {
-      if (gameOver || board[row][col] !== 0 || currentSeat !== mySeat) return;
-
-      applyMove(row, col, mySeat, true);
-      await sendNetworkEvent({ type: 'move', row, col, seat: mySeat });
+      if (sending.current || gameOver || board[row][col] !== 0 || currentSeat !== mySeat) return;
+      sending.current = true;
+      setMoveError(null);
+      try {
+        await sendNetworkEvent({ type: 'move', row, col, seat: mySeat });
+        applyMove(row, col, mySeat, true);
+      } catch {
+        setMoveError('Move not confirmed. Please try again.');
+      } finally { sending.current = false; }
     };
 
     const gameState: GameState = useMemo(
@@ -186,7 +196,7 @@ const OnlineBeeFiveBoard = forwardRef<OnlineBeeFiveBoardHandle, OnlineBeeFiveBoa
             fontSize: '16px',
           }}
         >
-          {turnText}
+          {moveError ?? turnText}
         </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px 12px' }}>
           <div style={{ width: '100%', maxWidth: LOCAL_BOARD_MAX_WIDTH, margin: '0 auto' }}>

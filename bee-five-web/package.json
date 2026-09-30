@@ -7,10 +7,14 @@
     "build": "next build",
     "start": "node scripts/fixRoutesManifest.mjs && next start",
     "lint": "eslint",
-    "test:adventure": "npx tsx scripts/adventure-parity.test.mjs"
+    "test:adventure": "npx tsx scripts/adventure-parity.test.mjs",
+    "test:onboarding": "node scripts/run-ts-checks.mjs scripts/onboarding.test.mjs scripts/analytics.test.mjs",
+    "test:xp": "node scripts/xp.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
+    "firebase": "^12.19.0",
+    "gameanalytics": "5.0.0",
     "next": "15.5.7",
     "react": "19.1.0",
     "react-dom": "19.1.0"

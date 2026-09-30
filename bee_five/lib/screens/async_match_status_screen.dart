@@ -154,6 +154,7 @@ class _AsyncMatchStatusScreenState extends State<AsyncMatchStatusScreen> {
   Future<void> _submitCompletedMatch(String winnerId) async {
     try {
       await _multiplayer.submitMatchResult(
+        matchId: widget.matchId, matchKind: 'async',
         player1Id: widget.myId,
         player2Id: widget.opponentId,
         winnerId: winnerId,
@@ -164,6 +165,7 @@ class _AsyncMatchStatusScreenState extends State<AsyncMatchStatusScreen> {
   Future<void> _submitDraw() async {
     try {
       await _multiplayer.submitMatchResult(
+        matchId: widget.matchId, matchKind: 'async',
         player1Id: widget.myId,
         player2Id: widget.opponentId,
         isDraw: true,

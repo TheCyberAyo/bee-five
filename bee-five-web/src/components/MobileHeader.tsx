@@ -34,15 +34,17 @@ export default function MobileHeader({ onMenuItemClick, isMobile }: MobileHeader
   useEffect(() => {
     const onFocus = () => refreshHeaderXp();
     const onStorage = (event: StorageEvent) => {
-      if (event.key?.includes('user_xp') || event.key?.includes('beeAdventureProgress')) {
+      if (event.key?.includes('xp_ledger_v1') || event.key?.includes('user_xp') || event.key?.includes('beeAdventureProgress')) {
         refreshHeaderXp();
       }
     };
     window.addEventListener('focus', onFocus);
+    window.addEventListener('bee-xp-changed', onFocus);
     window.addEventListener('storage', onStorage);
     document.addEventListener('visibilitychange', onFocus);
     return () => {
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('bee-xp-changed', onFocus);
       window.removeEventListener('storage', onStorage);
       document.removeEventListener('visibilitychange', onFocus);
     };

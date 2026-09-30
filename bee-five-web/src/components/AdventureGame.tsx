@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { getGameRules, type GameRules } from '../utils/adventureGameRules';
 import AdventureClassicAIGame from './AdventureClassicAIGame';
+import AdventureRuleGate from './onboarding/AdventureRuleGate';
 import { getStoryForGame, shouldShowStory, type StageStory } from '../data/stageStories';
 import { getBeeFactForGame } from '../data/beeFacts';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +36,7 @@ export default function AdventureGame({
   onGameChange,
 }: AdventureGameProps) {
   const { user } = useAuth();
+  const [introducedRules, setIntroducedRules] = useState<ReadonlySet<string>>(() => new Set());
 
   const [currentGame, setCurrentGame] = useState(initialGame || 1);
   const [gamesCompleted, setGamesCompleted] = useState<number[]>([]);
@@ -926,6 +928,14 @@ export default function AdventureGame({
     const gameRules = getGameRules(currentGame, isMatchGame ? currentMatch : undefined);
 
     return (
+      <AdventureRuleGate
+        key={`${currentGame}-${currentMatch}`}
+        level={currentGame}
+        round={currentMatch}
+        seen={introducedRules}
+        onContinue={(ids) => setIntroducedRules(previous => new Set([...previous, ...ids]))}
+        onExit={onBackToMenu}
+      >
       <AdventureClassicAIGame
         key={`${currentGame}-${currentMatch}`}
         onBackToMenu={onBackToMenu}
@@ -958,6 +968,7 @@ export default function AdventureGame({
         }}
         sessionUserId={sessionUserId}
       />
+      </AdventureRuleGate>
     );
   }
 

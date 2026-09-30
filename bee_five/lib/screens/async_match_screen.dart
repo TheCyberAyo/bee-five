@@ -1,3 +1,4 @@
+import '../services/game_analytics.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -57,6 +58,8 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
   @override
   void initState() {
     super.initState();
+    GameAnalytics.instance.selectMode('online_async');
+    GameAnalytics.instance.event('async_match_viewed');
     _loadAsyncInterstitial();
     _loadBannerAd();
     unawaited(_load());
@@ -276,6 +279,7 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
   Future<void> _submitCompletedMatch(String winnerId) async {
     try {
       await _multiplayer.submitMatchResult(
+        matchId: widget.matchId, matchKind: 'async',
         player1Id: widget.myId,
         player2Id: widget.opponentId,
         winnerId: winnerId,
@@ -286,6 +290,7 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
   Future<void> _submitDraw() async {
     try {
       await _multiplayer.submitMatchResult(
+        matchId: widget.matchId, matchKind: 'async',
         player1Id: widget.myId,
         player2Id: widget.opponentId,
         isDraw: true,
@@ -298,6 +303,7 @@ class _AsyncMatchScreenState extends State<AsyncMatchScreen> {
     bool isDraw = false,
     bool forfeited = false,
   }) {
+    GameAnalytics.instance.event('async_result_viewed', {'outcome': isDraw ? 'draw' : winnerId == widget.myId ? 'win' : 'loss'});
     final iWon = winnerId == widget.myId;
     final title = isDraw
         ? 'Draw'

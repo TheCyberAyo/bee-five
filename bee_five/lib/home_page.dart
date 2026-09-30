@@ -1,3 +1,4 @@
+import 'ads/verified_ad_reward.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -6,7 +7,7 @@ import 'dart:math' as math;
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'account_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'ads/ad_consent.dart';
 import 'ads/ad_unit_ids.dart';
@@ -222,20 +223,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   // Persistence helpers
   // ---------------------------------------------------------------------------
 
-  // Writes all reset values to SharedPreferences (both key sets).
+  // Writes all reset values to AccountPreferences (both key sets).
   // Called fire-and-forget after the synchronous setState in the reset handler.
   Future<void> _persistReset() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await AccountPreferences.getInstance();
     await prefs.setInt(_highestGameKey, 1);
     await prefs.setInt('current_game_level', 1);
-    await prefs.setInt('adventure_consecutive_losses', 0);
+    await resetAdventureConsecutiveLosses();
     await prefs.setInt('adventure_consecutive_wins', 0);
     await prefs.setInt('adventure_highest_unlocked_level', 1);
     await prefs.setInt('adventure_current_level', 1);
   }
 
   Future<void> _saveHighest(int highest) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await AccountPreferences.getInstance();
     await prefs.setInt(_highestGameKey, highest);
     await prefs.setInt('current_game_level', highest); // legacy home_page key
     // Keep dashboard_page keys in sync so the dashboard always shows the
@@ -245,7 +246,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
   }
 
   Future<int> _loadHighest() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await AccountPreferences.getInstance();
     // Take the max across legacy keys and adventure_* keys — saves from
     // `saveAdventureLevel` only touched adventure_* until legacy sync was added.
     final legacyHigh = prefs.getInt(_highestGameKey) ?? 1;
@@ -264,7 +265,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     // is awaiting the network, we do not overwrite the reset state.
     final genAtDispatch = _progressGeneration;
 
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await AccountPreferences.getInstance();
     final savedSound = prefs.getBool(BackgroundSound.soundEnabledKey) ?? true;
     if (mounted && savedSound != soundEnabled) setState(() => soundEnabled = savedSound);
 
@@ -1078,6 +1079,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       _saveHighest(highestUnlockedGame);
     }
     if (state == AppLifecycleState.resumed) {
+      scheduleProgressCloudSync();
       unawaited(_loadAsyncInbox());
     }
   }
@@ -2219,33 +2221,55 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
         ),
         content: const Text(
-          'You need to sign in or sign up to play Live Matches.',
-          style: TextStyle(fontSize: 16, color: Colors.black87),
+          'You cannot play live games without registering. Create an account to challenge other players online.',
+          style: TextStyle(fontSize: 16, color: Colors.black87, height: 1.35),
         ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              auth.leaveGuestMode(forSignUp: true);
-            },
-            child: const Text(
-              'Sign Up',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              auth.leaveGuestMode();
-            },
-            child: const Text(
-              'Sign In',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Exit'),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  auth.leaveGuestMode(forSignUp: true);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black87,
+                  foregroundColor: primaryYellow,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Colors.black, width: 2),
+                  ),
+                ),
+                child: const Text(
+                  'Register',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  auth.leaveGuestMode();
+                },
+                child: const Text(
+                  'Already have an account? Sign In',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.black54),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -3139,7 +3163,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
     );
   }
 
-  void _showRewardedAd() {
+  bool _preparingXpAd = false;
+  Future<void> _showRewardedAd() async {
+    if (_preparingXpAd) return;
     if (_rewardedAd == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -3149,28 +3175,43 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Widg
       );
       return;
     }
+    final ad = _rewardedAd!;
+    late VerifiedAdClaim claim;
+    _preparingXpAd = true;
+    try {
+      claim = await beginVerifiedAd(kRewardedAdUnitId);
+      await ad.setServerSideOptions(ServerSideVerificationOptions(userId: claim.userId, customData: claim.id));
+      if (!mounted) return;
+    } catch (error) {
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+        error is StateError ? error.message.toString() : 'Could not prepare verified ad rewards. Please try again.'))); }
+      _preparingXpAd = false;
+      return;
+    }
     _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _rewardedAd = null;
+        _preparingXpAd = false;
         _loadRewardedAd();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();
         _rewardedAd = null;
+        _preparingXpAd = false;
         _loadRewardedAd();
       },
     );
     _rewardedAd!.show(
       onUserEarnedReward: (ad, reward) async {
-        await onRewardedAdWatched();
+        final verified = await waitForVerifiedAd(claim);
         final newXp = await getXp();
         if (mounted) {
           setState(() => _headerXp = newXp);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('+$xpRewardedAdWatch XP earned! Well done!'),
-              backgroundColor: Colors.green,
+              content: Text(verified ? '+$xpRewardedAdWatch XP verified and added!' : 'Reward verification is pending. XP will appear once confirmed.'),
+              backgroundColor: verified ? Colors.green : Colors.orange,
             ),
           );
         }

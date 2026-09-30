@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
-/// First screen after launch: guest, sign in, or sign up.
+/// Optional auth choice screen (sign in / sign up only — no guest).
+/// Launch flow no longer uses this; Live Matches opens sign-up / sign-in via AuthGate.
 class WelcomeAuthPage extends StatelessWidget {
   const WelcomeAuthPage({
     super.key,
-    required this.onContinueAsGuest,
     required this.onSignIn,
     required this.onSignUp,
   });
 
-  final VoidCallback onContinueAsGuest;
   final VoidCallback onSignIn;
   final VoidCallback onSignUp;
 
@@ -44,7 +43,7 @@ class WelcomeAuthPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'How would you like to play?',
+                'Register to play live games against other players.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 17,
@@ -52,42 +51,7 @@ class WelcomeAuthPage extends StatelessWidget {
                   height: 1.35,
                 ),
               ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  'NB: You CANNOT challenge other players online if you enter as a guest!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.redAccent.shade100 : Colors.red.shade700,
-                    height: 1.35,
-                  ),
-                ),
-              ),
               const Spacer(),
-              SizedBox(
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: onContinueAsGuest,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: titleColor,
-                    side: const BorderSide(color: Colors.black87, width: 2),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Continue as Guest',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
               SizedBox(
                 height: 52,
                 child: ElevatedButton(

@@ -178,22 +178,23 @@ class OnlineBeeFiveBoardState extends State<OnlineBeeFiveBoard> {
     }
   }
 
+  bool _sending = false;
+
   Future<void> _onCellTap(int row, int col) async {
-    if (_gameOver) return;
+    if (_gameOver || _sending) return;
     if (_board[row][col] != 0) return;
     if (_currentSeat != _mySeat) return;
 
-    setState(() {
-      _board[row][col] = _mySeat;
-      _currentSeat = _mySeat == 1 ? 2 : 1;
-    });
-
-    await widget.sendNetworkEvent({
-      'type': 'move',
-      'row': row,
-      'col': col,
-      'seat': _mySeat,
-    });
+    _sending = true;
+    try {
+      await widget.sendNetworkEvent({'type': 'move', 'row': row, 'col': col, 'seat': _mySeat});
+      if (!mounted || _gameOver || _board[row][col] != 0) return;
+      setState(() { _board[row][col] = _mySeat; _currentSeat = _mySeat == 1 ? 2 : 1; });
+    } catch (_) {
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Move not confirmed. Please try again.'))); }
+      return;
+    } finally { _sending = false; }
 
     if (logic.checkWinCondition(_board, row, col, _mySeat)) {
       _setWin(_mySeat, row, col, notifyParent: true);

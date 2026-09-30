@@ -1,4 +1,5 @@
 'use client';
+import { syncAdventureProgress } from '../../services/progressService';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { mgMultiplayerService, parseEloChange, userIdsEqual } from '../../services/mgMultiplayerService';
@@ -12,7 +13,6 @@ import {
   getXp,
   canPlayLiveMatches,
   liveMatchesRequiresXpMessage,
-  recordSchoolLobbyMatchOutcome,
 } from '../../services/xpService';
 import { winsForSeries, type HeadToHeadSeriesScore } from '../../utils/headToHeadSeries';
 import { multiplayerTheme, primaryBlackButtonStyle, yellowDialogStyle } from '../../constants/multiplayerTheme';
@@ -65,7 +65,6 @@ export default function LiveMatchScreen({
   const [rematchChallenge, setRematchChallenge] = useState<Record<string, unknown> | null>(null);
   const [rematchHandled, setRematchHandled] = useState(false);
   const [rematchSent, setRematchSent] = useState(false);
-  const [resultXpRecorded, setResultXpRecorded] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const canOfferRematch =
@@ -130,10 +129,10 @@ export default function LiveMatchScreen({
         mgMultiplayerService.fetchHeadToHeadSeriesScore(myId, opponentId),
       ]);
       if (!cancelled) {
-        setPriorMatchCount(count);
+        setPriorMatchCount(mgMultiplayerService.activeMatchPriorCount ?? count);
         setSeriesScore(series);
       }
-    })();
+    })().catch(() => { if (!cancelled) setStatusMessage('Could not verify this match. Return to the lobby and try again.'); });
 
     return () => {
       cancelled = true;
@@ -168,29 +167,17 @@ export default function LiveMatchScreen({
 
     if (submitToServer) {
       try {
-        if (!hadMoves) {
-          await mgMultiplayerService.submitMatchResult({
-            player1Id: p1Id,
-            player2Id: p2Id,
-            isDraw: true,
-            voidNoMoves: true,
-          });
+        result = await mgMultiplayerService.submitMatchResult({
+          player1Id: p1Id, player2Id: p2Id, winnerId,
+          isDraw: !hadMoves, voidNoMoves: !hadMoves,
+        });
+        if (result.voidNoMoves === true) {
           setEndDialog({ kind: 'void' });
-          await mgMultiplayerService.leaveMatch(matchId);
-          return;
         } else {
-          result = await mgMultiplayerService.submitMatchResult({
-            player1Id: p1Id,
-            player2Id: p2Id,
-            winnerId,
-          });
-          const resolvedWinner =
-            result.duplicate === true
-              ? (result.winner_id?.toString() ?? winnerId)
-              : winnerId;
           await refreshSeries();
           const eloResult = await enrichEloResult(result);
-          setEndDialog({ kind: 'result', winnerId: resolvedWinner, eloResult });
+          if (result.isDraw === true) setEndDialog({ kind: 'draw', payload: eloResult ?? result });
+          else setEndDialog({ kind: 'result', winnerId: String(result.winner_id), eloResult });
         }
       } catch {
         setMatchEnded(false);
@@ -366,11 +353,8 @@ export default function LiveMatchScreen({
   };
 
   useEffect(() => {
-    if (endDialog?.kind === 'result' && !resultXpRecorded) {
-      recordSchoolLobbyMatchOutcome(userIdsEqual(endDialog.winnerId, myId));
-      setResultXpRecorded(true);
-    }
-  }, [endDialog, resultXpRecorded, myId]);
+    if (endDialog) void syncAdventureProgress(myId).catch(() => {});
+  }, [endDialog, myId]);
 
   const renderEndDialog = () => {
     if (!endDialog) return null;

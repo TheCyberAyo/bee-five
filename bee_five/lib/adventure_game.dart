@@ -1,3 +1,5 @@
+import 'onboarding/adventure_rule_tips.dart';
+import 'services/game_analytics.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
@@ -44,6 +46,9 @@ class AdventureGame extends StatefulWidget {
 }
 
 class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserver {
+  final _telemetry = MatchTelemetry();
+  final Set<String> _introducedRules = {};
+  List<AdventureRuleTip> _pendingRuleTips = [];
   int currentGame = 1;
   int currentPlayer = 1;
   List<List<int>> board = [];
@@ -121,6 +126,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   @override
   void initState() {
     super.initState();
+    GameAnalytics.instance.selectMode('adventure');
     WidgetsBinding.instance.addObserver(this);
     currentGame = widget.initialGame;
     _initializeGame();
@@ -409,6 +415,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
 
   @override
   void dispose() {
+    _telemetry.quit();
     WidgetsBinding.instance.removeObserver(this);
     _persistProgressBestEffort();
     timer?.cancel();
@@ -437,6 +444,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   }
 
   void _initializeGame() {
+    _telemetry.quit(reason: 'level_change');
     timer?.cancel();
     timer = null;
 
@@ -484,6 +492,20 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
       _lastAnnouncedMatchKey = null;
     }
 
+    _pendingRuleTips = adventureRuleTips(currentGame, currentMatch)
+        .where((tip) => !_introducedRules.contains(tip.id)).toList();
+    if (_pendingRuleTips.isNotEmpty) {
+      showStartCountdown = false;
+      _showBeeFactScreen = false;
+      GameAnalytics.instance.event('adventure_rules_viewed', {
+        'level': currentGame, 'round': currentMatch,
+      });
+      return;
+    }
+    _continueRoundIntroduction();
+  }
+
+  void _continueRoundIntroduction() {
     _currentBeeFact = getBeeFactForGame(currentGame);
     final shouldShowStartCountdown =
         !gameRules!.isMatchGame || currentMatch == 1;
@@ -506,6 +528,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   }
 
   void _beginGameAfterCountdown() {
+    _telemetry.start('adventure', details: {'level': currentGame, 'round': currentMatch, 'difficulty': aiDifficulty});
     showStartCountdown = false;
     gameStarted = true;
     gameInitialized = true;
@@ -1267,6 +1290,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   }
 
   void _handleGameEnd() {
+    _telemetry.complete(winner == 1 ? 'win' : winner == 2 ? 'loss' : 'draw');
     timer?.cancel();
     
     if (winner == 1) {
@@ -1539,6 +1563,7 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
   }
   
   void _resetGame() {
+    _telemetry.rematchRequested();
     _countdownSequenceTimer?.cancel();
     setState(() {
       currentMatch = 1;
@@ -1613,6 +1638,27 @@ class _AdventureGameState extends State<AdventureGame> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
+    if (_pendingRuleTips.isNotEmpty) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _backToMenu();
+        },
+        child: AdventureRuleBriefing(
+        level: currentGame,
+        round: currentMatch,
+        tips: _pendingRuleTips,
+        onExit: _backToMenu,
+        onContinue: () {
+          setState(() {
+            _introducedRules.addAll(_pendingRuleTips.map((tip) => tip.id));
+            _pendingRuleTips = [];
+            _continueRoundIntroduction();
+          });
+        },
+        ),
+      );
+    }
     final screenSize = MediaQuery.of(context).size;
     final cellSize = math.min(
       (screenSize.width - 46) / boardSize,

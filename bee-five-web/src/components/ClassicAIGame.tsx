@@ -269,17 +269,17 @@ export default function ClassicAIGame({ onBackToMenu }: ClassicAIGameProps) {
     const currentIndex = boardGameIndexRef.current;
     const points = scoreForDifficulty(classicStreakDifficultyForGame(currentIndex));
 
-    setClassicGamesWon((prev) => {
-      const newScore = prev + points;
-      onClassicStreakWin(newScore);
-      classicGamesWonRef.current = newScore;
-      if (newScore > classicBestStreakRef.current) {
-        setClassicBestStreak(newScore);
-        classicBestStreakRef.current = newScore;
-        saveClassicBestStreak(newScore);
-      }
-      return newScore;
-    });
+    // board index counts actual consecutive wins, unlike the weighted score.
+    // Keep XP side effects outside React state updaters (which may run twice).
+    onClassicStreakWin(currentIndex);
+    const newScore = classicGamesWonRef.current + points;
+    classicGamesWonRef.current = newScore;
+    setClassicGamesWon(newScore);
+    if (newScore > classicBestStreakRef.current) {
+      setClassicBestStreak(newScore);
+      classicBestStreakRef.current = newScore;
+      saveClassicBestStreak(newScore);
+    }
 
     setBoardGameIndex(currentIndex + 1);
   }, []);

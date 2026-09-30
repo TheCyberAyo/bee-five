@@ -1,16 +1,18 @@
+import '../onboarding/first_play_gate.dart';
 import 'package:flutter/material.dart';
 import '../contexts/auth_context.dart';
+import '../home_page.dart';
 import 'sign_in_page.dart';
 import 'sign_up_page.dart';
-import 'welcome_auth_page.dart';
 import '../splash_screen.dart';
 
 enum AuthScreen {
-  welcome,
   signIn,
   signUp,
 }
 
+/// App shell: splash → home for everyone (signed-in or guest).
+/// Sign in / sign up only when requested (e.g. Live Matches).
 class AuthGate extends StatefulWidget {
   const AuthGate({
     super.key,
@@ -24,23 +26,14 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  AuthScreen _screen = AuthScreen.welcome;
-  bool _signUpOpenedFromWelcome = false;
+  AuthScreen _screen = AuthScreen.signUp;
+  bool _splashDone = false;
 
   @override
   void didUpdateWidget(covariant AuthGate oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final wasInApp =
-        oldWidget.auth.user != null || oldWidget.auth.isGuest;
-    final nowInApp =
-        widget.auth.user != null || widget.auth.isGuest;
-    if (wasInApp && !nowInApp && !widget.auth.loading) {
-      setState(() {
-        _screen = AuthScreen.welcome;
-        _signUpOpenedFromWelcome = false;
-      });
-    }
 
+    // Live Matches left guest mode to collect credentials.
     if (oldWidget.auth.isGuest &&
         !widget.auth.isGuest &&
         widget.auth.user == null &&
@@ -48,9 +41,30 @@ class _AuthGateState extends State<AuthGate> {
       final forSignUp = widget.auth.takeOpenSignUpAfterLeaveGuest();
       setState(() {
         _screen = forSignUp ? AuthScreen.signUp : AuthScreen.signIn;
-        _signUpOpenedFromWelcome = forSignUp;
       });
     }
+
+    // Signed in after auth — return to home (skip splash).
+    if (oldWidget.auth.user == null && widget.auth.user != null) {
+      setState(() => _splashDone = true);
+    }
+
+    // Cancelled auth back into guest — stay on home.
+    if (!oldWidget.auth.isGuest &&
+        widget.auth.isGuest &&
+        widget.auth.user == null) {
+      setState(() => _splashDone = true);
+    }
+  }
+
+  void _cancelAuth() {
+    widget.auth.enterGuestMode();
+    setState(() => _splashDone = true);
+  }
+
+  void _onSplashComplete() {
+    if (!mounted) return;
+    setState(() => _splashDone = true);
   }
 
   @override
@@ -64,50 +78,40 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    if (widget.auth.user == null && !widget.auth.isGuest) {
-      switch (_screen) {
-        case AuthScreen.welcome:
-          return WelcomeAuthPage(
-            onContinueAsGuest: () => widget.auth.enterGuestMode(),
-            onSignIn: () =>
-                setState(() => _screen = AuthScreen.signIn),
-            onSignUp: () => setState(() {
-              _signUpOpenedFromWelcome = true;
-              _screen = AuthScreen.signUp;
-            }),
-          );
+    // Unsigned and not in guest mode → register / sign-in (Live Matches gate).
+    final needsAuth = widget.auth.user == null && !widget.auth.isGuest;
 
+    if (needsAuth) {
+      switch (_screen) {
         case AuthScreen.signIn:
           return SignInPage(
             auth: widget.auth,
-            onBackToWelcome: () =>
-                setState(() => _screen = AuthScreen.welcome),
-            onNavigateToSignUp: () => setState(() {
-              _signUpOpenedFromWelcome = false;
-              _screen = AuthScreen.signUp;
-            }),
+            onBackToWelcome: _cancelAuth,
+            onNavigateToSignUp: () =>
+                setState(() => _screen = AuthScreen.signUp),
           );
 
         case AuthScreen.signUp:
           return SignUpPage(
             auth: widget.auth,
-            backButtonLabel: _signUpOpenedFromWelcome
-                ? '← Back'
-                : '← Back to Sign In',
-            onBack: () => setState(() {
-              if (_signUpOpenedFromWelcome) {
-                _signUpOpenedFromWelcome = false;
-                _screen = AuthScreen.welcome;
-              } else {
-                _screen = AuthScreen.signIn;
-              }
-            }),
+            backButtonLabel: '← Back',
+            onBack: _cancelAuth,
             onNavigateToSignIn: () =>
                 setState(() => _screen = AuthScreen.signIn),
           );
       }
     }
 
-    return SplashScreen(auth: widget.auth);
+    if (!_splashDone) {
+      return SplashScreen(
+        auth: widget.auth,
+        onComplete: _onSplashComplete,
+      );
+    }
+
+    return FirstPlayGate(
+      key: ValueKey(widget.auth.user?.id ?? 'guest'),
+      homeBuilder: (_) => const HomePage(),
+    );
   }
 }

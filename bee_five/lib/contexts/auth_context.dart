@@ -29,14 +29,16 @@ class AuthContext extends ChangeNotifier {
     _init();
   }
 
-  /// Skip account sign-in; cleared when a Supabase session exists or on [signOut].
+  /// Skip account sign-in; used so unsigned players can use the app.
+  /// Cleared when a Supabase session exists. Cleared temporarily by [leaveGuestMode]
+  /// so AuthGate can show sign-in / sign-up (e.g. from Live Matches).
   void enterGuestMode() {
     if (_isGuest) return;
     _isGuest = true;
     notifyListeners();
   }
 
-  /// Leave guest mode so the auth gate can show sign-in / sign-up (e.g. from Live Matches).
+  /// Leave guest mode so the auth gate can show register / sign-in (e.g. Live Matches).
   void leaveGuestMode({bool forSignUp = false}) {
     if (!_isGuest) return;
     _isGuest = false;
@@ -96,6 +98,8 @@ class AuthContext extends ChangeNotifier {
 
   void _init() {
     if (supabaseClient == null) {
+      // No backend — still let players into the app as guests.
+      _isGuest = true;
       _loading = false;
       notifyListeners();
       return;
@@ -108,6 +112,9 @@ class AuthContext extends ChangeNotifier {
       _isGuest = false;
       _persistUsernameFromUserToPrefs(_user!);
       unawaited(PushNotificationService.instance.registerIfNeeded());
+    } else {
+      // New / unsigned players go straight into the app (no welcome auth).
+      _isGuest = true;
     }
     _loading = false;
     notifyListeners();
@@ -117,7 +124,8 @@ class AuthContext extends ChangeNotifier {
         _session = null;
         _user = null;
         _loading = false;
-        _isGuest = false;
+        // Stay in the app after sign-out; Live Matches can re-prompt auth.
+        _isGuest = true;
         PushNotificationService.instance.stop();
       } else {
         _session = data.session;
@@ -202,7 +210,8 @@ class AuthContext extends ChangeNotifier {
     }
     _session = null;
     _user = null;
-    _isGuest = false;
+    // Return to in-app guest play (same as a fresh install).
+    _isGuest = true;
     _loading = false;
     notifyListeners();
   }

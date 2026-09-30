@@ -1,7 +1,8 @@
+import 'services/game_analytics.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'account_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'ads/ad_unit_ids.dart';
 import 'ads/ad_log.dart';
@@ -21,6 +22,8 @@ class ClassicAIGame extends StatefulWidget {
   final int initialTimer;
   final String? backgroundColor;
   final bool isClassicStreakMode;
+  final bool isGuidedPractice;
+  final VoidCallback? onGuidedPracticeComplete;
 
   const ClassicAIGame({
     super.key,
@@ -29,6 +32,8 @@ class ClassicAIGame extends StatefulWidget {
     this.initialTimer = 15,
     this.backgroundColor,
     this.isClassicStreakMode = false,
+    this.isGuidedPractice = false,
+    this.onGuidedPracticeComplete,
   });
 
   @override
@@ -36,6 +41,10 @@ class ClassicAIGame extends StatefulWidget {
 }
 
 class _ClassicAIGameState extends State<ClassicAIGame> {
+  final _telemetry = MatchTelemetry();
+  bool _firstMoveMade = false;
+  bool _guidedComplete = false;
+  String get _analyticsMode => widget.isClassicStreakMode ? 'classic_streak' : 'practice';
   List<List<int>> board = [];
   int currentPlayer = 2; // 1 = human (yellow), 2 = AI (black)
   int winner = 0; // 0 = no winner/draw, 1 = human, 2 = AI
@@ -50,6 +59,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   // Classic streak mode only
   int classicSessionTimeLeft = _classicSessionSeconds;
   int classicGamesWon = 0;
+  int _classicWinCount = 0;
   int classicBestStreak = 0;
   Timer? sessionTimer;
   bool classicGameOver = false;
@@ -127,6 +137,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   @override
   void initState() {
     super.initState();
+    GameAnalytics.instance.selectMode(_analyticsMode);
     if (widget.isClassicStreakMode) {
       aiDifficulty = _classicStreakDifficultyForGame(1);
       timeLeft = 0;
@@ -141,8 +152,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
     getXp().then((xp) {
       if (mounted) setState(() => _headerXp = xp);
     });
-    _loadBannerAd();
-    _loadInterstitialAd();
+    if (!widget.isGuidedPractice) {
+      _loadBannerAd();
+      _loadInterstitialAd();
+    }
   }
 
   void _loadBannerAd() {
@@ -180,6 +193,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   // Show interstitial every Nth "Play Again" depending on mode.
   void _onPlayAgainPressed() {
+    _telemetry.rematchRequested();
     _playAgainCount++;
     final adFrequency = widget.isClassicStreakMode ? 4 : 6;
     if (_playAgainCount % adFrequency == 0 && _interstitialAd != null) {
@@ -207,14 +221,14 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   Future<void> _loadBestStreak() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await AccountPreferences.getInstance();
     setState(() {
       classicBestStreak = prefs.getInt(_prefClassicBestStreak) ?? 0;
     });
   }
 
   Future<void> _saveBestStreak(int streak) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await AccountPreferences.getInstance();
     await prefs.setInt(_prefClassicBestStreak, streak);
     scheduleProgressCloudSync();
   }
@@ -236,6 +250,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   void _classicSessionEnd({required bool timeUp, bool delayModal = true}) {
     if (classicGameOver) return;
+    _telemetry.complete(timeUp ? 'timeout' : (winner == 2 ? 'loss' : 'draw'));
     sessionTimer?.cancel();
     classicGameOver = true;
     if (classicGamesWon > classicBestStreak) {
@@ -261,6 +276,11 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   void _scheduleEndGameModal() {
+    if (widget.isGuidedPractice && !_guidedComplete) {
+      _guidedComplete = true;
+      widget.onGuidedPracticeComplete?.call();
+    }
+    _telemetry.complete(winner == 1 ? 'win' : winner == 2 ? 'loss' : 'draw');
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
       setState(() => showWinModal = true);
@@ -277,6 +297,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
   @override
   void dispose() {
+    _telemetry.quit();
     timer?.cancel();
     sessionTimer?.cancel();
     _bannerAd?.dispose();
@@ -285,6 +306,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
   }
 
   void _resetBoard() {
+    _telemetry.start(_analyticsMode, details: {
+      'difficulty': aiDifficulty,
+      if (widget.isGuidedPractice) 'tutorial_id': 'first_practice_v1',
+    });
     // Compute blocked cells for current game index (only in classic streak mode)
     final int blockedCount = widget.isClassicStreakMode
         ? _blockedCellCountForGame(_classicGameIndex)
@@ -358,16 +383,25 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
       return;
     }
 
+    if (widget.isGuidedPractice && !_firstMoveMade) {
+      GameAnalytics.instance.event('tutorial_step', {
+        'tutorial_id': 'first_practice_v1',
+        'step': 'first_move',
+      });
+    }
     setState(() {
+      _firstMoveMade = true;
       board[row][col] = currentPlayer;
       timeLeft = widget.initialTimer;
     });
 
     if (_checkWinner(row, col, currentPlayer)) {
       if (widget.isClassicStreakMode) {
+        _telemetry.complete('win');
         final int points = _scoreForDifficulty(aiDifficulty);
         setState(() {
           classicGamesWon += points;
+          _classicWinCount++;
           if (classicGamesWon > classicBestStreak) {
             classicBestStreak = classicGamesWon;
             _saveBestStreak(classicBestStreak);
@@ -377,7 +411,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
           winner = 1;
           winningPieces = logic.getWinningPieces(board, row, col, 1);
         });
-        onClassicStreakWin(classicGamesWon).then((result) {
+        onClassicStreakWin(_classicWinCount).then((result) {
           if (mounted) {
             setState(() {
               _headerXp = result.$1;
@@ -481,6 +515,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
 
       if (_checkWinner(row, col, 2)) {
         if (widget.isClassicStreakMode) {
+          _telemetry.complete('loss');
           setState(() {
             _lastXpDelta = 0;
             winner = 2;
@@ -869,7 +904,13 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const SizedBox(width: 40),
+                      if (widget.isGuidedPractice)
+                        TextButton(
+                          onPressed: widget.onBackToMenu,
+                          child: const Text('Skip', style: TextStyle(color: primaryYellow)),
+                        )
+                      else
+                        const SizedBox(width: 40),
                       Image.asset(
                         'assets/BEE-FIVE.png',
                         height: 40,
@@ -939,6 +980,18 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                     ),
                   ),
 
+                if (widget.isGuidedPractice && !_firstMoveMade)
+                  Container(
+                    width: double.infinity,
+                    color: primaryYellow,
+                    padding: const EdgeInsets.all(12),
+                    child: const Text(
+                      'Tap any empty square to place your first piece.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+
                 // Game Info
                 Container(
                   padding: const EdgeInsets.all(15),
@@ -979,7 +1032,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final boardSide = constraints.maxWidth;
+                      final boardSide = math.min(constraints.maxWidth, constraints.maxHeight);
                       final cellSize = (boardSide - totalBorders) / boardSize;
                       return Center(
                         child: Container(
@@ -1003,6 +1056,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                                   }
 
                                   return GestureDetector(
+                                    key: ValueKey('practice_cell_${row}_$col'),
                                     onTap: () => _handleCellClick(row, col),
                                     child: Container(
                                       width: cellSize,
@@ -1186,8 +1240,10 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                       ),
                     ],
                     const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 12,
+                      runSpacing: 12,
                       children: [
                         if (classicGameOver)
                           ElevatedButton(
@@ -1196,6 +1252,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                                 classicGameOver = false;
                                 classicSessionTimeLeft = _classicSessionSeconds;
                                 classicGamesWon = 0;
+                                _classicWinCount = 0;
                                 _classicGameIndex = 1;
                                 aiDifficulty = _classicStreakDifficultyForGame(1);
                               });
@@ -1224,7 +1281,7 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                           )
                         else
                           ElevatedButton(
-                            onPressed: _onPlayAgainPressed,
+                            onPressed: widget.isGuidedPractice ? widget.onBackToMenu : _onPlayAgainPressed,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
                               padding: const EdgeInsets.symmetric(
@@ -1236,8 +1293,8 @@ class _ClassicAIGameState extends State<ClassicAIGame> {
                                 side: const BorderSide(color: Colors.black, width: 2),
                               ),
                             ),
-                            child: const Text(
-                              'Play Again',
+                            child: Text(
+                              widget.isGuidedPractice ? 'Continue' : 'Play Again',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,

@@ -194,6 +194,7 @@ function nextTurnDeadline(): string {
 
 
 async function submitForfeitStats(
+  matchId: string,
 
   player1Id: string,
 
@@ -220,7 +221,7 @@ async function submitForfeitStats(
       },
 
       body: JSON.stringify({
-
+        match_id: matchId, match_kind: 'async',
         player1_id: player1Id,
 
         player2_id: player2Id,
@@ -262,7 +263,7 @@ async function applyExpiredForfeits(matchId?: string): Promise<ForfeitRow[]> {
   const rows = (data ?? []) as ForfeitRow[];
 
   for (const row of rows) {
-    await submitForfeitStats(row.player1_id, row.player2_id, row.winner_id);
+    await submitForfeitStats(row.match_id, row.player1_id, row.player2_id, row.winner_id);
 
     const loserId = row.winner_id === row.player1_id
       ? row.player2_id
@@ -812,6 +813,9 @@ Deno.serve(async (req) => {
 
   let notifyBody: string;
 
+  if (status === "completed" || isDraw) {
+    await supabase.rpc('mg_confirm_match_result', { p_match_id: matchId, p_kind: 'async' });
+  }
   if (status === "completed") {
 
     notifyBody = `${moverName} won the 24hr-turn match.`;

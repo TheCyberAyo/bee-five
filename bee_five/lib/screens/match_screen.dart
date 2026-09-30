@@ -1,3 +1,5 @@
+import '../adventure_progress_service.dart';
+import '../services/game_analytics.dart';
 // ============================================================
 // FILE: lib/screens/match_screen.dart
 // PURPOSE: Live Bee Five match — synced moves via Supabase Broadcast,
@@ -96,6 +98,7 @@ class _MatchScreenState extends State<MatchScreen> {
   StreamSubscription<Map<String, dynamic>>? _rematchChallengeResponseSub;
   StreamSubscription<Map<String, dynamic>>? _rematchMatchStartSub;
 
+  final _telemetry = MatchTelemetry();
   bool _matchEnded = false;
   bool _waitingDrawConfirm = false;
   bool _rematchHandled = false;
@@ -135,6 +138,8 @@ class _MatchScreenState extends State<MatchScreen> {
   @override
   void initState() {
     super.initState();
+    GameAnalytics.instance.selectMode('online_live');
+    _telemetry.start('online_live');
     _service.notifyMatchScreenOpened();
     // Listen before joining so broadcast StreamController does not drop events
     // that arrive in the first ms after subscribe (broadcast has no buffer).
@@ -161,7 +166,6 @@ class _MatchScreenState extends State<MatchScreen> {
       ),
     );
     _joinMatch();
-    unawaited(_loadMatchHeaderData());
   }
 
   Future<void> _loadMatchHeaderData() async {
@@ -171,7 +175,7 @@ class _MatchScreenState extends State<MatchScreen> {
     ]);
     if (!mounted) return;
     setState(() {
-      _priorMatchCount = results[0] as int;
+      _priorMatchCount = _service.activeMatchPriorCount ?? results[0] as int;
       _seriesScore = results[1] as HeadToHeadSeriesScore;
     });
   }
@@ -451,6 +455,7 @@ class _MatchScreenState extends State<MatchScreen> {
     }
 
     // Stage synchronously first so a simultaneous opponent click merges to one room.
+    _telemetry.rematchRequested();
     final proposedMatchId = _uuid.v4();
     _service.stageOutgoingChallenge(widget.opponentId, proposedMatchId);
 
@@ -536,11 +541,15 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Future<void> _joinMatch() async {
-    await _service.joinMatch(
-      matchId: widget.matchId,
-      userId: widget.myId,
-      opponentId: widget.opponentId,
-    );
+    try {
+      await _service.joinMatch(matchId: widget.matchId, userId: widget.myId, opponentId: widget.opponentId);
+      await _loadMatchHeaderData();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not verify this match. Please try again from the lobby.')));
+        popAllLiveMatchRoutes(context);
+      }
+    }
   }
 
   void _handleOpponentEvent(Map<String, dynamic> payload) {
@@ -712,19 +721,20 @@ class _MatchScreenState extends State<MatchScreen> {
       await _refreshHeadToHeadSeriesScore();
     }
     if (mounted) {
-      if (submitToServer && !hadMoves) {
+      if (result?['voidNoMoves'] == true) {
         _voidNoMovesEnd = true;
         _showVoidNoMovesDialog();
+      } else if (result?['isDraw'] == true) {
+        _showDrawDialog(result!);
       } else {
-        final resolvedWinner = result?['duplicate'] == true
-            ? (result?['winner_id']?.toString() ?? winnerId)
-            : winnerId;
+        final resolvedWinner = result?['winner_id']?.toString() ?? winnerId;
         _showResultDialog(resolvedWinner, result);
       }
     }
   }
 
   void _showVoidNoMovesDialog() {
+    _telemetry.quit(reason: 'void_no_moves');
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -757,6 +767,7 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   void _showDrawDialog(Map<String, dynamic> payload) {
+    _telemetry.complete('draw');
     _beginRematchPhase();
 
     final d1 = payload['player1Change'];
@@ -791,6 +802,7 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   void _showResultDialog(String winnerId, Map<String, dynamic>? eloResult) {
+    _telemetry.complete(winnerId == widget.myId ? 'win' : 'loss');
     unawaited(_presentResultDialog(winnerId, eloResult));
   }
 
@@ -798,7 +810,7 @@ class _MatchScreenState extends State<MatchScreen> {
     String winnerId,
     Map<String, dynamic>? eloResult,
   ) async {
-    await recordSchoolLobbyMatchOutcome(winnerId == widget.myId);
+    await syncAdventureProgress();
     if (!mounted) {
       return;
     }
@@ -865,6 +877,7 @@ class _MatchScreenState extends State<MatchScreen> {
 
   @override
   void dispose() {
+    _telemetry.quit();
     _cancelRematchListeners();
     _gameEventSub.cancel();
     _matchOverSub.cancel();
@@ -932,6 +945,7 @@ class _MatchScreenState extends State<MatchScreen> {
               if (_matchEnded) {
                 return;
               }
+              GameAnalytics.instance.event('forfeit_requested', {'game_mode': 'online_live'});
               unawaited(
                 _finishMatchEnd(
                   winnerId: widget.opponentId,

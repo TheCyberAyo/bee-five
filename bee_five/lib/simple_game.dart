@@ -1,3 +1,4 @@
+import 'services/game_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'ads/ad_unit_ids.dart';
@@ -609,6 +610,7 @@ class _GameBoard extends StatefulWidget {
 }
 
 class _GameBoardState extends State<_GameBoard> {
+  final _telemetry = MatchTelemetry();
   List<List<int>> board = [];
   int currentPlayer = 1;
   int winner = 0;
@@ -632,6 +634,7 @@ class _GameBoardState extends State<_GameBoard> {
   @override
   void initState() {
     super.initState();
+    GameAnalytics.instance.selectMode('local_multiplayer');
     _initBoard();
     BackgroundSound.instance.startIfEnabled();
     getXp().then((xp) {
@@ -673,6 +676,7 @@ class _GameBoardState extends State<_GameBoard> {
   }
 
   void _initBoard() {
+    _telemetry.start('local_multiplayer', details: {'series_length': widget.totalGames});
     board = List.generate(boardSize, (_) => List.filled(boardSize, 0));
     currentPlayer = 1;
     winner = 0;
@@ -706,10 +710,12 @@ class _GameBoardState extends State<_GameBoard> {
   void dispose() {
     _bannerAd?.dispose();
     _singleMatchInterstitial?.dispose();
+    _telemetry.quit();
     super.dispose();
   }
 
   void _scheduleWinModal(int winnerPlayer) {
+    _telemetry.complete(winnerPlayer == 0 ? 'draw' : 'player_${winnerPlayer}_win');
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
       setState(() => showWinModal = true);
@@ -763,6 +769,7 @@ class _GameBoardState extends State<_GameBoard> {
 
   // ---- Single-match play-again (with interstitial every 5th) ----
   void _onPlayAgainSingle() {
+    _telemetry.rematchRequested();
     _playAgainCount++;
     if (_playAgainCount % 5 == 0 && _singleMatchInterstitial != null) {
       _singleMatchInterstitial!.fullScreenContentCallback =

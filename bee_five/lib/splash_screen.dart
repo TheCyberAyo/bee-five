@@ -2,15 +2,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'adventure_progress_service.dart';
 import 'contexts/auth_context.dart';
-import 'home_page.dart';
 import 'services/multiplayer_service.dart';
 
 /// Splash flow: Connect 5 demo (6s), then BEE FIVE logo (2s), then Home.
 /// School / default lobby setup happens when the player opens Live Matches.
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key, required this.auth});
+  const SplashScreen({
+    super.key,
+    required this.auth,
+    required this.onComplete,
+  });
 
   final AuthContext auth;
+
+  /// Called when splash finishes (AuthGate then shows Home — no route replace).
+  final VoidCallback onComplete;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -53,28 +59,21 @@ class _SplashScreenState extends State<SplashScreen> {
     _timer?.cancel();
     if (!mounted) return;
 
-    if (widget.auth.user != null || widget.auth.isGuest) {
-      if (widget.auth.user != null) {
-        try {
-          await syncAdventureProgress();
-        } catch (_) {
-          // Still open Home if the network fails; local prefs remain.
-        }
-
-        try {
-          await MultiplayerService().syncMgProfileFromAuthMetadata();
-        } catch (_) {}
-
-        if (!mounted) return;
+    if (widget.auth.user != null) {
+      try {
+        await syncAdventureProgress();
+      } catch (_) {
+        // Still open Home if the network fails; local prefs remain.
       }
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const HomePage()),
-      );
-    } else {
-      // Fallback — normally AuthGate handles this
-      Navigator.of(context).pop();
+      try {
+        await MultiplayerService().syncMgProfileFromAuthMetadata();
+      } catch (_) {}
+
+      if (!mounted) return;
     }
+
+    widget.onComplete();
   }
 
   @override

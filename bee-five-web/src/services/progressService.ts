@@ -1,3 +1,4 @@
+import { readXpLedger, recordXpEvent, syncXpLedger } from './xpLedger';
 import { supabase } from '../lib/supabase';
 
 export interface AdventureProgress {
@@ -154,10 +155,7 @@ function mergeXpAuxState(local: XpAuxState, remote: XpAuxState): XpAuxState {
       1,
       Math.max(local.adventureConsecutiveWins, remote.adventureConsecutiveWins)
     ),
-    adventureConsecutiveLosses: Math.max(
-      local.adventureConsecutiveLosses,
-      remote.adventureConsecutiveLosses
-    ),
+    adventureConsecutiveLosses: local.adventureConsecutiveLosses,
     adventureLevelsFirstClear: mergeFirstClearLevels(
       local.adventureLevelsFirstClear,
       remote.adventureLevelsFirstClear
@@ -191,7 +189,6 @@ function xpAuxToRemotePayload(xpAux: XpAuxState): Record<string, unknown> {
     daily_challenge_date: xpAux.dailyChallengeDate,
     daily_challenge_won: xpAux.dailyChallengeWon,
     adventure_consecutive_wins: xpAux.adventureConsecutiveWins,
-    adventure_consecutive_losses: xpAux.adventureConsecutiveLosses,
     adventure_levels_first_clear: xpAux.adventureLevelsFirstClear,
     adventure_first_clear_xp_migrated: xpAux.adventureFirstClearXpMigrated,
   };
@@ -202,37 +199,25 @@ export function readLocalXpAuxState(userId: string | null = progressSyncUserId):
 
   const readBool = (base: string): boolean | null => {
     const raw = window.localStorage.getItem(scopedPrefKey(base, userId));
-    if (raw == null && userId) {
-      const legacy = window.localStorage.getItem(base);
-      if (legacy == null) return null;
-      return legacy === 'true';
-    }
     if (raw == null) return null;
     return raw === 'true';
   };
 
   const readString = (base: string): string | null => {
     const raw = window.localStorage.getItem(scopedPrefKey(base, userId));
-    if (raw == null && userId) {
-      return window.localStorage.getItem(base);
-    }
     return raw;
   };
 
   const readInt = (base: string): number => {
     const raw = window.localStorage.getItem(scopedPrefKey(base, userId));
-    let parsed = raw != null ? Number.parseInt(raw, 10) : Number.NaN;
-    if (Number.isNaN(parsed) && userId) {
-      parsed = Number.parseInt(window.localStorage.getItem(base) ?? '', 10);
-    }
+    const parsed = raw != null ? Number.parseInt(raw, 10) : Number.NaN;
     return Number.isNaN(parsed) ? 0 : parsed;
   };
 
   let adventureLevelsFirstClear: number[] = [];
   try {
     const raw =
-      window.localStorage.getItem(scopedPrefKey(PREF_ADVENTURE_LEVELS_FIRST_CLEAR, userId)) ??
-      (userId ? window.localStorage.getItem(PREF_ADVENTURE_LEVELS_FIRST_CLEAR) : null);
+      window.localStorage.getItem(scopedPrefKey(PREF_ADVENTURE_LEVELS_FIRST_CLEAR, userId));
     if (raw) {
       const parsed = JSON.parse(raw) as string[];
       adventureLevelsFirstClear = parsed
@@ -245,14 +230,13 @@ export function readLocalXpAuxState(userId: string | null = progressSyncUserId):
   }
 
   const migratedRaw =
-    window.localStorage.getItem(scopedPrefKey(PREF_ADVENTURE_FIRST_CLEAR_MIGRATED, userId)) ??
-    (userId ? window.localStorage.getItem(PREF_ADVENTURE_FIRST_CLEAR_MIGRATED) : null);
+    window.localStorage.getItem(scopedPrefKey(PREF_ADVENTURE_FIRST_CLEAR_MIGRATED, userId));
 
   return {
     dailyChallengeDate: readString(PREF_DAILY_CHALLENGE_DATE),
     dailyChallengeWon: readBool(PREF_DAILY_CHALLENGE_WON),
     adventureConsecutiveWins: readInt(PREF_ADVENTURE_CONSECUTIVE_WINS),
-    adventureConsecutiveLosses: readInt(PREF_ADVENTURE_CONSECUTIVE_LOSSES),
+    adventureConsecutiveLosses: readXpLedger(userId).losses,
     adventureLevelsFirstClear,
     adventureFirstClearXpMigrated: migratedRaw === 'true',
   };
@@ -281,10 +265,9 @@ export function writeLocalXpAuxState(
     );
   }
   if (xpAux.adventureConsecutiveLosses != null) {
-    window.localStorage.setItem(
-      scopedPrefKey(PREF_ADVENTURE_CONSECUTIVE_LOSSES, userId),
-      String(xpAux.adventureConsecutiveLosses)
-    );
+    const current = readXpLedger(userId).losses;
+    if (xpAux.adventureConsecutiveLosses === 0) recordXpEvent(userId, 'adventure_reset');
+    else if (xpAux.adventureConsecutiveLosses === current + 1) recordXpEvent(userId, 'adventure_failure');
   }
   if (xpAux.adventureLevelsFirstClear != null) {
     window.localStorage.setItem(
@@ -317,33 +300,12 @@ export function readLocalPlayerStats(userId: string | null = progressSyncUserId)
     return { userXp: DEFAULT_USER_XP, loginStreak: 0, classicBestStreak: 0 };
   }
 
-  const xpKey = scopedPrefKey(PREF_USER_XP, userId);
   const streakKey = scopedPrefKey(PREF_LOGIN_STREAK, userId);
   const classicKey = scopedPrefKey(PREF_CLASSIC_BEST_STREAK, userId);
 
-  let userXp = Number.parseInt(window.localStorage.getItem(xpKey) ?? '', 10);
-  if (Number.isNaN(userXp) && userId) {
-    const legacyXp = Number.parseInt(window.localStorage.getItem(PREF_USER_XP) ?? '', 10);
-    userXp = Number.isNaN(legacyXp) ? DEFAULT_USER_XP : legacyXp;
-  } else if (Number.isNaN(userXp)) {
-    userXp = DEFAULT_USER_XP;
-  }
-
-  let loginStreak = Number.parseInt(window.localStorage.getItem(streakKey) ?? '', 10);
-  if (Number.isNaN(loginStreak) && userId) {
-    const legacy = Number.parseInt(window.localStorage.getItem(PREF_LOGIN_STREAK) ?? '', 10);
-    loginStreak = Number.isNaN(legacy) ? 0 : legacy;
-  } else if (Number.isNaN(loginStreak)) {
-    loginStreak = 0;
-  }
-
-  let classicBestStreak = Number.parseInt(window.localStorage.getItem(classicKey) ?? '', 10);
-  if (Number.isNaN(classicBestStreak) && userId) {
-    const legacy = Number.parseInt(window.localStorage.getItem(PREF_CLASSIC_BEST_STREAK) ?? '', 10);
-    classicBestStreak = Number.isNaN(legacy) ? 0 : legacy;
-  } else if (Number.isNaN(classicBestStreak)) {
-    classicBestStreak = 0;
-  }
+  const userXp = readXpLedger(userId).xp;
+  const loginStreak = Number.parseInt(window.localStorage.getItem(streakKey) ?? '0', 10) || 0;
+  const classicBestStreak = Number.parseInt(window.localStorage.getItem(classicKey) ?? '0', 10) || 0;
 
   return { userXp, loginStreak, classicBestStreak };
 }
@@ -371,7 +333,7 @@ export function scheduleProgressCloudSync(userId: string | null = progressSyncUs
     clearTimeout(syncProgressDebounce);
   }
   syncProgressDebounce = setTimeout(() => {
-    void syncAdventureProgress(userId, { preferLocalDashboardStats: true });
+    void syncAdventureProgress(userId, { preferLocalDashboardStats: true }).catch(console.warn);
   }, 900);
 }
 
@@ -414,9 +376,10 @@ async function loadRemoteAdventureProgress(userId: string): Promise<RemoteAdvent
       .from('adventure_progress')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) return null;
+    if (error) throw error;
+    if (!data) return null;
 
     const current = clampLevel(data.current_game ?? 1);
     const highestRaw = data.highest_unlocked_game ?? current;
@@ -440,8 +403,8 @@ async function loadRemoteAdventureProgress(userId: string): Promise<RemoteAdvent
         typeof data.classic_best_streak === 'number' ? data.classic_best_streak : undefined,
       xp_aux: xpAuxFromRemoteRow(data as Record<string, unknown>),
     };
-  } catch {
-    return null;
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -455,7 +418,6 @@ async function upsertRemoteAdventureProgress(
     currentGame: number;
     highestUnlockedGame: number;
     gamesWon?: number;
-    dashboardXp?: number;
     dashboardLoginStreak?: number;
     dashboardClassicBest?: number;
     xpAux?: XpAuxState;
@@ -467,7 +429,6 @@ async function upsertRemoteAdventureProgress(
   const safeHighest = clampLevel(payload.highestUnlockedGame);
   const completed = deriveGamesCompleted(safeHighest);
   const localStats = readLocalPlayerStats(userId);
-  const xpOut = payload.dashboardXp ?? localStats.userXp;
   const streakOut = payload.dashboardLoginStreak ?? localStats.loginStreak;
   const classicOut = payload.dashboardClassicBest ?? localStats.classicBestStreak;
   const auxOut = payload.xpAux ?? readLocalXpAuxState(userId);
@@ -484,7 +445,6 @@ async function upsertRemoteAdventureProgress(
 
   const statsPayload = {
     ...legacyPayload,
-    user_xp: xpOut,
     login_streak: streakOut,
     classic_best_streak: classicOut,
   };
@@ -494,13 +454,8 @@ async function upsertRemoteAdventureProgress(
     ...xpAuxToRemotePayload(auxOut),
   };
 
-  const { error: fullError } = await supabase.from('adventure_progress').upsert(fullPayload);
-  if (!fullError) return;
-
-  const { error: statsError } = await supabase.from('adventure_progress').upsert(statsPayload);
-  if (!statsError) return;
-
-  await supabase.from('adventure_progress').upsert(legacyPayload);
+  const { error } = await supabase.from('adventure_progress').upsert(fullPayload);
+  if (error) throw error;
 }
 
 function toAdventureProgress(userId: string, synced: SyncedAdventureProgress): AdventureProgress {
@@ -525,7 +480,7 @@ export async function syncAdventureProgress(
   userId: string,
   options?: { preferLocalDashboardStats?: boolean }
 ): Promise<SyncedAdventureProgress | null> {
-  const preferLocalDashboardStats = options?.preferLocalDashboardStats ?? false;
+  void options; // Retained for existing callers; XP is always event-based.
   if (!userId) return null;
 
   const localProgress = await loadLocalProgress(userId);
@@ -533,11 +488,11 @@ export async function syncAdventureProgress(
   const localHighest = clampLevel(
     Math.max(localProgress?.highest_unlocked_game ?? 1, localCurrent)
   );
-  const localStats = readLocalPlayerStats(userId);
-  const localXpAux = readLocalXpAuxState(userId);
+  let localStats = readLocalPlayerStats(userId);
+  let localXpAux = readLocalXpAuxState(userId);
   const resetPending =
     canUseLocalStorage() &&
-    window.localStorage.getItem(PREF_ADVENTURE_RESET_PENDING) === 'true';
+    window.localStorage.getItem(scopedPrefKey(PREF_ADVENTURE_RESET_PENDING, userId)) === 'true';
 
   if (!supabase) {
     const mergedHighest = Math.max(localHighest, localCurrent);
@@ -547,24 +502,33 @@ export async function syncAdventureProgress(
       gamesCompleted: deriveGamesCompleted(mergedHighest),
       gamesWon: localProgress?.games_won ?? Math.max(0, mergedHighest - 1),
       ...localStats,
-      xpAux: localXpAux,
+      userXp: readXpLedger(userId).xp,
+      xpAux: { ...localXpAux, adventureConsecutiveLosses: readXpLedger(userId).losses },
     };
   }
 
-  const remote = await loadRemoteAdventureProgress(userId);
+  let remote: RemoteAdventureProgress | null;
+  try {
+    remote = await loadRemoteAdventureProgress(userId);
+    await syncXpLedger(userId);
+  } catch (error) {
+    console.warn('Progress sync deferred; local events retained', error);
+    return null;
+  }
+  localStats = readLocalPlayerStats(userId);
+  localXpAux = readLocalXpAuxState(userId);
 
   if (resetPending) {
     const forcedHighest = Math.max(localHighest, localCurrent);
     await upsertRemoteAdventureProgress(userId, {
       currentGame: localCurrent,
       highestUnlockedGame: forcedHighest,
-      dashboardXp: localStats.userXp,
       dashboardLoginStreak: localStats.loginStreak,
       dashboardClassicBest: localStats.classicBestStreak,
       xpAux: localXpAux,
     });
     if (canUseLocalStorage()) {
-      window.localStorage.removeItem(PREF_ADVENTURE_RESET_PENDING);
+      window.localStorage.removeItem(scopedPrefKey(PREF_ADVENTURE_RESET_PENDING, userId));
     }
     const synced = {
       currentGame: localCurrent,
@@ -572,11 +536,12 @@ export async function syncAdventureProgress(
       gamesCompleted: deriveGamesCompleted(forcedHighest),
       gamesWon: Math.max(0, forcedHighest - 1),
       ...localStats,
-      xpAux: localXpAux,
+      userXp: readXpLedger(userId).xp,
+      xpAux: { ...localXpAux, adventureConsecutiveLosses: readXpLedger(userId).losses },
     };
     await saveLocalProgress(userId, toAdventureProgress(userId, synced));
-    writeLocalPlayerStats(userId, localStats);
-    writeLocalXpAuxState(userId, localXpAux);
+    writeLocalPlayerStats(userId, { ...localStats, userXp: readXpLedger(userId).xp });
+    writeLocalXpAuxState(userId, { ...localXpAux, adventureConsecutiveLosses: undefined });
     return synced;
   }
 
@@ -585,7 +550,6 @@ export async function syncAdventureProgress(
     await upsertRemoteAdventureProgress(userId, {
       currentGame: localCurrent,
       highestUnlockedGame: mergedHighest,
-      dashboardXp: localStats.userXp,
       dashboardLoginStreak: localStats.loginStreak,
       dashboardClassicBest: localStats.classicBestStreak,
       xpAux: localXpAux,
@@ -596,11 +560,12 @@ export async function syncAdventureProgress(
       gamesCompleted: deriveGamesCompleted(mergedHighest),
       gamesWon: localProgress?.games_won ?? Math.max(0, mergedHighest - 1),
       ...localStats,
-      xpAux: localXpAux,
+      userXp: readXpLedger(userId).xp,
+      xpAux: { ...localXpAux, adventureConsecutiveLosses: readXpLedger(userId).losses },
     };
     await saveLocalProgress(userId, toAdventureProgress(userId, synced));
-    writeLocalPlayerStats(userId, localStats);
-    writeLocalXpAuxState(userId, localXpAux);
+    writeLocalPlayerStats(userId, { ...localStats, userXp: readXpLedger(userId).xp });
+    writeLocalXpAuxState(userId, { ...localXpAux, adventureConsecutiveLosses: undefined });
     return synced;
   }
 
@@ -612,9 +577,7 @@ export async function syncAdventureProgress(
   const hasMeaningfulLocalState = localCurrent !== 1 || localHighest !== 1;
   const mergedCurrent = clampLevel(hasMeaningfulLocalState ? localCurrent : remote.current_game);
 
-  const mergedXp = preferLocalDashboardStats
-    ? localStats.userXp
-    : mergeMaxStat(localStats.userXp, remote.user_xp);
+  const mergedXp = readXpLedger(userId).xp;
   const mergedStreak = mergeMaxStat(localStats.loginStreak, remote.login_streak);
   const mergedClassic = mergeMaxStat(localStats.classicBestStreak, remote.classic_best_streak);
   const mergedXpAux = mergeXpAuxState(localXpAux, remote.xp_aux ?? emptyXpAuxState());
@@ -626,13 +589,12 @@ export async function syncAdventureProgress(
     loginStreak: mergedStreak,
     classicBestStreak: mergedClassic,
   });
-  writeLocalXpAuxState(userId, mergedXpAux);
+  writeLocalXpAuxState(userId, { ...mergedXpAux, adventureConsecutiveLosses: undefined });
 
   await upsertRemoteAdventureProgress(userId, {
     currentGame: mergedCurrent,
     highestUnlockedGame: mergedHighest,
     gamesWon: remote.games_won > 0 ? remote.games_won : undefined,
-    dashboardXp: mergedXp,
     dashboardLoginStreak: mergedStreak,
     dashboardClassicBest: mergedClassic,
     xpAux: mergedXpAux,
@@ -643,10 +605,10 @@ export async function syncAdventureProgress(
     highestUnlockedGame: mergedHighest,
     gamesCompleted: deriveGamesCompleted(mergedHighest),
     gamesWon: mergedGamesWon,
-    userXp: mergedXp,
+    userXp: readXpLedger(userId).xp,
     loginStreak: mergedStreak,
     classicBestStreak: mergedClassic,
-    xpAux: mergedXpAux,
+    xpAux: { ...mergedXpAux, adventureConsecutiveLosses: readXpLedger(userId).losses },
   };
   await saveLocalProgress(userId, toAdventureProgress(userId, synced));
   return synced;
@@ -654,6 +616,9 @@ export async function syncAdventureProgress(
 
 /** Merge guest local progress into a signed-in account before cloud sync. */
 export async function promoteGuestProgressToUser(userId: string): Promise<void> {
+  if (!canUseLocalStorage() || window.localStorage.getItem('guest_progress_claimed_by')) return;
+  // One device's guest progress can be imported once, never its unverified XP.
+  window.localStorage.setItem('guest_progress_claimed_by', userId);
   const guestProgress = await loadLocalProgress(null);
   const userProgress = await loadLocalProgress(userId);
   const guestStats = readLocalPlayerStats(null);
@@ -679,11 +644,10 @@ export async function promoteGuestProgressToUser(userId: string): Promise<void> 
   });
 
   writeLocalPlayerStats(userId, {
-    userXp: Math.max(guestStats.userXp, userStats.userXp),
     loginStreak: Math.max(guestStats.loginStreak, userStats.loginStreak),
     classicBestStreak: Math.max(guestStats.classicBestStreak, userStats.classicBestStreak),
   });
-  writeLocalXpAuxState(userId, mergeXpAuxState(guestXpAux, userXpAux));
+  writeLocalXpAuxState(userId, { ...mergeXpAuxState(guestXpAux, userXpAux), adventureConsecutiveLosses: undefined });
 }
 
 export async function loadAdventureProgress(userId: string): Promise<AdventureProgress | null> {
@@ -736,7 +700,6 @@ export async function saveAdventureProgress(
       currentGame: mergedProgress.current_game,
       highestUnlockedGame: mergedProgress.highest_unlocked_game,
       gamesWon: mergedProgress.games_won,
-      dashboardXp: localStats.userXp,
       dashboardLoginStreak: localStats.loginStreak,
       dashboardClassicBest: localStats.classicBestStreak,
       xpAux: localXpAux,
@@ -744,7 +707,7 @@ export async function saveAdventureProgress(
     return true;
   } catch (error) {
     console.error('Error saving progress:', error);
-    return true;
+    return false;
   }
 }
 
@@ -841,7 +804,7 @@ export async function autoSaveSessionProgress(
 
 export async function resetAdventureProgress(userId: string): Promise<boolean> {
   if (canUseLocalStorage()) {
-    window.localStorage.setItem(PREF_ADVENTURE_RESET_PENDING, 'true');
+    window.localStorage.setItem(scopedPrefKey(PREF_ADVENTURE_RESET_PENDING, userId), 'true');
   }
   return saveAdventureProgress(userId, {
     current_game: 1,

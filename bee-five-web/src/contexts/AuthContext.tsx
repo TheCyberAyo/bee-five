@@ -53,6 +53,7 @@ function applySessionToState(
 ): User | null {
   setSession(session);
   const nextUser = session?.user ?? null;
+  setProgressSyncUserId(nextUser?.id ?? null);
   setUser(nextUser);
   syncSupabaseAuth(session);
   return nextUser;
@@ -156,6 +157,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('Failed to sync adventure progress on auth', error);
       }
     })();
+    const retrySync = () => {
+      if (document.visibilityState === 'visible') {
+        void syncAdventureProgress(user.id).catch(error => console.warn('Progress sync deferred', error));
+      }
+    };
+    window.addEventListener('online', retrySync);
+    document.addEventListener('visibilitychange', retrySync);
+    return () => {
+      window.removeEventListener('online', retrySync);
+      document.removeEventListener('visibilitychange', retrySync);
+    };
   }, [user?.id]);
 
   const refreshProfile = async () => {
@@ -271,6 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    setProgressSyncUserId(null);
     if (!supabase) {
       setSession(null);
       setUser(null);

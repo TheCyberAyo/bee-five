@@ -1,3 +1,4 @@
+import { syncXpLedger } from './xpLedger';
 import type { RealtimeChannel, Session, User } from '@supabase/supabase-js';
 import { INTERNAL_EMAIL_DOMAIN } from '../lib/internalAuthEmail';
 import { supabase } from '../lib/supabase';
@@ -153,29 +154,7 @@ function unwrapChallengeResponsePayload(raw: Record<string, unknown>): Record<st
   );
 }
 
-function unwrapGameEventPayload(raw: Record<string, unknown>): Record<string, unknown> {
-  return (
-    findMapInTree(raw, (m) => {
-      const pid = m.player_id ?? m.playerId;
-      if (pid == null) return false;
-      if (m.type === 'move') return 'row' in m && 'col' in m;
-      return true;
-    }) ?? raw
-  );
-}
 
-function unwrapMatchOverPayload(raw: Record<string, unknown>): Record<string, unknown> {
-  return (
-    findMapInTree(
-      raw,
-      (m) =>
-        'winner_id' in m ||
-        m.is_draw === true ||
-        'winnerChange' in m ||
-        'player1Change' in m,
-    ) ?? raw
-  );
-}
 
 function parseProfileInt(v: unknown, fallback = 0): number {
   if (typeof v === 'number') return Math.trunc(v);
@@ -397,7 +376,9 @@ class MgMultiplayerService {
   private rejoinLobbyTimer: ReturnType<typeof setTimeout> | null = null;
   private removingLobbyChannel = false;
 
-  private static readonly opponentDisconnectGraceMs = 12_000;
+  private static readonly opponentDisconnectGraceMs = 60_000;
+  private verifiedHeartbeat: ReturnType<typeof setInterval> | null = null;
+  activeMatchPriorCount: number | null = null;
   private static readonly presenceSyncIntervalMs = 8_000;
 
   private onlinePlayersEmitter = new SimpleEmitter<PlayerPresence[]>();
@@ -1272,22 +1253,25 @@ class MgMultiplayerService {
       await this.removeStaleMatchChannels(matchId);
       if (generation !== this.matchJoinGeneration) return;
 
+      await syncXpLedger(userId);
+      const { data: joined, error: joinError } = await supabase.rpc('mg_join_verified_live', {
+        p_match_id: matchId, p_opponent: opponentId,
+      });
+      if (joinError) throw joinError;
+      this.activeMatchPriorCount = joined.prior_match_count;
       this.activeMatchId = matchId;
       this.matchOpponentId = opponentId;
+      this.verifiedHeartbeat = setInterval(() => {
+        void supabase!.rpc('mg_live_heartbeat', { p_match_id: matchId }).then(() => {});
+        void this.refreshVerifiedMatch(matchId);
+      }, 3_000);
 
       const channel = supabase.channel(`match:${matchId}`);
 
-      channel.on('broadcast', { event: 'game_event' }, ({ payload }) => {
-        const data = unwrapGameEventPayload((payload ?? {}) as Record<string, unknown>);
-        const sender = (data.player_id ?? data.playerId)?.toString();
-        if (sender && sender !== userId) {
-          this.gameEventEmitter.emit(data);
-        }
-      });
-
-      channel.on('broadcast', { event: 'match_over' }, (message) => {
-        this.matchOverEmitter.emit(unwrapMatchOverPayload((message ?? {}) as Record<string, unknown>));
-      });
+      // Broadcast is a wake-up hint only. Read authenticated moves/results from
+      // the server so an arbitrary channel message cannot invent a move or win.
+      channel.on('broadcast', { event: 'game_event' }, () => { void this.refreshVerifiedMatch(matchId); });
+      channel.on('broadcast', { event: 'match_over' }, () => { void this.refreshVerifiedMatch(matchId); });
 
       const onOpponentPresenceMaybeReturned = () => {
         if (this.isOpponentPresentOnMatchChannel(opponentId)) {
@@ -1338,10 +1322,31 @@ class MgMultiplayerService {
     await this.joinMatchPromise;
   }
 
+  private verifiedRefreshRunning = false;
+  private async refreshVerifiedMatch(matchId: string): Promise<void> {
+    if (!supabase || this.activeMatchId !== matchId || this.verifiedRefreshRunning) return;
+    this.verifiedRefreshRunning = true;
+    try {
+      const { data, error } = await supabase.from('mg_live_games').select('moves,status').eq('id', matchId).single();
+      if (error || !data || this.activeMatchId !== matchId) return;
+      for (const move of data.moves ?? []) this.gameEventEmitter.emit(move);
+      if (['completed', 'draw', 'void'].includes(data.status)) {
+        const { data: result, error: resultError } = await supabase.rpc('mg_confirm_match_result', { p_match_id: matchId });
+        if (!resultError && result && this.activeMatchId === matchId) this.matchOverEmitter.emit({
+          ...result, is_draw: result.isDraw, void_no_moves: result.voidNoMoves,
+        });
+      }
+    } catch { /* Durable state is retried on the next heartbeat. */ }
+    finally { this.verifiedRefreshRunning = false; }
+  }
+
   async leaveMatch(onlyIfMatchId?: string): Promise<void> {
     if (onlyIfMatchId && this.activeMatchId !== onlyIfMatchId) return;
 
     this.matchJoinGeneration++;
+    if (this.verifiedHeartbeat) clearInterval(this.verifiedHeartbeat);
+    this.verifiedHeartbeat = null;
+    this.activeMatchPriorCount = null;
     this.cancelOpponentDisconnectTimer();
     const endedMatchId = this.activeMatchId;
     this.matchOpponentId = null;
@@ -1365,14 +1370,17 @@ class MgMultiplayerService {
 
   async sendGameEvent(playerId: string, eventData: Record<string, unknown>): Promise<void> {
     const ch = this.matchChannel;
-    if (!ch) return;
-
-    const payload = { player_id: playerId, ...eventData };
+    if (!ch || !supabase || !this.activeMatchId) throw new Error('Match not connected');
+    const { data, error } = await supabase.rpc('mg_record_live_move', {
+      p_match_id: this.activeMatchId, p_row: eventData.row, p_col: eventData.col,
+    });
+    if (error) throw error;
+    const payload = { ...eventData, seat: data.seat, player_id: playerId };
 
     try {
       await ch.httpSend('game_event', payload);
     } catch {
-      await ch.send({ type: 'broadcast', event: 'game_event', payload });
+      await ch.send({ type: 'broadcast', event: 'game_event', payload }).catch(() => undefined);
     }
   }
 
@@ -1409,6 +1417,8 @@ class MgMultiplayerService {
     }
 
     const body: Record<string, unknown> = {
+      match_id: this.activeMatchId,
+      match_kind: 'live',
       player1_id: player1Id,
       player2_id: player2Id,
       is_draw: isDraw,
@@ -1439,16 +1449,16 @@ class MgMultiplayerService {
       throw new Error(String(result.error));
     }
 
-    if (isDraw) {
+    if (result.isDraw === true) {
       await this.sendMatchBroadcast('match_over', {
         is_draw: true,
-        ...(voidNoMoves ? { void_no_moves: true } : {}),
+        ...(result.voidNoMoves === true ? { void_no_moves: true } : {}),
         player1Change: result.player1Change,
         player2Change: result.player2Change,
       });
     } else {
       await this.sendMatchBroadcast('match_over', {
-        winner_id: winnerId,
+        winner_id: result.winner_id,
         winnerChange: result.winnerChange,
         loserChange: result.loserChange,
       });
