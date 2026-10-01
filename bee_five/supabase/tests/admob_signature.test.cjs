@@ -14,6 +14,11 @@ try {
  const raw=`ad_network=5450213213286189855&ad_unit=2005976804&custom_data=11111111-1111-4111-8111-111111111111&reward_amount=1&reward_item=XP&timestamp=${now}&transaction_id=valid_receipt_1&user_id=22222222-2222-4222-8222-222222222222`;
  const url=query=>`https://example.test/reward?${query}&signature=${sign('sha256',Buffer.from(query),privateKey).toString('base64url')}&key_id=123`;
  assert.equal(verify(url(raw),keys,now).unit,'2005976804');
+ const probe=raw.replace('11111111-1111-4111-8111-111111111111','configuration-check').replace('22222222-2222-4222-8222-222222222222','beefive-ssv-verification');
+ assert.equal(verify(url(probe),keys,now),null,'Signed console probe must not produce a reward');
+ assert.throws(()=>verify(url(raw).replace('22222222-2222-4222-8222-222222222222','beefive-ssv-verification'),keys,now),/signature/);
+ assert.throws(()=>verify(url(probe.replace('configuration-check','other')),keys,now),/identity/);
+ assert.throws(()=>verify(url(probe),keys,now+172800001),/Expired/);
  assert.throws(()=>verify(url(raw).replace('reward_amount=1','reward_amount=99'),keys,now),/signature/);
  assert.throws(()=>verify(url(raw),[{...keys[0],keyId:456}],now),/signature/);
  assert.throws(()=>verify(url(raw)+'&user_id=attacker',keys,now));

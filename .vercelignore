@@ -1,0 +1,20 @@
+# The Vercel project builds only bee-five-web from this monorepo.
+# Never upload mobile bundles, signing files, local caches, or credentials.
+bee_five/
+BeefiveApp/
+_sb_init_tmp/
+ts-temp/
+node_modules/
+.idea/
+.vscode/
+.env*
+*.log
+bee-five-web/node_modules/
+bee-five-web/.next/
+bee-five-web/.vercel/
+bee-five-web/out/
+bee-five-web/.env*
+bee-five-web/*.tsbuildinfo
+**/.DS_Store
+**/*.pem
+**/*.key

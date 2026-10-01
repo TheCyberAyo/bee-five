@@ -17,10 +17,54 @@ each third actual consecutive win.
 
 ## Rollout status
 
-Source changes and isolated tests are complete. The migrations have NOT been applied
-to production and these client changes have NOT been released.
+### Production cutover — October 2, 2026
 
-### Production release preflight — September 30, 2026
+- The owner explicitly approved proceeding with the web/backend release and
+  retiring support for older clients before a compatible iOS release is available.
+- Both September 30 migrations are applied to production project
+  `nbyirvmueubdlsbtnrwh`. The 30 existing progress rows and aggregate 809 XP were
+  unchanged across the cutover. Direct authenticated writes to XP are denied.
+- `submit-match`, `async-game`, and `admob-reward` are deployed. The reward endpoint
+  verifies Google's signatures instead of requiring a Supabase JWT.
+- Vercel deployment `dpl_92P8KJ2DSxaWzUfxzdXnRMiUujhh` was built successfully and
+  released to `beefiveweb.com`. It includes the onboarding, analytics, and XP work
+  from `4c02338`, plus Next.js / eslint-config-next 15.5.27 security patches.
+- The root `.vercelignore` excludes mobile bundles and local credentials from CLI
+  uploads; Vercel's project root remains `bee-five-web`.
+- Live browser checks confirmed the win objective, three visual examples,
+  first-move prompt, AI response, Skip, home screen, and sign-in form.
+- Isolated XP and competitive-reward SQL tests, client XP/onboarding/analytics
+  tests, signature tests, and the hosted production build passed. Existing lint
+  warnings remain. `supabase/tests/production_xp_smoke.sql` also passed against
+  production using authenticated permissions and rolled back all test writes.
+- Unsigned reward callbacks return HTTP 400; unauthenticated match requests return
+  HTTP 401. A special signed AdMob console probe returns success without awarding
+  XP. Use test user ID `beefive-ssv-verification` and custom data
+  `configuration-check` when verifying the callback URL in AdMob.
+- Both Android (`2005976804`) and iOS (`8356435492`) rewarded units now have the
+  production `admob-reward` URL saved. Google's console verified a signed callback
+  for each unit; real device ad earning still needs an end-to-end check.
+- The signed-in release check exposed a web progress upsert targeting the row
+  primary key instead of unique `user_id`. Existing accounts received HTTP 409
+  (`23505`) and their dashboard could remain empty. The web now specifies
+  `onConflict: 'user_id'`, matching Flutter; the client regression test simulates
+  the database constraint and checks that the existing level and XP survive.
+- After redeployment, the supplied account signed in successfully, restored
+  Level 25 after reload, and displayed 193 XP in the live dashboard, matching its
+  authenticated API result. No password or session was saved in the repository.
+- The signed-in Live Matches lobby loaded the account and rankings successfully.
+  It reported no other online players, so no real two-player match was started.
+- A complete two-player match, cross-device syncing, and receipt of production
+  analytics in the dashboards still require verification.
+  No mobile store release was submitted as part of this web/backend cutover.
+- Older clients that directly write XP or submit unverified live results are no
+  longer supported. There is no pre-existing universal forced-update screen in
+  those installed clients; this cutover rejects their incompatible operations.
+
+### Historical preflight — September 30, 2026
+
+The following records describe the earlier blocked release, not current status.
+
 
 - Supabase access to Bee Five (`nbyirvmueubdlsbtnrwh`) is working. The migration
   dry run lists exactly the two XP migrations below; neither was applied.

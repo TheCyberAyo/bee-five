@@ -1,3 +1,5 @@
 ﻿.expo/
 *.hprof
 
+.vercel
+.env*

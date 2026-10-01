@@ -454,7 +454,7 @@ async function upsertRemoteAdventureProgress(
     ...xpAuxToRemotePayload(auxOut),
   };
 
-  const { error } = await supabase.from('adventure_progress').upsert(fullPayload);
+  const { error } = await supabase.from('adventure_progress').upsert(fullPayload, { onConflict: 'user_id' });
   if (error) throw error;
 }
 

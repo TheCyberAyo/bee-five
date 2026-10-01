@@ -8,7 +8,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // percent-decoded form used by Google's Tink verifier (never form/re-encode it).
 // Google signs everything
 // before &signature=, with signature and key_id at the end of the callback.
-export function verifyAdMobCallback(url: string, keys: AdKeys, now = Date.now()): VerifiedAd {
+export function verifyAdMobCallback(url: string, keys: AdKeys, now = Date.now()): VerifiedAd | null {
   const raw = new URL(url).search.slice(1);
   const marker = raw.indexOf('&signature=');
   if (marker < 1) throw new Error('Missing signature');
@@ -31,9 +31,12 @@ export function verifyAdMobCallback(url: string, keys: AdKeys, now = Date.now())
   const transaction = params.get('transaction_id') ?? '';
   const unit = (params.get('ad_unit') ?? '').split('/').pop()!;
   const timestamp = Number(params.get('timestamp'));
+  if (!Number.isSafeInteger(timestamp) || timestamp > now + 300_000 || timestamp < now - 172_800_000) throw new Error('Expired receipt');
+  // AdMob's console sends a signed test callback before saving the URL.
+  // Acknowledge this explicit probe without creating a claim or awarding XP.
+  if (user === 'beefive-ssv-verification' && claim === 'configuration-check') return null;
   if (!uuid.test(user) || !uuid.test(claim) || !/^[a-zA-Z0-9_-]{1,256}$/.test(transaction)) throw new Error('Invalid reward identity');
   if (!['2005976804', '8356435492'].includes(unit)) throw new Error('Unconfigured ad unit');
-  if (!Number.isSafeInteger(timestamp) || timestamp > now + 300_000 || timestamp < now - 172_800_000) throw new Error('Expired receipt');
   if (!(Number(params.get('reward_amount')) > 0)) throw new Error('Invalid reward');
   return { claim, user, transaction, unit, earnedAt: new Date(timestamp).toISOString() };
 }

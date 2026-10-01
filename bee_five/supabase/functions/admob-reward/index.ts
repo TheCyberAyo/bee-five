@@ -20,6 +20,7 @@ Deno.serve(async req => {
   let receipt;
   try { receipt = verifyAdMobCallback(req.url, keys); }
   catch { return new Response('Invalid verification', { status: 400 }); }
+  if (receipt === null) return new Response('Verification callback accepted; no reward issued');
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const { error } = await admin.rpc('confirm_xp_ad', {
     p_claim: receipt.claim, p_user: receipt.user, p_transaction: receipt.transaction,

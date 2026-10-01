@@ -29,9 +29,12 @@ global.__xpBackend = {
   from() { return {
     select() { return this; }, eq() { return this; },
     async maybeSingle() { return readError ? { data: null, error: new Error('read failed') } : { data: structuredClone(remote), error: null }; },
-    async upsert(payload) {
+    async upsert(payload, options) {
       assert.ok(!('user_xp' in payload), 'No balance replacement allowed');
       assert.ok(!('adventure_consecutive_losses' in payload), 'No stale failure counter writes');
+      if (remote?.user_id === payload.user_id && options?.onConflict !== 'user_id') {
+        return { error: new Error('duplicate key value violates unique constraint adventure_progress_user_id_key') };
+      }
       if (pauseUpload) await pauseUpload;
       uploads++; remote = { ...remote, ...payload }; return { error: null };
     },
@@ -70,6 +73,14 @@ const test = async (name, action) => { await action(); console.log('PASS', name)
   });
   await test('fresh device preserves zero XP', async () => {
     reset(0); await p.syncAdventureProgress('test'); assert.equal(p.readLocalPlayerStats('test').userXp, 0);
+  });
+  await test('existing account updates progress without inserting a duplicate', async () => {
+    reset(193);
+    remote.current_game = 25; remote.highest_unlocked_game = 25;
+    const synced = await p.syncAdventureProgress('test');
+    assert.equal(synced.currentGame, 25);
+    assert.equal(remote.user_xp, 193);
+    assert.ok(uploads > 0);
   });
   await test('stale device cannot undo a deduction', async () => {
     reset(9, 10); await p.syncAdventureProgress('test'); assert.equal(remote.user_xp, 9);
